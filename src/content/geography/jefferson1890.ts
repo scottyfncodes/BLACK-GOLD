@@ -9,7 +9,7 @@ export type LatLon = readonly [lat: number, lon: number];
 
 export interface LineFeature {
   id: string;
-  kind: "river" | "bayou" | "railroad" | "road";
+  kind: "river" | "bayou" | "creek" | "railroad" | "road";
   name: string;
   points: readonly LatLon[];
   /** Where along the line (0–1) to place the label, or omit for no label. */
@@ -92,6 +92,11 @@ export const JEFFERSON_1890: RegionGeography = {
       labelAt: 0.35,
       points: [[30.045, -94.215], [30.03, -94.195], [30.008, -94.18], [29.985, -94.165], [29.962, -94.15]],
     },
+    // Prairie coulees draining to the Neches and Hillebrandt Bayou (unnamed on the 1890 survey).
+    { id: "coulee-1", kind: "creek", name: "", points: [[30.052, -94.122], [30.058, -94.104], [30.064, -94.083]] },
+    { id: "coulee-2", kind: "creek", name: "", points: [[30.03, -94.062], [30.038, -94.05], [30.046, -94.044]] },
+    { id: "coulee-3", kind: "creek", name: "", points: [[30.005, -94.075], [30.012, -94.05], [30.018, -94.03], [30.024, -94.008]] },
+    { id: "coulee-4", kind: "creek", name: "", points: [[30.04, -94.135], [30.03, -94.15], [30.02, -94.17], [30.012, -94.181]] },
     {
       id: "tnorr",
       kind: "railroad",

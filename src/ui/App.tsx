@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useState } from "preact/hooks";
 import { formatClock, formatDate, type GameRuntime, type Snapshot, type Speed } from "../app/runtime";
-import { JEFFERSON_1890 } from "../content/geography/jefferson1890";
-import { drawMap } from "../render/map";
+import type { Selection } from "../render/plate/map";
 import { CampaignMenu } from "./CampaignMenu";
+import { FieldNotes } from "./FieldNotes";
+import { MapFigure } from "./MapFigure";
+import { SectionFigure } from "./SectionFigure";
 
 function useSnapshot(runtime: GameRuntime): Snapshot {
   const [snap, setSnap] = useState(runtime.snapshot());
@@ -26,18 +28,27 @@ const SPEEDS: { speed: Speed; label: string; title: string; key: string }[] = [
 export function App({ runtime }: { runtime: GameRuntime }) {
   const snap = useSnapshot(runtime);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [selection, setSelection] = useState<Selection>(null);
+  const onSelect = useCallback((s: Selection) => setSelection(s), []);
+
+  // Forget a selection that no longer exists (rubbed out, or a different world loaded).
+  useEffect(() => {
+    if (selection?.kind === "section" && !snap.knowledge.interp.sections.some((s) => s.id === selection.id)) setSelection(null);
+    if (selection?.kind === "prospect" && !snap.knowledge.interp.prospects.some((p) => p.id === selection.id)) setSelection(null);
+  }, [snap.rev, selection]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (menuOpen || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement) {
-        if (e.key === " ") return; // let Space press the focused button
+        if (e.key === " ") return;
       }
       if (e.key === " ") {
         e.preventDefault();
         runtime.togglePause();
         return;
       }
+      if (e.key === "Escape") setSelection(null);
       const match = SPEEDS.find((s) => s.key === e.key);
       if (match) runtime.setSpeed(match.speed);
     };
@@ -45,85 +56,45 @@ export function App({ runtime }: { runtime: GameRuntime }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [runtime, menuOpen]);
 
+  const sections = snap.knowledge.interp.sections;
+  const line = selection?.kind === "section" ? sections.find((s) => s.id === selection.id) : sections[sections.length - 1];
+
   return (
-    <div class="shell">
-      <header class="bar">
-        <div class="date" aria-live="off">
-          <span class="date-day" data-testid="date">{formatDate(snap.time, "long")}</span>
-          <span class="date-clock" data-testid="clock">{formatClock(snap.time)}</span>
+    <div class="plate">
+      <header class="plate-head">
+        <p class="plate-no">PLATE I</p>
+        <h1>Jefferson County, Texas</h1>
+        <p class="plate-sub">The prairie south of Beaumont, {formatDate(snap.time, "long").replace(/^\w+, /, "")}</p>
+      </header>
+
+      <div class="figs">
+        <MapFigure runtime={runtime} snap={snap} selection={selection} onSelect={onSelect} />
+        <SectionFigure runtime={runtime} snap={snap} line={line} />
+      </div>
+
+      <aside class="notes" aria-label="Field notes">
+        <FieldNotes runtime={runtime} snap={snap} selection={selection} onSelect={onSelect} />
+      </aside>
+
+      <footer class="clock">
+        <div class="clock-row">
+          <div class="when">
+            <span data-testid="date">{formatDate(snap.time, "long")}</span>
+            <span class="clock-time" data-testid="clock">{formatClock(snap.time)}</span>
+          </div>
+          <button type="button" class="clock-menu" onClick={() => setMenuOpen(true)}>Campaign</button>
         </div>
         <div class="speeds" role="radiogroup" aria-label="Game speed">
           {SPEEDS.map((s) => (
-            <button
-              key={s.speed}
-              type="button"
-              role="radio"
-              aria-checked={snap.speed === s.speed}
-              title={s.title}
-              class="speed"
-              data-speed={s.speed}
-              onClick={() => runtime.setSpeed(s.speed)}
-            >
+            <button key={s.speed} type="button" role="radio" aria-checked={snap.speed === s.speed} title={s.title} class="speed" data-speed={s.speed} onClick={() => runtime.setSpeed(s.speed)}>
               {s.label}
             </button>
           ))}
         </div>
-      </header>
-
-      <main class="stage">
-        <figure class="map-frame">
-          <MapCanvas />
-          <figcaption class="map-caption">
-            <strong>{JEFFERSON_1890.name}</strong>
-            <span>Surface survey only. Nothing is known yet of what lies beneath.</span>
-          </figcaption>
-        </figure>
-      </main>
-
-      <footer class="bar bar-bottom">
-        <p class="status" role="status" data-testid="status">
-          {snap.status}
-        </p>
-        <button type="button" class="button" onClick={() => setMenuOpen(true)}>
-          Campaign
-        </button>
+        <p class="status" role="status" data-testid="status">{snap.status}</p>
       </footer>
 
       <CampaignMenu runtime={runtime} snap={snap} open={menuOpen} onClose={() => setMenuOpen(false)} />
-    </div>
-  );
-}
-
-function MapCanvas() {
-  const wrap = useRef<HTMLDivElement>(null);
-  const canvas = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const el = wrap.current;
-    const cv = canvas.current;
-    if (!el || !cv) return;
-    const redraw = () => {
-      const size = Math.floor(Math.min(el.clientWidth, el.clientHeight));
-      if (size <= 0) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, 3);
-      cv.style.width = cv.style.height = `${size}px`;
-      cv.width = cv.height = Math.round(size * dpr);
-      const ctx = cv.getContext("2d");
-      if (ctx) drawMap(ctx, size, dpr, JEFFERSON_1890);
-    };
-    const ro = new ResizeObserver(redraw);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  return (
-    <div class="map-wrap" ref={wrap}>
-      <canvas
-        ref={canvas}
-        class="map"
-        role="img"
-        aria-label="Map of Jefferson County, Texas in 1890: the Neches River runs south-east past Beaumont to Grigsby's Bluff, the Texas and New Orleans Railroad crosses east to west through Beaumont, and coastal marsh covers the south."
-      />
     </div>
   );
 }

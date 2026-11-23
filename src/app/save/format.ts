@@ -1,4 +1,4 @@
-import { isSeed, type Engine, type WorldState } from "../../sim";
+import { GEOLOGY_VERSION, isSeed, type Engine, type WorldState } from "../../sim";
 
 /**
  * The save file format. Pure (no I/O) so it is fully testable in Node.
@@ -100,6 +100,10 @@ function assertLoadable(w: Record<string, unknown>, engine: Engine): asserts w i
   }
   for (const s of engine.systems) {
     if (!(s.id in (w.systems as Record<string, unknown>))) fail(`missing state for system "${s.id}"`);
+  }
+  const geo = (w.systems as Record<string, unknown>).geology as { version?: unknown } | undefined;
+  if (geo && geo.version !== GEOLOGY_VERSION) {
+    throw new SaveError(`This save's ground was made by a different version of the geology (version ${String(geo.version)}; this build has ${GEOLOGY_VERSION}).`);
   }
   for (const st of Object.values(w.rng as Record<string, unknown>)) {
     if (!Array.isArray(st) || st.length !== 4 || !st.every((n) => Number.isInteger(n) && n >= 0 && n <= 0xffffffff)) {
