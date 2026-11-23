@@ -5,3 +5,4 @@ playwright-report
 .vercel
 *.local
 .env*
+gitcraft-out/
