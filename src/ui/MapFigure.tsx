@@ -3,16 +3,20 @@ import type { GameRuntime, Snapshot } from "../app/runtime";
 import { SURVEYS } from "../content/geography/surveys";
 import { JEFFERSON_1890, regionSizeKm } from "../content/geography/jefferson1890";
 import { drawManuscript, drawPrint, FIELD_SCALE, hitTest, toKm, type MapView, type Selection } from "../render/plate/map";
+import { drawLife } from "../render/plate/life";
 import type { Pt } from "../render/plate/kit";
 import { devOverlay } from "./devHook";
 
-export type Tool = "select" | "section" | "prospect";
+export type Tool = "select" | "section" | "prospect" | "stake";
 
 interface Props {
   runtime: GameRuntime;
   snap: Snapshot;
   selection: Selection;
   onSelect: (s: Selection) => void;
+  tool: Tool;
+  setTool: (t: Tool) => void;
+  onOpenRig: () => void;
 }
 
 const REGION = regionSizeKm(JEFFERSON_1890);
@@ -24,17 +28,16 @@ const MAX_SCALE = 140;
 
 interface Cache { canvas: HTMLCanvasElement; view: MapView; dpr: number; print: unknown }
 
-export function MapFigure({ runtime, snap, selection, onSelect }: Props) {
+export function MapFigure({ runtime, snap, selection, onSelect, tool, setTool, onOpenRig }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const [tool, setTool] = useState<Tool>("select");
   const [draft, setDraft] = useState<Pt | null>(null);
   const view = useRef<MapView | null>(null);
   const cache = useRef<Cache | null>(null);
   const dirty = useRef(true);
   const settle = useRef<number | undefined>(undefined);
-  const latest = useRef({ snap, selection, draft, tool });
-  latest.current = { snap, selection, draft, tool };
+  const latest = useRef({ snap, selection, draft, tool, setTool, onOpenRig });
+  latest.current = { snap, selection, draft, tool, setTool, onOpenRig };
 
   const minScale = () => { const v = view.current!; return Math.min(v.w / REGION.width, v.h / REGION.height) * 0.98; };
   const clampView = () => {
@@ -87,9 +90,11 @@ export function MapFigure({ runtime, snap, selection, onSelect }: Props) {
     };
     const ro = new ResizeObserver(resize);
     ro.observe(el);
+    const started = performance.now();
     const frame = () => {
       raf = requestAnimationFrame(frame);
-      if (!dirty.current || !view.current || !cache.current) return;
+      // The plate is alive (smoke, the train, the party, daylight), so it redraws every frame.
+      if (!view.current || !cache.current) return;
       dirty.current = false;
       const v = view.current, c = cache.current, dpr = Math.min(window.devicePixelRatio || 1, 2);
       const ctx = cv.getContext("2d")!;
@@ -105,6 +110,7 @@ export function MapFigure({ runtime, snap, selection, onSelect }: Props) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const { snap: s, selection: sel, draft: d } = latest.current;
       drawManuscript(ctx, v, { knowledge: s.knowledge, print: s.print, selection: sel, draft: d });
+      drawLife(ctx, v, { anim: (performance.now() - started) / 1000, gameTime: s.time, knowledge: s.knowledge, wells: s.ops.well ? [...s.ops.past, s.ops.well] : s.ops.past });
       devOverlay()?.map(ctx, v, runtime.currentWorld.seed);
     };
     raf = requestAnimationFrame(frame);
@@ -183,13 +189,19 @@ export function MapFigure({ runtime, snap, selection, onSelect }: Props) {
         if (!d) { setDraft(km); return; }
         const reason = runtime.command("interp.section.add", { a: d, b: km });
         setDraft(null);
-        setTool("select");
+        latest.current.setTool("select");
         if (!reason) { const secs = runtime.snapshot().knowledge.interp.sections; onSelect({ kind: "section", id: secs[secs.length - 1]!.id }); }
+        return;
+      }
+      if (t === "stake") {
+        const reason = runtime.command("rig.spud", { x: km[0], y: km[1] });
+        latest.current.setTool("select");
+        if (!reason) latest.current.onOpenRig();
         return;
       }
       if (t === "prospect") {
         const reason = runtime.command("interp.prospect.add", { at: km, r: 0.8 });
-        setTool("select");
+        latest.current.setTool("select");
         if (!reason) { const ps = runtime.snapshot().knowledge.interp.prospects; onSelect({ kind: "prospect", id: ps[ps.length - 1]!.id }); }
         return;
       }
@@ -221,7 +233,7 @@ export function MapFigure({ runtime, snap, selection, onSelect }: Props) {
     dirty.current = true;
     scheduleSettle();
   };
-  const hint = tool === "section" ? (draft ? "Tap where the line should end." : "Tap where the line of section should begin.") : tool === "prospect" ? "Tap the centre of your prospect." : null;
+  const hint = tool === "section" ? (draft ? "Tap where the line should end." : "Tap where the line of section should begin.") : tool === "prospect" ? "Tap the centre of your prospect." : tool === "stake" ? "Tap where the derrick should stand." : null;
 
   return (
     <figure class="fig fig-map">

@@ -72,7 +72,22 @@ export interface OpinionEvidence extends Base {
   text: string;
 }
 
-export type Evidence = SignEvidence | WalkEvidence | WellRecordEvidence | OpinionEvidence;
+/** A bailer sample from the company's own well: what came up, and from about where. */
+export interface SampleEvidence extends Base {
+  kind: "sample";
+  provenance: "observed";
+  wellId: string;
+  x: number;
+  y: number;
+  /** The bail interval: depth is smeared over the hole drilled since the last bail. */
+  topFt: number;
+  baseFt: number;
+  lith: ReportedLith;
+  call: string;
+  show?: "gas" | "oil" | "sulphur";
+}
+
+export type Evidence = SignEvidence | WalkEvidence | WellRecordEvidence | OpinionEvidence | SampleEvidence;
 
 export interface SectionLine {
   id: string;

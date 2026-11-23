@@ -1,7 +1,7 @@
 import type { GameRuntime, Snapshot } from "../app/runtime";
 import { formatDate } from "../app/runtime";
 import { SURVEYS, insidePoly } from "../content/geography/surveys";
-import { CONSULT_DAYS, INQUIRE_DAYS, WALK_DAYS, type Evidence, type FieldTask } from "../sim";
+import { CONSULT_DAYS, COSTS, INQUIRE_DAYS, WALK_DAYS, type Evidence, type FieldTask, type Well } from "../sim";
 import type { Selection } from "../render/plate/map";
 
 interface Props {
@@ -9,6 +9,8 @@ interface Props {
   snap: Snapshot;
   selection: Selection;
   onSelect: (s: Selection) => void;
+  onStake: () => void;
+  onOpenRig: () => void;
 }
 
 const ROMAN = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii", "xiii", "xiv", "xv", "xvi", "xvii", "xviii", "xix", "xx"];
@@ -32,19 +34,57 @@ function evidenceLine(e: Evidence): { text: string; src: string; red?: boolean }
       return { text: e.found ? `Walked the survey: ${e.found} sign${e.found > 1 ? "s" : ""} noted.` : "Walked the survey: nothing out of the ordinary.", src: `${when}` };
     case "opinion":
       return { text: e.text, src: `${e.from === "geologist" ? "A geologist from Austin" : "Talk in Beaumont"}, ${when} · ${e.stance}` };
+    case "sample":
+      return { text: `Bailer sample, ${e.topFt}–${e.baseFt} ft: ${e.call}.`, src: `Our own well, ${when}`, red: !!e.show };
     case "wellRecord":
       return { text: `${e.owner}'s water well (${e.year}), ${e.depthFt} ft. ${e.intervals.length} beds described.`, src: `His account, ${when} · ${memoryWord(e.memory)}`, red: e.intervals.some((i) => i.show) };
   }
 }
 
+const dollars = (n: number) => "$" + Math.floor(n).toLocaleString("en-US");
+const stakeNote = () => `${dollars(COSTS.rigUp)} to raise a derrick, then tap the spot`;
+
+function wellWords(w: Well): string {
+  if (w.status === "rigging") return "· the derrick is going up";
+  if (w.status === "gusher") return `· came in at ${Math.floor(w.depthFt)} ft`;
+  if (w.status === "dry") return `· dry at ${Math.floor(w.depthFt)} ft`;
+  return `· ${Math.floor(w.depthFt)} ft${w.status === "stuck" ? ", tools stuck" : ""}`;
+}
+
+/** One plain next step, from what the company has done so far. */
+function nextStep(snap: Snapshot): string {
+  const k = snap.knowledge, well = snap.ops.well;
+  if (well && well.status !== "gusher" && well.status !== "dry") return "Go to the rig and make hole.";
+  if (well?.status === "gusher") return "You struck it. Leases and money come next.";
+  if (well?.status === "dry") return snap.ops.cash > COSTS.rigUp + 100 ? "A dry hole still teaches you the ground. Choose a better spot and try again." : "Too little money left for another derrick.";
+  if (!k.evidence.some((e) => e.kind === "walked")) return "Tap a survey near a hill and walk the ground. Look for gas bubbling, sour springs, a rise in the prairie.";
+  if (!k.evidence.some((e) => e.kind === "surfaceSign" && e.sign !== "mound")) return "Walk more surveys. Gas and sour springs cluster where oil lies beneath.";
+  return "Signs found. Pick the most promising survey and stake a well there, on the flank of the rise rather than its crown.";
+}
+
 const memoryWord = (m: number) => (m > 0.85 ? "remembers well" : m > 0.7 ? "fair memory" : "hazy memory");
 
-export function FieldNotes({ runtime, snap, selection, onSelect }: Props) {
+export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpenRig }: Props) {
   const k = snap.knowledge;
   const task = k.task;
   const act = (type: string, payload: Record<string, string>) => () => runtime.command(type, payload);
 
-  const busy = task ? <p class="task" data-testid="task">{taskLine(task, snap)}</p> : null;
+  const well = snap.ops.well;
+  const drilling = !!well && well.status !== "gusher" && well.status !== "dry";
+  const wellLine = well ? (
+    <div class="well-line">
+      <p>
+        <b>{well.name}</b> {wellWords(well)}
+      </p>
+      <button type="button" class="button button-primary" data-testid="to-rig" onClick={onOpenRig}>Go to the rig</button>
+    </div>
+  ) : null;
+  const busy = (
+    <>
+      {task ? <p class="task" data-testid="task">{taskLine(task, snap)}</p> : null}
+      {wellLine}
+    </>
+  );
 
   if (selection?.kind === "survey") {
     const s = SURVEYS.find((x) => x.id === selection.id);
@@ -75,6 +115,11 @@ export function FieldNotes({ runtime, snap, selection, onSelect }: Props) {
           <button type="button" class="button button-primary" disabled={!!task} onClick={act("fieldwork.walk", { surveyId: s.id })}>Walk the ground<small>{days(WALK_DAYS(s.acres))}</small></button>
           <button type="button" class="button" disabled={!!task} onClick={act("fieldwork.consult", { surveyId: s.id, who: "gossip" })}>Ask in Beaumont<small>{days(CONSULT_DAYS.gossip)}</small></button>
           <button type="button" class="button" disabled={!!task} onClick={act("fieldwork.consult", { surveyId: s.id, who: "geologist" })}>Send for a geologist<small>{days(CONSULT_DAYS.geologist)}</small></button>
+        </div>
+        <div class="acts">
+          <button type="button" class="button button-drill" data-testid="stake" disabled={drilling || snap.ops.cash < COSTS.rigUp} onClick={onStake}>
+            Stake a well here<small>{drilling ? "one rig at a time" : stakeNote()}</small>
+          </button>
         </div>
       </section>
     );
@@ -131,8 +176,12 @@ export function FieldNotes({ runtime, snap, selection, onSelect }: Props) {
     <section class="notes-body" aria-labelledby="notes-h">
       <h2 id="notes-h">Field notes</h2>
       <p class="sub">Spring 1890. Somewhere under this prairie, perhaps, is oil.</p>
+      <div class="goal" data-testid="goal">
+        <p class="goal-head">Bring in a well before the money runs out.</p>
+        <p>You have <b>{dollars(snap.ops.cash)}</b>, one rig and a driller. Every day costs money, and raising a derrick costs {dollars(COSTS.rigUp)}.</p>
+        <p class="goal-next"><b>Next:</b> {nextStep(snap)}</p>
+      </div>
       {busy}
-      <p>Choose a survey on the map to see what is known of it, and send the party out to look. Ask settlers what their wells went through. Draw a line of section to set those records side by side.</p>
       <p class="empty">Print is the county survey anyone can buy. Red is the company's own hand. Blank paper means unknown, not empty.</p>
       <p class="tally">{signs} sign{signs === 1 ? "" : "s"} seen · {records} well record{records === 1 ? "" : "s"} · {k.interp.sections.length} section{k.interp.sections.length === 1 ? "" : "s"} · {k.interp.prospects.length} prospect{k.interp.prospects.length === 1 ? "" : "s"}</p>
     </section>

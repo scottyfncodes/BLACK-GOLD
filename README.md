@@ -6,7 +6,7 @@ Start with one wooden derrick and a cable-tool rig in Southeast Texas. Read the 
 
 ## Status
 
-**M1 (The ground) complete.** A playable prospect: seeded salt-dome geology hidden from the player, fieldwork that turns it into evidence, and the Geologist's Plate: a published 1890 map with the company's knowledge in carmine, and sections built only from what is known. The design and build plan are in [`docs/DESIGN.md`](docs/DESIGN.md); the art direction is in [`docs/ART-DIRECTION.md`](docs/ART-DIRECTION.md).
+**First Gusher: drilling is playable.** Stake a well, raise the derrick, work the temper screw in rhythm, bail samples, and bring in oil before the money runs out. Built on **M1 (The ground):** A playable prospect: seeded salt-dome geology hidden from the player, fieldwork that turns it into evidence, and the Geologist's Plate: a published 1890 map with the company's knowledge in carmine, and sections built only from what is known. The design and build plan are in [`docs/DESIGN.md`](docs/DESIGN.md); the art direction is in [`docs/ART-DIRECTION.md`](docs/ART-DIRECTION.md).
 
 | Phase | Scope | State |
 |---|---|---|

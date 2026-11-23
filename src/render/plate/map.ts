@@ -61,8 +61,12 @@ export function drawPrint(ctx: CanvasRenderingContext2D, v: MapView, print: Prin
 
   // Woodland and marsh marks, anchored in km so they do not swim when the map pans.
   const woods = g.woods.map(PP), marsh = g.marsh.map(PP);
+  // Bounding boxes first: most scatter points are nowhere near a given polygon.
+  const bb = (p: Pt[]): Box => p.reduce<Box>((b, [x, y]) => [Math.min(b[0], x), Math.min(b[1], y), Math.max(b[2], x), Math.max(b[3], y)], [Infinity, Infinity, -Infinity, -Infinity]);
+  const woodsBB = woods.map(bb), marshBB = marsh.map(bb);
+  const within = (polys: Pt[][], boxes: Box[], x: number, y: number) => polys.some((p, i) => { const b = boxes[i]!; return x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3] && inside(p, x, y); });
   scatterKm(v, field ? 7.5 : 10, 61, (x, y, r) => {
-    if (!woods.some((p) => inside(p, x, y)) || marsh.some((p) => inside(p, x, y))) return;
+    if (!within(woods, woodsBB, x, y) || within(marsh, marshBB, x, y)) return;
     if (fbm(x / 70 - ox / 70, y / 70 - oy / 70, 64, 3) < 0.36 + r * 0.12) return;
     const rr = (field ? 1.5 : 1.1) + r * 1.1;
     ctx.strokeStyle = "rgba(70, 84, 44, 0.75)";
@@ -74,7 +78,7 @@ export function drawPrint(ctx: CanvasRenderingContext2D, v: MapView, print: Prin
     ctx.fillRect(x - 0.4, y + rr - 0.2, 0.8, 1.4);
   });
   scatterKm(v, 13, 71, (x, y, r) => {
-    if (r > 0.7 || !marsh.some((p) => inside(p, x, y))) return;
+    if (r > 0.7 || !within(marsh, marshBB, x, y)) return;
     ctx.strokeStyle = "rgba(40, 92, 104, 0.75)";
     ctx.lineWidth = 0.6;
     const ww = 2.5 + r * 2;
