@@ -11,6 +11,7 @@ interface Props {
   onSelect: (s: Selection) => void;
   onStake: () => void;
   onOpenRig: () => void;
+  onOpenBooks: () => void;
 }
 
 const ROMAN = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii", "xiii", "xiv", "xv", "xvi", "xvii", "xviii", "xix", "xx"];
@@ -97,8 +98,10 @@ function wellWords(w: Well): string {
 function nextStep(snap: Snapshot): string {
   const k = snap.knowledge, well = snap.ops.well;
   if (well && well.status !== "gusher" && well.status !== "dry") return "Go to the rig and make hole.";
-  if (well?.status === "gusher") return "You struck it. Leases and money come next.";
-  if (well?.status === "dry") return snap.ops.cash > COSTS.rigUp + 100 ? "A dry hole still teaches you the ground. Choose a better spot and try again." : "Too little money left for another derrick.";
+  if (!snap.ops.bank.rigOwned) return "The bank has the rig. Open the books: hire the crew out, or buy a used rig.";
+  if (snap.ops.production.producers.length) return "The oil pays at each month's end. The bank will lend more against it; lease more land and drill again.";
+  if (well?.status === "gusher") return well.outcome?.startsWith("OIL") ? "You struck oil. Go to the rig and cap it, and the oil sells each month." : "Gas, with no buyer in 1890. Choose another spot.";
+  if (well?.status === "dry") return snap.ops.cash > COSTS.rigUp + 100 ? "A dry hole still teaches you the ground. Choose a better spot and try again." : "Too little money for another derrick. The bank will lend against the rig: open the books.";
   if (!k.evidence.some((e) => e.kind === "walked")) return "Tap a survey near a hill and walk the ground. Look for gas bubbling, sour springs, a rise in the prairie.";
   if (!k.evidence.some((e) => e.kind === "surfaceSign" && e.sign !== "mound")) return "Walk more surveys. Gas and sour springs cluster where oil lies beneath.";
   return "Signs found. Pick the most promising survey and stake a well there, on the flank of the rise rather than its crown.";
@@ -106,7 +109,7 @@ function nextStep(snap: Snapshot): string {
 
 const memoryWord = (m: number) => (m > 0.85 ? "remembers well" : m > 0.7 ? "fair memory" : "hazy memory");
 
-export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpenRig }: Props) {
+export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpenRig, onOpenBooks }: Props) {
   const k = snap.knowledge;
   const task = k.task;
   const act = (type: string, payload: Record<string, string>) => () => runtime.command(type, payload);
@@ -169,8 +172,8 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
         </div>
         <LeaseBlock runtime={runtime} snap={snap} surveyId={s.id} />
         <div class="acts">
-          <button type="button" class="button button-drill" data-testid="stake" disabled={drilling || !leased || snap.ops.cash < COSTS.rigUp} onClick={onStake}>
-            Stake a well here<small>{drilling ? "one rig at a time" : !leased ? "lease the land first" : stakeNote()}</small>
+          <button type="button" class="button button-drill" data-testid="stake" disabled={drilling || !leased || !snap.ops.bank.rigOwned || snap.ops.cash < COSTS.rigUp} onClick={onStake}>
+            Stake a well here<small>{!snap.ops.bank.rigOwned ? "the bank has the rig" : drilling ? "one rig at a time" : !leased ? "lease the land first" : stakeNote()}</small>
           </button>
         </div>
       </section>
@@ -230,8 +233,9 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
       <p class="sub">Spring 1890. Somewhere under this prairie, perhaps, is oil.</p>
       <div class="goal" data-testid="goal">
         <p class="goal-head">Bring in a well before the money runs out.</p>
-        <p>You have <b>{dollars(snap.ops.cash)}</b>, one rig and a driller. Every day costs money, and raising a derrick costs {dollars(COSTS.rigUp)}.</p>
+        <p>You have <b>{dollars(snap.ops.cash)}</b>{snap.ops.debt > 0 ? <> and owe the bank <b>{dollars(Math.ceil(snap.ops.debt))}</b></> : null}, {snap.ops.bank.rigOwned ? "one rig" : "no rig"} and a driller. Every day costs money, and raising a derrick costs {dollars(COSTS.rigUp)}.</p>
         <p class="goal-next"><b>Next:</b> {nextStep(snap)}</p>
+        <div class="acts"><button type="button" class="button button-quiet" data-testid="open-books" onClick={onOpenBooks}>The books and the bank</button></div>
       </div>
       {busy}
       <p class="empty">Print is the county survey anyone can buy. Red is the company's own hand. Blank paper means unknown, not empty.</p>

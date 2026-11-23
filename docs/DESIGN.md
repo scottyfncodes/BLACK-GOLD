@@ -393,9 +393,9 @@ Each milestone ships through a PR with a live preview link and is playable or in
 - Parcels, owners, lease negotiation, terms and delay rentals, double-entry ledger, monthly statement, cash-flow forecast, bank loan
 
 **Acceptance**
-- [ ] The ledger balances after every transaction (property test over random command sequences)
-- [ ] A lease lapses or charges rental on schedule
-- [ ] The player can lease a parcel and see the cost reflected in the forecast
+- [x] The ledger balances after every transaction (property test over random command sequences)
+- [x] A lease lapses or charges rental on schedule
+- [ ] The player can lease a parcel and see the cost reflected in the forecast (the cost shows in the cash book; the forecast is deferred, see §8)
 
 ### M3: The cockpit (cable-tool drilling)
 
@@ -505,7 +505,7 @@ Where the build deliberately differs from the plan above. Each milestone appends
   - casing at $1.10 a foot;
   - $60 for a fishing job.
 
-  Running out of money ends the well. Leases are not modelled yet, so any surveyed land can be drilled.
+  Running out of money ends the well. At the time leases were not modelled and any surveyed land could be drilled; the next phase (below) requires a lease.
 - **Drilling model.** Penetration depends on how squarely the tools strike, which the player sets by feeding the temper screw, and on the rock at the bit (truth), the bit's sharpness and the cuttings cushion. Uncased sands heave in. Stuck tools come from slack, caving and dirty holes, and every stuck event carries its cause. Bailing returns a sample, which is evidence. A gusher happens only where the truth holds oil or gas (tested).
 - **Pace.** About 60 ft a day in practice, which is period-plausible. From a well-chosen site, the automatic driller brings in about 75% of wells within budget; the failures are deep pays where the money runs out short of the oil. Manual play with good rhythm is faster.
 - **The rig view** is an animated plate drawn on canvas, with sound synthesized through Web Audio, so there are no asset files:
@@ -518,6 +518,42 @@ Where the build deliberately differs from the plan above. Each milestone appends
 - **The living map:** daylight, Beaumont's mill smoke, the train, the field party riding the survey it is walking, the company's derricks in ink, and oil staining the paper where a well came in.
 - **Time at the rig.** 1× is ten game minutes a second, so the feed rhythm is playable. Operations (bailing, dressing, casing, fishing) fast-forward. Stuck tools, a gusher or a dry hole pause the game.
 - **Guidance.** The plate states the goal ("Bring in a well before the money runs out.") and one plain next step.
+
+**Leases, the ledger and the bank (M2, built on the rig)**
+
+- **One financial model.** Every dollar moves through an append-only, double-entry ledger in whole cents (`sim/company/ledger.ts`). Cash, debt and every balance are derived from the entries; nothing else stores money. An entry that does not balance, or is not whole cents, is refused.
+- **Step-size independence.** Money moves only at scheduled events, never in proportion to a frame or a step:
+  - rig time accrues per tick and is entered once a day at midnight;
+  - oil is produced daily and sold on the 1st for the month before;
+  - interest accrues each midnight in exact integer units (1/36,500 of a cent) and is charged on the 1st, with the fractions carried over.
+
+  Tests run the same campaign at steps of 1 minute, 1,439, 1,440 and 1,441 minutes, 9 days and a 500-day jump, and require byte-identical books. One property test plays random command sequences and checks that the books balance after every transaction and that neither cash nor debt goes negative.
+- **Leases** (`sim/company/leases.ts`):
+  - one year, one-eighth royalty, from public information only. The price rises near a printed hill, near Beaumont and near the company's own strikes. A test changes the hidden geology and gets identical terms.
+  - The owner's asking price, or one lower offer at three quarters. Each owner has a fixed temperament, and a refusal stands for 30 days.
+  - A lease is held while a well is drilled or producing on it. Otherwise it is renewed on a delay rental if the cash is there, or it lapses.
+  - Drilling requires a lease.
+- **Minimal production** (`sim/company/production.ts`), not the M4 reservoir model:
+  - capping an oil gusher costs $80;
+  - wagons haul at most 150 bbl a day;
+  - the flow declines with what has been drawn from the trap;
+  - oil sells at 60¢ a barrel at the railhead, less 20¢ hauling and the royalty.
+
+  Gas has no buyer in 1890. Uncapped gushers earn nothing. Gusher and victory behaviour are unchanged; capping is a separate, deliberate step.
+- **The bank** (`sim/company/bank.ts`): the First National Bank of Beaumont lends half the value of the rig and the producing wells, in $50 steps, at 8% a year. Discovering oil raises the credit limit. The player can repay at any time.
+  - **Default is consequential but recoverable.** One unpaid month brings a warning, and the interest is added to the loan. Two in a row bring foreclosure:
+    - the bank takes the rig and sets its value against the loan, paying back any surplus;
+    - a well being drilled is abandoned;
+    - if debt remains, the bank keeps a lien on oil revenue until it is clear.
+  - **The land and wells stay with the company.** Without a rig, the crew can hire out for 30 days at $90, and a used rig costs $300, so no state is unwinnable.
+- **Saves: schema 2.** The version-1 migration turns the stored cash into "Balance brought forward" plus the rig on the books, grants an active well's land a lease, and adds empty lease, production and bank books. It is idempotent and tested against a real version-1 save. Loading validates that every entry balances and that the balances match a recompute.
+- **The books in the UI.** The clock bar shows cash in hand and any debt, and opens the Company's Books:
+  - the position;
+  - the bank counter: borrow, repay $50 or all of it, and the recovery actions;
+  - the cash book by month, summarised by heading (Land, Drilling, Crew, Oil, The bank…). Each month's entries fold away, with Date, Particulars, Paid out, Received and Balance columns.
+
+  Daily rig-time entries are aggregated in the month summary, so the book stays readable.
+- **Not yet:** the cash-flow forecast (M2) and the monthly statement as a document. The month summary in the books stands in for both until the economy (M5) gives them something to forecast.
 
 ## 9. Open decisions
 

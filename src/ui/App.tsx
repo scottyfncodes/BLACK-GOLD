@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { formatClock, formatDate, type GameRuntime, type Snapshot, type Speed } from "../app/runtime";
 import type { Selection } from "../render/plate/map";
+import { Books } from "./Books";
 import { CampaignMenu } from "./CampaignMenu";
 import { FieldNotes } from "./FieldNotes";
 import { MapFigure, type Tool } from "./MapFigure";
@@ -26,9 +27,20 @@ const SPEEDS: { speed: Speed; label: string; title: string; key: string }[] = [
   { speed: "skip", label: "Skip", title: "Run until something needs you, at most to the start of next month (4)", key: "4" },
 ];
 
+/** The weekday gives way first when the clock bar is narrow. */
+function dateParts(t: number) {
+  const long = formatDate(t, "long");
+  const i = long.indexOf(", ");
+  return i < 0 ? long : <><span class="weekday">{long.slice(0, i + 2)}</span>{long.slice(i + 2)}</>;
+}
+const usd = (n: number) => "$" + Math.floor(n).toLocaleString("en-US");
+const cashWords = (snap: Snapshot) => `${usd(snap.ops.cash)} in hand${snap.ops.debt > 0 ? `, ${usd(Math.ceil(snap.ops.debt))} owed to the bank` : ""}`;
+
 export function App({ runtime }: { runtime: GameRuntime }) {
   const snap = useSnapshot(runtime);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [booksOpen, setBooksOpen] = useState(false);
+  const openBooks = useCallback(() => setBooksOpen(true), []);
   const [selection, setSelection] = useState<Selection>(null);
   const onSelect = useCallback((s: Selection) => setSelection(s), []);
   const [tool, setTool] = useState<Tool>("select");
@@ -43,7 +55,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (menuOpen || rigOpen || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (menuOpen || booksOpen || rigOpen || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement) {
         if (e.key === " ") return;
       }
@@ -58,7 +70,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [runtime, menuOpen, rigOpen]);
+  }, [runtime, menuOpen, booksOpen, rigOpen]);
 
   const sections = snap.knowledge.interp.sections;
   const line = selection?.kind === "section" ? sections.find((s) => s.id === selection.id) : sections[sections.length - 1];
@@ -80,15 +92,19 @@ export function App({ runtime }: { runtime: GameRuntime }) {
       </div>
 
       <aside class="notes" aria-label="Field notes">
-        <FieldNotes runtime={runtime} snap={snap} selection={selection} onSelect={onSelect} onStake={() => setTool("stake")} onOpenRig={openRig} />
+        <FieldNotes runtime={runtime} snap={snap} selection={selection} onSelect={onSelect} onStake={() => setTool("stake")} onOpenRig={openRig} onOpenBooks={openBooks} />
       </aside>
 
       <footer class="clock">
         <div class="clock-row">
           <div class="when">
-            <span data-testid="date">{formatDate(snap.time, "long")}</span>
+            <span data-testid="date">{dateParts(snap.time)}</span>
             <span class="clock-time" data-testid="clock">{formatClock(snap.time)}</span>
           </div>
+          <button type="button" class="clock-menu clock-books" data-testid="books" aria-label={`The company's books: ${cashWords(snap)}`} onClick={openBooks}>
+            <span class="purse" data-testid="cash">{usd(snap.ops.cash)}</span>
+            {snap.ops.debt > 0 && <span class="owe" data-testid="debt">owes {usd(Math.ceil(snap.ops.debt))}</span>}
+          </button>
           <button type="button" class="clock-menu" onClick={() => setMenuOpen(true)}>Campaign</button>
         </div>
         <div class="speeds" role="radiogroup" aria-label="Game speed">
@@ -102,6 +118,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
       </footer>
 
       <CampaignMenu runtime={runtime} snap={snap} open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <Books runtime={runtime} snap={snap} open={booksOpen} onClose={() => setBooksOpen(false)} />
     </div>
     {showRig && <RigView runtime={runtime} snap={snap} onClose={() => setRigOpen(false)} />}
     </>

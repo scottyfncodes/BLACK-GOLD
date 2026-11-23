@@ -6,12 +6,12 @@ Start with one wooden derrick and a cable-tool rig in Southeast Texas. Read the 
 
 ## Status
 
-**First Gusher: drilling is playable.** Stake a well, raise the derrick, work the temper screw in rhythm, bail samples, and bring in oil before the money runs out. Built on **M1 (The ground):** A playable prospect: seeded salt-dome geology hidden from the player, fieldwork that turns it into evidence, and the Geologist's Plate: a published 1890 map with the company's knowledge in carmine, and sections built only from what is known. The design and build plan are in [`docs/DESIGN.md`](docs/DESIGN.md); the art direction is in [`docs/ART-DIRECTION.md`](docs/ART-DIRECTION.md).
+**Leases, the ledger and the bank.** Lease the land from its owner, drill, cap the oil and sell it each month, and borrow against what the company owns, all through one double-entry ledger in whole cents. Default is consequential but never a dead end. **First Gusher: drilling is playable.** Stake a well, raise the derrick, work the temper screw in rhythm, bail samples, and bring in oil before the money runs out. Built on **M1 (The ground):** A playable prospect: seeded salt-dome geology hidden from the player, fieldwork that turns it into evidence, and the Geologist's Plate: a published 1890 map with the company's knowledge in carmine, and sections built only from what is known. The design and build plan are in [`docs/DESIGN.md`](docs/DESIGN.md); the art direction is in [`docs/ART-DIRECTION.md`](docs/ART-DIRECTION.md).
 
 | Phase | Scope | State |
 |---|---|---|
 | 0: Foundation | Deterministic sim core, clock, persistence, minimal shell | Done (M0) |
-| 1: First Oil | Playable 1890 Southeast Texas cable-tool slice | M1 done (the ground); next M2, land and money |
+| 1: First Oil | Playable 1890 Southeast Texas cable-tool slice | M1 (the ground), the rig, and M2 (leases, ledger, bank) built; next M4, reservoirs and production |
 | 2: Industrial Expansion | Rotary, mud, multiple rigs, research, competitors | Designed at outline level |
 | 3+ | Directional, modern, speculative eras | Vision only |
 
