@@ -12,7 +12,8 @@
 5. [Phase 1 vertical slice: "The Big Hill, 1890"](#5-phase-1-vertical-slice-the-big-hill-1890)
 6. [Milestone plan and acceptance criteria](#6-milestone-plan-and-acceptance-criteria)
 7. [What we are not building yet](#7-what-we-are-not-building-yet)
-8. [Open decisions](#8-open-decisions)
+8. [As-built notes](#8-as-built-notes)
+9. [Open decisions](#9-open-decisions)
 
 ---
 
@@ -172,7 +173,7 @@ One model per phenomenon, integrated at different resolution. There are no separ
 
 ### 3.6 Persistence
 
-- Save = `{ schemaVersion, buildId, seed, state, commandLogTail }`, gzipped.
+- Save = `{ format, schemaVersion, buildId, savedAt, world }`, gzipped. The seed lives in the world. A command-log tail for bug reports is added when there are player commands worth logging.
 - **Migrations** are an ordered list of pure functions `vN → vN+1`. Old saves load forever, and there is a test for every migration.
 - Autosave on month boundaries and before risky operations (a gusher, running casing). Three rolling slots plus manual saves. Export and import as a `.blackgold` file.
 
@@ -292,7 +293,7 @@ News of a discovery spreads by distance and time. Lease asking prices on nearby 
 
 *Left out for now:* stock markets, multiple commodities, refining, taxes beyond a flat figure, inflation, M&A.
 
-### 4.6 Technology (data model from M0, gameplay from Phase 2)
+### 4.6 Technology (data model and gameplay from Phase 2)
 
 ```ts
 type Tech = {
@@ -350,7 +351,7 @@ Assistance is on by default: the driller comments in plain language ("line's goi
 
 ### Look and feel (Era I)
 
-A paper and ink world: field maps on aged paper with hand-inked annotations, a ledger set in period typography, cast-iron and brass gauges, a sepia and oil-black palette with a single hot accent for fire and gushers. Sound is half the feel: engine thump, cable slap, the bailer's gurgle, steam. The final direction gets picked visually before UI work starts (see the [open decisions](#8-open-decisions)).
+**Decided: B · Geologist's Plate.** The game looks like a hand-coloured plate from a state geological survey report. Every view is a numbered plate, with the section and the map as captioned figures. Watercolour washes are for land and rock only, and infrastructure is drawn in ink. The company's own knowledge is written in carmine, using the conventions geologists used for certainty, and blank paper means "not known". Set in Bodoni Moda. The rules, tokens and what is ruled out are in [`docs/ART-DIRECTION.md`](ART-DIRECTION.md). Sound is half the feel: engine thump, cable slap, the bailer's gurgle, steam.
 
 ### Slice success criterion (from the prompt, made testable)
 
@@ -449,7 +450,7 @@ Deferring these is a decision, not an oversight. Each has an entry point already
 | 3D wellbore view, Three.js | No directional drilling until Phase 3 | Survey-station wellbore model (M3) |
 | Directional drilling: toolface, motors, MWD | Phase 3. Needs instruments to exist in-world first | Actual vs. known wellbore positions (M3) |
 | World map and multiple basins | One basin has to be fun first | `basinId` in every geology key |
-| Research tree UI | Nothing real to research in 1890 Beaumont yet | `tech/` data model (M0) |
+| Research tree UI and `tech/` model | Nothing real to research in 1890 Beaumont yet. Built with its first real technology in Phase 2 rather than as an unused M0 abstraction | System registry (M0) |
 | AI corporations with strategy | The Rush model covers Phase 1 honestly | `actor` on every command |
 | Employees beyond driller, dresser, rig builders, geologist | Roles must earn their place with real effects | Generic skill model |
 | Offshore, horizontal, RSS, geosteering | Phases 3–4 | — |
@@ -462,12 +463,24 @@ Deferring these is a decision, not an oversight. Each has an entry point already
 
 ---
 
-## 8. Open decisions
+## 8. As-built notes
 
-These need your call before or during M0. Defaults are noted, and work proceeds on the default unless you say otherwise.
+Where the build deliberately differs from the plan above. Each milestone appends here.
+
+**M0 (Foundation)**
+
+- The `tech/` data model moved to Phase 2, so the first technology arrives with real gameplay instead of an unused abstraction.
+- "Until something happens" also stops at the start of the next month, because M0 has no interrupt sources yet. Real interrupts take over from M3.
+- Speeds are 1× = 1 game hour per real second, 4× and 16× multiples, Skip about a month per half second. They get retuned when the cockpit (M3) needs minute-level play.
+- The unit toggle (oilfield vs. SI) arrives with the first measured quantity in M1. M0 displays nothing with units except the map's scale bar.
+- The 60 fps and under-2 s load criteria are measured in headless Chromium: frame rate at 16×, and load under 4× CPU and network throttling as a stand-in for a mid-range phone.
+
+## 9. Open decisions
+
+Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.
 
 1. **Platform:** web-first with per-PR live preview links. *Default: yes.*
 2. **Hosting:** Vercel static deploy with preview URLs per PR. This needs the repository connected to a Vercel project, which is your approval to give. *Default: Vercel, set up at M0.*
-3. **Visual direction:** before M6 UI work, two or three Era I style frames get rendered for you to pick from (paper map + ledger + cockpit). *Default: "paper, ink and cast iron," as described in Section 5.*
+3. **Visual direction:** *Decided: B · Geologist's Plate*, chosen from three rendered directions in review round 1. See [`docs/ART-DIRECTION.md`](ART-DIRECTION.md).
 4. **Units:** period oilfield units displayed by default with an SI toggle. *Default: yes.*
 5. **Historical naming:** real places, fictional people and companies. *Default: yes.*
