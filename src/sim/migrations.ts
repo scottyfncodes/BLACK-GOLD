@@ -7,6 +7,8 @@ import { insertScheduled, type WorldState } from "./core/engine";
 import { MINUTES_PER_DAY } from "./core/time";
 import { emptyLedger, post, recompute, dollarsToCents, type Ledger } from "./company/ledger";
 import { RIG_VALUE } from "./operations";
+import { emptyLeaseBook, ROYALTY, termEnd, type LeaseBook } from "./company/leases";
+import { SURVEYS } from "../content/geography/surveys";
 
 export type Migration = (world: Record<string, unknown>) => Record<string, unknown>;
 
@@ -31,6 +33,18 @@ export function v1ToV2(input: Record<string, unknown>): Record<string, unknown> 
     delete ops.cash;
   }
   if (!("accrued" in ops)) ops.accrued = { ticks: 0 };
+  if (!("leases" in ops)) {
+    // A well already being drilled keeps its land: the lease is granted from the day of migration.
+    const book: LeaseBook = emptyLeaseBook();
+    const well = ops.well as { surveyId?: string; status?: string } | null;
+    const survey = well && well.status !== "gusher" && well.status !== "dry" ? SURVEYS.find((s) => s.id === well.surveyId) : undefined;
+    if (survey) {
+      const expiresAt = termEnd(world.time);
+      book.leases.push({ surveyId: survey.id, signedAt: world.time, expiresAt, acres: survey.acres, bonusCents: 0, royalty: ROYALTY, status: "active", renewals: 0 });
+      insertScheduled(world, expiresAt, "lease.term", { surveyId: survey.id });
+    }
+    ops.leases = book as unknown as Record<string, unknown>;
+  }
   if (!world.queue.some((e) => e.type === "company.day")) insertScheduled(world, nextMidnight(world.time), "company.day");
   return world;
 }

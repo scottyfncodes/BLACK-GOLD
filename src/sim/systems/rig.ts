@@ -18,6 +18,8 @@ import { generateGeology, rockAt, type Lithology, type RockAt } from "../geology
 import type { SampleEvidence } from "../knowledge/types";
 import { accruedCents, COSTS, RIG_VALUE, STARTING_CASH, type Operation, type OperationsState, type Well } from "../operations";
 import { cashCents, dollarsToCents, emptyLedger, pay, post } from "../company/ledger";
+import { activeLease, askingTerms, emptyLeaseBook, ownerAccepts, REFUSAL_DAYS, surveyById, termEnd, type PublicNews } from "../company/leases";
+import { printedMap } from "../surface/print";
 
 type Ctx = SystemContext<Json>;
 const S = (ctx: Ctx) => ctx.state as unknown as OperationsState;
@@ -179,6 +181,24 @@ function complete(ctx: Ctx, w: Well, op: Operation): void {
   }
 }
 
+function notice(ctx: Ctx, message: string): void {
+  ctx.emit({ type: "company.notice", severity: "notice", interrupt: false, data: { message } });
+}
+
+/** Extend a lease by one term, from its current expiry. */
+function renew(ctx: Ctx, lease: { expiresAt: number; renewals: number; surveyId: string }, message: string): void {
+  lease.expiresAt = termEnd(lease.expiresAt);
+  lease.renewals++;
+  ctx.schedule(lease.expiresAt, "lease.term", { surveyId: lease.surveyId });
+  notice(ctx, message);
+}
+
+/** Public news: where the company's wells have come in with oil. */
+function news(st: OperationsState): PublicNews {
+  const wells = st.well ? [...st.past, st.well] : st.past;
+  return { strikes: wells.filter((w) => w.status === "gusher" && w.outcome?.startsWith("OIL")).map((w) => ({ x: w.x, y: w.y })) };
+}
+
 /** Cash that can be spent now: the books less rig time run today and not yet entered. */
 function available(st: OperationsState): number {
   return cashCents(st.ledger) - accruedCents(st);
@@ -210,7 +230,7 @@ function well(ctx: Ctx): Well {
 
 export const rig: System<Json> = {
   id: "operations",
-  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, well: null, past: [], samples: [], next: 1 }) as unknown as Json,
+  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), well: null, past: [], samples: [], next: 1 }) as unknown as Json,
   init(ctx) {
     const st = S(ctx);
     post(st.ledger, ctx.now, "opening", "Capital paid in", [{ account: "cash", cents: dollarsToCents(STARTING_CASH) }, { account: "equity", cents: -dollarsToCents(STARTING_CASH) }]);
@@ -222,6 +242,27 @@ export const rig: System<Json> = {
       // Rig time is entered in the books once a day, for the day just ended.
       flushRigTime(ctx, ctx.now - 1);
       ctx.schedule(nextMidnight(ctx.now), "company.day");
+    },
+    "lease.term"(ctx, payload) {
+      const st = S(ctx);
+      const surveyId = (payload as { surveyId?: string })?.surveyId ?? "";
+      const lease = st.leases.leases.find((l) => l.surveyId === surveyId && l.status === "active" && l.expiresAt === ctx.now);
+      if (!lease) return;
+      const name = surveyById(surveyId)?.name ?? "the";
+      const w = st.well;
+      // Held by operations: a well being drilled on the lease keeps it.
+      if (w && w.surveyId === surveyId && (w.status === "rigging" || w.status === "drilling" || w.status === "stuck")) {
+        renew(ctx, lease, `The ${name} lease is held by the well being drilled on it.`);
+        return;
+      }
+      const t = askingTerms(surveyById(surveyId)!, printedMap(ctx.seed), news(st));
+      if (available(st) >= t.rentalCents) {
+        pay(st.ledger, ctx.now, "lease", `Delay rental on the ${name} lease, one year`, "delayRental", t.rentalCents, { surveyId });
+        renew(ctx, lease, `Paid $${t.rentalCents / 100} delay rental to keep the ${name} lease another year.`);
+        return;
+      }
+      lease.status = "lapsed";
+      notice(ctx, `The ${name} lease has lapsed: the delay rental of $${t.rentalCents / 100} could not be paid.`);
     },
     "rig.tick"(ctx) {
       const st = S(ctx);
@@ -250,6 +291,7 @@ export const rig: System<Json> = {
       if (typeof p?.x !== "number" || typeof p?.y !== "number") throw new CommandRejected("Choose a place to drill.");
       const survey = SURVEYS.find((s) => insidePoly(s.poly, p.x as number, p.y as number));
       if (!survey) throw new CommandRejected("Drill on surveyed land.");
+      if (!activeLease(st.leases, survey.id, ctx.now)) throw new CommandRejected(`You hold no lease on the ${survey.name} survey. Lease it first.`);
       if (available(st) < dollarsToCents(COSTS.rigUp)) throw new CommandRejected(`Raising a derrick costs $${COSTS.rigUp}. You have $${Math.floor(available(st) / 100)}.`);
       if (st.well) st.past.push(st.well);
       const n = st.past.length + 1;
@@ -261,6 +303,38 @@ export const rig: System<Json> = {
       };
       startOp(ctx, st.well, "rigup");
       ctx.schedule(ctx.now + TICK_MINUTES, "rig.tick");
+    },
+    "lease.take"(ctx, c: Command) {
+      const st = S(ctx);
+      const p = c.payload as { surveyId?: string; offer?: string };
+      const survey = surveyById(p?.surveyId ?? "");
+      if (!survey) throw new CommandRejected("No such survey.");
+      if (activeLease(st.leases, survey.id, ctx.now)) throw new CommandRejected(`You already hold the ${survey.name} lease.`);
+      const lower = p.offer === "lower";
+      const t = askingTerms(survey, printedMap(ctx.seed), news(st));
+      if (lower && (st.leases.refusedUntil[survey.id] ?? -1) > ctx.now) throw new CommandRejected(`The owner has already refused a lower offer. The asking bonus is $${t.askingCents / 100}.`);
+      const cents = lower ? t.lowerCents : t.askingCents;
+      if (available(st) < cents) throw new CommandRejected(`The bonus is $${cents / 100}. You have $${Math.floor(available(st) / 100)}.`);
+      if (lower && !ownerAccepts(ctx.seed, survey.id)) {
+        st.leases.refusedUntil[survey.id] = ctx.now + REFUSAL_DAYS * MINUTES_PER_DAY;
+        notice(ctx, `${survey.owner} refused $${cents / 100} for the ${survey.name} survey. The asking bonus stands at $${t.askingCents / 100}.`);
+        return;
+      }
+      pay(st.ledger, ctx.now, "lease", `Lease bonus, ${survey.name} survey (${survey.acres} acres)`, "leaseBonus", cents, { surveyId: survey.id });
+      const expiresAt = termEnd(ctx.now);
+      st.leases.leases.push({ surveyId: survey.id, signedAt: ctx.now, expiresAt, acres: survey.acres, bonusCents: cents, royalty: t.royalty, status: "active", renewals: 0 });
+      ctx.schedule(expiresAt, "lease.term", { surveyId: survey.id });
+      notice(ctx, `Leased the ${survey.name} survey for $${cents / 100}: one year, one-eighth royalty to ${survey.owner}.`);
+    },
+    "lease.release"(ctx, c: Command) {
+      const st = S(ctx);
+      const surveyId = (c.payload as { surveyId?: string })?.surveyId ?? "";
+      const lease = activeLease(st.leases, surveyId, ctx.now);
+      if (!lease) throw new CommandRejected("You hold no lease there.");
+      const w = st.well;
+      if (w && w.surveyId === surveyId && w.status !== "gusher" && w.status !== "dry") throw new CommandRejected("You are drilling on that lease.");
+      lease.status = "released";
+      notice(ctx, `Released the ${surveyById(surveyId)?.name ?? ""} lease.`);
     },
     "rig.feed"(ctx, c: Command) {
       const w = well(ctx);

@@ -163,6 +163,10 @@ export class GameRuntime {
         // Stuck tools, a gusher or a dry hole: stop the clock so the player can act.
         if (e.interrupt) { this.speed = "paused"; this.carry = 0; }
       }
+      if (e.type === "company.notice") {
+        this.rev++;
+        this.status = String((e.data as { message?: string } | undefined)?.message ?? "");
+      }
       if (e.type === "fieldwork.report") {
         this.rev++;
         this.status = String((e.data as { message?: string } | undefined)?.message ?? "The party is back.");

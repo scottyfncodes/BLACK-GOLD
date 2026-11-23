@@ -21,6 +21,7 @@ export { printedMap, PRINT_RELIEF_FT, type PrintedMap, type PrintedHill, type Pr
 export { WALK_DAYS, CONSULT_DAYS, INQUIRE_DAYS } from "./systems/fieldwork";
 export { GEOLOGY_VERSION } from "./geology/truth/model";
 export { MIGRATIONS, worldProblem, type Migration } from "./migrations";
+export { activeLease, askingTerms, ROYALTY, TERM_DAYS, LOWER_OFFER, type Lease, type LeaseBook, type Terms, type PublicNews } from "./company/leases";
 export { cashCents, debtCents, type Ledger, type Entry, type Category, type Account } from "./company/ledger";
 export { operationsOf, COSTS, STARTING_CASH, type OperationsView, type Well, type WellStatus, type Operation } from "./operations";
 export { FEED_RATE, SWEET_FT, MAX_DEPTH_FT, TICK_MINUTES, contactFor } from "./systems/rig";

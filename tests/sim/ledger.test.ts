@@ -39,6 +39,7 @@ describe("rig costs in the books", () => {
   const [x, y] = centroid(survey.poly);
   const drilling = () => {
     const w = gameEngine.createWorld("1edfe11edfe11edf", CAMPAIGN_START);
+    cmd(w, "lease.take", { surveyId: survey.id, offer: "asking" });
     cmd(w, "rig.spud", { x, y });
     return w;
   };

@@ -20,8 +20,15 @@ function oilSite(seed: string): { x: number; y: number } | undefined {
   return undefined;
 }
 
+/** Lease the survey under a point (players must, since leases). */
+function lease(w: WorldState, at: { x: number; y: number }): void {
+  const s = SURVEYS.find((x) => insidePoly(x.poly, at.x, at.y))!;
+  cmd(w, "lease.take", { surveyId: s.id, offer: "asking" });
+}
+
 function rigged(seed: string, at: { x: number; y: number }): WorldState {
   const w = gameEngine.createWorld(seed, CAMPAIGN_START);
+  lease(w, at);
   cmd(w, "rig.spud", at);
   gameEngine.advance(w, w.time + 3 * MINUTES_PER_DAY + 10);
   return w;
@@ -31,8 +38,12 @@ describe("cable-tool drilling", () => {
   it("raising a derrick costs money and three days", () => {
     const at = { x: SURVEYS[4]!.poly[0]![0] + 0.2, y: SURVEYS[4]!.poly[0]![1] + 0.2 };
     const w = gameEngine.createWorld("00000000000000aa", CAMPAIGN_START);
-    cmd(w, "rig.spud", { x: (SURVEYS[4]!.poly[0]![0] + SURVEYS[4]!.poly[2]![0]) / 2, y: (SURVEYS[4]!.poly[0]![1] + SURVEYS[4]!.poly[2]![1]) / 2 });
-    expect(operationsOf(w).cash).toBe(STARTING_CASH - COSTS.rigUp);
+    const site = { x: (SURVEYS[4]!.poly[0]![0] + SURVEYS[4]!.poly[2]![0]) / 2, y: (SURVEYS[4]!.poly[0]![1] + SURVEYS[4]!.poly[2]![1]) / 2 };
+    lease(w, site);
+    const afterLease = operationsOf(w).cash;
+    expect(afterLease).toBeLessThan(STARTING_CASH);
+    cmd(w, "rig.spud", site);
+    expect(operationsOf(w).cash).toBe(afterLease - COSTS.rigUp);
     expect(operationsOf(w).well!.status).toBe("rigging");
     const { interrupted } = gameEngine.advance(w, w.time + 4 * MINUTES_PER_DAY, { stopOnInterrupt: true });
     expect(interrupted).toBe(true);

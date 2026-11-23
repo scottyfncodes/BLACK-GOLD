@@ -1,7 +1,7 @@
 import type { GameRuntime, Snapshot } from "../app/runtime";
 import { formatDate } from "../app/runtime";
 import { SURVEYS, insidePoly } from "../content/geography/surveys";
-import { CONSULT_DAYS, COSTS, INQUIRE_DAYS, WALK_DAYS, type Evidence, type FieldTask, type Well } from "../sim";
+import { activeLease, askingTerms, CONSULT_DAYS, COSTS, INQUIRE_DAYS, WALK_DAYS, type Evidence, type FieldTask, type Well } from "../sim";
 import type { Selection } from "../render/plate/map";
 
 interface Props {
@@ -39,6 +39,48 @@ function evidenceLine(e: Evidence): { text: string; src: string; red?: boolean }
     case "wellRecord":
       return { text: `${e.owner}'s water well (${e.year}), ${e.depthFt} ft. ${e.intervals.length} beds described.`, src: `His account, ${when} · ${memoryWord(e.memory)}`, red: e.intervals.some((i) => i.show) };
   }
+}
+
+/** The land: the owner's terms, or the company's lease on it. Public information only. */
+function LeaseBlock({ runtime, snap, surveyId }: { runtime: GameRuntime; snap: Snapshot; surveyId: string }) {
+  const survey = SURVEYS.find((x) => x.id === surveyId)!;
+  const lease = activeLease(snap.ops.leases, surveyId, snap.time);
+  if (lease) {
+    return (
+      <div class="lease lease-ours" data-testid="lease">
+        <h3>The company's lease</h3>
+        <p>
+          {lease.acres} acres, one-eighth royalty to {survey.owner}. Runs to <b>{formatDate(lease.expiresAt)}</b>
+          {lease.renewals ? `, renewed ${lease.renewals} time${lease.renewals > 1 ? "s" : ""}` : ""}.
+        </p>
+        <p class="empty">Held while a well is drilled on it; otherwise renewed on a delay rental if the money is there.</p>
+        <div class="acts"><button type="button" class="button button-quiet" onClick={() => runtime.command("lease.release", { surveyId })}>Release the lease</button></div>
+      </div>
+    );
+  }
+  const wells = snap.ops.well ? [...snap.ops.past, snap.ops.well] : snap.ops.past;
+  const strikes = wells.filter((w) => w.status === "gusher" && w.outcome?.startsWith("OIL")).map((w) => ({ x: w.x, y: w.y }));
+  const t = askingTerms(survey, snap.print, { strikes });
+  const refused = (snap.ops.leases.refusedUntil[surveyId] ?? -1) > snap.time;
+  const lapsed = snap.ops.leases.leases.some((l) => l.surveyId === surveyId && l.status === "lapsed");
+  return (
+    <div class="lease" data-testid="lease">
+      <h3>The land</h3>
+      <p>
+        {survey.owner} asks <b>{dollars(t.askingCents / 100)}</b> bonus for a one-year lease of {t.acres} acres, with a one-eighth royalty on any oil sold.
+        {t.reasons.length ? ` The price is up: ${t.reasons.join(", ")}.` : ""}
+      </p>
+      {lapsed && <p class="empty">Your earlier lease here has lapsed.</p>}
+      <div class="acts">
+        <button type="button" class="button button-primary" data-testid="lease-asking" disabled={snap.ops.cash < t.askingCents / 100} onClick={() => runtime.command("lease.take", { surveyId, offer: "asking" })}>
+          Lease it<small>{dollars(t.askingCents / 100)}</small>
+        </button>
+        <button type="button" class="button" data-testid="lease-lower" disabled={refused || snap.ops.cash < t.lowerCents / 100} onClick={() => runtime.command("lease.take", { surveyId, offer: "lower" })}>
+          Offer {dollars(t.lowerCents / 100)}<small>{refused ? "refused this month" : "the owner may refuse"}</small>
+        </button>
+      </div>
+    </div>
+  );
 }
 
 const dollars = (n: number) => "$" + Math.floor(n).toLocaleString("en-US");
@@ -90,6 +132,7 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
     const s = SURVEYS.find((x) => x.id === selection.id);
     if (!s) return null;
     const wellsHere = snap.print.wells.filter((w) => insidePoly(s.poly, w.x, w.y));
+    const leased = !!activeLease(snap.ops.leases, s.id, snap.time);
     const items = k.evidence.filter((e) => ("surveyId" in e && e.surveyId === s.id) || (e.kind === "wellRecord" && wellsHere.some((w) => w.id === e.wellId)));
     return (
       <section class="notes-body" aria-labelledby="notes-h">
@@ -116,9 +159,10 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
           <button type="button" class="button" disabled={!!task} onClick={act("fieldwork.consult", { surveyId: s.id, who: "gossip" })}>Ask in Beaumont<small>{days(CONSULT_DAYS.gossip)}</small></button>
           <button type="button" class="button" disabled={!!task} onClick={act("fieldwork.consult", { surveyId: s.id, who: "geologist" })}>Send for a geologist<small>{days(CONSULT_DAYS.geologist)}</small></button>
         </div>
+        <LeaseBlock runtime={runtime} snap={snap} surveyId={s.id} />
         <div class="acts">
-          <button type="button" class="button button-drill" data-testid="stake" disabled={drilling || snap.ops.cash < COSTS.rigUp} onClick={onStake}>
-            Stake a well here<small>{drilling ? "one rig at a time" : stakeNote()}</small>
+          <button type="button" class="button button-drill" data-testid="stake" disabled={drilling || !leased || snap.ops.cash < COSTS.rigUp} onClick={onStake}>
+            Stake a well here<small>{drilling ? "one rig at a time" : !leased ? "lease the land first" : stakeNote()}</small>
           </button>
         </div>
       </section>
