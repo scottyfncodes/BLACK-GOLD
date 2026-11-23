@@ -383,10 +383,10 @@ Each milestone ships through a PR with a live preview link and is playable or in
 - Evidence store, surface observation command, dev god-view cross-sections
 
 **Acceptance**
-- [ ] Across 1,000 seeds, every oil-bearing cell lies inside a trap above its contact (property test)
-- [ ] Charged-dome rate falls within the target band. At least 85% of seeds have one or more discoverable fields
-- [ ] Observation commands change knowledge and never change truth (truth hash unchanged)
-- [ ] The player-facing map shows only evidence-derived information
+- [x] Across 1,000 seeds, every oil-bearing cell lies inside a trap above its contact (property test)
+- [x] Charged-dome rate falls within the target band. At least 85% of seeds have one or more discoverable fields
+- [x] Observation commands change knowledge and never change truth (truth hash unchanged)
+- [x] The player-facing map shows only evidence-derived information
 
 ### M2: Land and money
 
@@ -474,6 +474,26 @@ Where the build deliberately differs from the plan above. Each milestone appends
 - Speeds are 1× = 1 game hour per real second, 4× and 16× multiples, Skip about a month per half second. They get retuned when the cockpit (M3) needs minute-level play.
 - The unit toggle (oilfield vs. SI) arrives with the first measured quantity in M1. M0 displays nothing with units except the map's scale bar.
 - The 60 fps and under-2 s load criteria are measured in headless Chromium: frame rate at 16×, and load under 4× CPU and network throttling as a stand-in for a mid-range phone.
+
+**M1 (The ground)**
+
+- **Truth is regenerated, never saved.** Geology is a pure function of the seed and `GEOLOGY_VERSION`. The world stores only the version, and a save made by a different geology version is refused rather than reinterpreted.
+- **Measured at acceptance** over a fixed set of 1,000 seeds:
+  - 30% of domes are charged, inside the 20–35% band.
+  - 87.6% of seeds hold a field. "Discoverable" means oil shallower than 2,500 ft, which is Era I cable-tool reach.
+  - 19% of seeds print no named hill at all, so in those worlds mounds must be found on foot.
+- **The Frio is a reservoir.** It is a major Gulf Coast reservoir, and treating it as non-reservoir left deep domes with no traps.
+- **Addition beyond §4.2: settlers' water-well records** (evidence kind `wellRecord`). Before drilling (M3), they are the only possible subsurface evidence. They're also historically apt: water wells on Big Hill struck sulphur water and gas. Each record is the owner's memory, merged and rounded to 5 ft, in his own words.
+- **Evidence kinds in M1:**
+  - surface signs, with real false positives (marsh gas);
+  - walked-survey records (negative evidence: examined, nothing found);
+  - well records;
+  - opinions (gossip, and a geologist biased by 1890 theory).
+- **Not in M1:** samples, drillers' logs and offset wells arrive with drilling (M3) and the Rush (M5).
+- **Interpretations are separate from evidence:** section lines and prospects, kept in their own list, which the player can rub out. Correlations in a section are inferred from the records on screen, never from truth.
+- **Grants no longer straddle the Neches or cover Beaumont's townsite.** The fixed survey grid is filtered so that it doesn't.
+- **Rendering is cached rather than tiled.** The renderer uses one cached print layer (rebuilt when a pan or zoom settles) plus a manuscript layer drawn every frame. That meets M1's needs, so tiles and worker rendering are deferred until frame times require them.
+- **The dev god view** (`src/debug/godview.ts`, press G) loads only in development. CI fails the build if it appears in production.
 
 ## 9. Open decisions
 

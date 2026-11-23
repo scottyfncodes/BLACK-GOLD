@@ -8,11 +8,13 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByTestId("date")).toHaveText("Wednesday, 1 January 1890");
 });
 
-test("opens on New Year's Day 1890, paused, with the region map", async ({ page }) => {
+test("opens on New Year's Day 1890, paused, on Plate I with the map and an empty section", async ({ page }) => {
   await expect(page.getByTestId("clock")).toHaveText("06:00");
   await expect(page.getByRole("radio", { name: "Pause" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("heading", { name: "Jefferson County, Texas" })).toBeVisible();
   await expect(page.getByRole("img", { name: /Map of Jefferson County/ })).toBeVisible();
-  await expect(page.getByText("Nothing is known yet of what lies beneath.")).toBeVisible();
+  await expect(page.getByText("No line of section yet")).toBeVisible();
+  await expect(page.getByText("Blank paper means unknown, not empty.")).toBeVisible();
 });
 
 test("time runs at each speed and stops when paused", async ({ page }) => {
@@ -96,7 +98,7 @@ test("keyboard: Space toggles pause, number keys set speed", async ({ page, isMo
   await expect(page.getByRole("radio", { name: "Pause" })).toHaveAttribute("aria-checked", "true");
 });
 
-test("layout: no horizontal scroll, touch-sized controls, square map", async ({ page }) => {
+test("layout: no horizontal scroll, touch-sized controls", async ({ page }) => {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
   for (const name of ["Pause", "1×", "4×", "16×", "Skip"]) {
@@ -104,9 +106,13 @@ test("layout: no horizontal scroll, touch-sized controls, square map", async ({ 
     expect(box.height, name).toBeGreaterThanOrEqual(44);
     expect(box.width, name).toBeGreaterThanOrEqual(44);
   }
+  for (const name of ["Draw section", "Mark prospect", "Zoom in", "Zoom out"]) {
+    const box = (await page.getByRole("button", { name }).boundingBox())!;
+    expect(box.height, name).toBeGreaterThanOrEqual(44);
+  }
   const map = (await page.getByRole("img", { name: /Map of Jefferson County/ }).boundingBox())!;
-  expect(Math.abs(map.width - map.height)).toBeLessThanOrEqual(1);
   expect(map.width).toBeGreaterThan(300);
+  expect(map.height).toBeGreaterThan(280);
 });
 
 test("holds frame rate while running at 16×", async ({ page }) => {

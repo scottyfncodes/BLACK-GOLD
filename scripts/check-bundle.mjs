@@ -10,6 +10,14 @@ if (files.length === 0) {
   console.error("No built JavaScript found. Run `vite build` first.");
   process.exit(1);
 }
+// The dev-only god view of hidden geology must never ship.
+for (const f of readdirSync(dir)) {
+  const text = readFileSync(join(dir, f), "utf8");
+  if (/BLACK-GOLD-DEV-GOD-VIEW|__blackGoldGodView|geology\/truth\/surface|DEV · TRUTH/.test(text) && !f.endsWith(".map")) {
+    console.error(`${f}: contains the development god view. It must never be in a production build.`);
+    process.exit(1);
+  }
+}
 let total = 0;
 for (const f of files) {
   const kb = gzipSync(readFileSync(join(dir, f))).length / 1024;

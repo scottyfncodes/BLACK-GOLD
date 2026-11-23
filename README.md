@@ -6,12 +6,12 @@ Start with one wooden derrick and a cable-tool rig in Southeast Texas. Read the 
 
 ## Status
 
-**M0 (Foundation) complete.** A deterministic simulation core, versioned saves and a minimal shell are in place: date, speed controls, the 1890 region map, and campaign save/load. The design and build plan are in [`docs/DESIGN.md`](docs/DESIGN.md).
+**M1 (The ground) complete.** A playable prospect: seeded salt-dome geology hidden from the player, fieldwork that turns it into evidence, and the Geologist's Plate: a published 1890 map with the company's knowledge in carmine, and sections built only from what is known. The design and build plan are in [`docs/DESIGN.md`](docs/DESIGN.md); the art direction is in [`docs/ART-DIRECTION.md`](docs/ART-DIRECTION.md).
 
 | Phase | Scope | State |
 |---|---|---|
 | 0: Foundation | Deterministic sim core, clock, persistence, minimal shell | Done (M0) |
-| 1: First Oil | Playable 1890 Southeast Texas cable-tool slice | Next: M1, the ground |
+| 1: First Oil | Playable 1890 Southeast Texas cable-tool slice | M1 done (the ground); next M2, land and money |
 | 2: Industrial Expansion | Rotary, mud, multiple rigs, research, competitors | Designed at outline level |
 | 3+ | Directional, modern, speculative eras | Vision only |
 
@@ -30,9 +30,9 @@ npm run test:e2e     # Playwright end-to-end (iPhone 13 + desktop) against the p
 
 | Path | What lives there |
 |---|---|
-| `src/sim/` | The simulation. Pure and deterministic: no DOM, no wall clock, no `Math.random` (enforced by lint). |
+| `src/sim/` | The simulation. Pure and deterministic: no DOM, no wall clock, no `Math.random` (enforced by lint). Geological truth lives in `sim/geology/truth` and is sealed: only `sim/` and the dev god view may import it. |
 | `src/app/` | Browser runtime: real time → game time, saves (IndexedDB, gzip, file export and import). |
-| `src/ui/`, `src/render/` | Preact screens and Canvas renderers. They read the subsurface only through `sim/knowledge`. |
+| `src/ui/`, `src/render/` | Preact screens and the plate renderer (`render/plate`). They see the published map and `sim/knowledge`, never truth; a draw-call test proves it. |
 | `src/content/` | Static data, such as real 1890 geography. |
 | `tests/` | Unit, determinism (golden hash), save-format, architecture-boundary and end-to-end tests. |
 

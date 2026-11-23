@@ -47,11 +47,13 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/ui/**/*.{ts,tsx}", "src/render/**/*.{ts,tsx}"],
+    // Truth is sealed inside sim/. Only the dev-only god view (src/debug, never in production
+    // builds) may read it from outside.
+    files: ["src/ui/**/*.{ts,tsx}", "src/render/**/*.{ts,tsx}", "src/app/**/*.{ts,tsx}", "src/main.tsx", "src/content/**/*.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
-        { patterns: [{ group: TRUTH, message: "UI and rendering read the subsurface only through sim/knowledge, never geological truth." }] },
+        { patterns: [{ group: TRUTH, message: "UI and rendering read the subsurface only through sim/knowledge, never geological truth." }, { group: ["**/debug/**", "**/debug"], message: "The dev god view is loaded only by main.tsx in development." }] },
       ],
     },
   },

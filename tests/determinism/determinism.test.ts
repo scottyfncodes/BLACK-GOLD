@@ -84,4 +84,5 @@ describe("performance", () => {
   });
 });
 
-const GOLDEN_TEN_YEAR_HASH = "0919ad9a05e50f";
+// Re-pinned in M1: the world now carries geology and knowledge state.
+const GOLDEN_TEN_YEAR_HASH = "0cd85969804339";

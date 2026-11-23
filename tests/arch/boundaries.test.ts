@@ -41,6 +41,21 @@ describe("architecture boundaries", () => {
     }
   });
 
+  it("blocks the app layer and the entry point from reading geological truth", async () => {
+    for (const file of ["src/app/runtime.ts", "src/main.tsx"]) {
+      const errors = await lintAs(file, `import { rockAt } from "./sim/geology/truth/model";\nexport const x = rockAt;\n`);
+      expect(errors.join("\n"), file).toMatch(/never geological truth/);
+    }
+  });
+
+  it("keeps truth out of the sim's public surface", async () => {
+    const sim = await import("../../src/sim");
+    const exported = Object.keys(sim);
+    for (const name of ["generateGeology", "rockAt", "columnAt", "formationTop", "surfaceSigns", "waterWells", "shallowestOil", "flankTrapAt", "STACK"]) {
+      expect(exported, name).not.toContain(name);
+    }
+  });
+
   it("allows the app layer to use the wall clock", async () => {
     expect(await lintAs("src/app/clock.ts", "export const t = Date.now();\n")).toEqual([]);
   });

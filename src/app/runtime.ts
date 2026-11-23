@@ -1,4 +1,4 @@
-import { CAMPAIGN_START, gameEngine, startOfNextMonth, toCalendar, type Seed, type SimEvent, type WorldState } from "../sim";
+import { CAMPAIGN_START, gameEngine, knowledgeOf, printedMap, startOfNextMonth, toCalendar, type Json, type KnowledgeView, type PrintedMap, type Seed, type SimEvent, type WorldState } from "../sim";
 import { createSave, decodeSave, encodeSave, SaveError, type SaveFile } from "./save/format";
 import { gunzip, gzip } from "./save/gzip";
 import { autosaveId, saveStore, type SaveSummary } from "./save/store";
@@ -26,6 +26,11 @@ const MAX_FRAME_MS = 250;
 
 export interface Snapshot {
   time: number;
+  /** What the company knows and believes. Arrays are live; `rev` changes when they do. */
+  knowledge: KnowledgeView;
+  /** The published 1890 survey for this world. */
+  print: PrintedMap;
+  rev: number;
   speed: Speed;
   seed: Seed;
   status: string;
@@ -52,6 +57,7 @@ export class GameRuntime {
   private busy = false;
   private listeners = new Set<() => void>();
   private snap: Snapshot;
+  private rev = 0;
 
   constructor(seed: Seed = randomSeed()) {
     this.world = gameEngine.createWorld(seed, CAMPAIGN_START);
@@ -117,14 +123,31 @@ export class GameRuntime {
     this.changed();
   }
 
+  /** Issue a player command now. Returns the rejection reason, if any. */
+  command(type: string, payload: Json): string | null {
+    const result = gameEngine.advance(this.world, this.world.time, { commands: [{ t: this.world.time, actor: "player", type, payload }] });
+    this.rev++;
+    this.handleEvents(result.events);
+    const rejected = result.events.find((e) => e.type === "command.rejected");
+    const reason = rejected ? String((rejected.data as { reason?: string } | undefined)?.reason ?? "Not possible.") : null;
+    if (reason) this.setStatus(reason);
+    else this.changed();
+    return reason;
+  }
+
   private handleEvents(events: SimEvent[]): void {
     for (const e of events) {
       if (e.type === "calendar.newMonth") void this.autosave();
+      if (e.type === "fieldwork.report") {
+        this.rev++;
+        this.status = String((e.data as { message?: string } | undefined)?.message ?? "The party is back.");
+      }
     }
   }
 
   async newCampaign(seed: Seed): Promise<void> {
     this.world = gameEngine.createWorld(seed, CAMPAIGN_START);
+    this.rev++;
     this.speed = "paused";
     this.carry = 0;
     this.setStatus(`New campaign started with seed ${seed}.`);
@@ -189,6 +212,7 @@ export class GameRuntime {
 
   private adopt(save: SaveFile): void {
     this.world = save.world;
+    this.rev++;
     this.speed = "paused";
     this.carry = 0;
   }
@@ -224,7 +248,7 @@ export class GameRuntime {
   }
 
   private makeSnapshot(): Snapshot {
-    return { time: this.world.time, speed: this.speed, seed: this.world.seed, status: this.status, saves: this.saves, busy: this.busy };
+    return { time: this.world.time, knowledge: knowledgeOf(this.world), print: printedMap(this.world.seed), rev: this.rev, speed: this.speed, seed: this.world.seed, status: this.status, saves: this.saves, busy: this.busy };
   }
 
   private changed(): void {
