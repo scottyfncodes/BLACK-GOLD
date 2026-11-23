@@ -84,5 +84,5 @@ describe("performance", () => {
   });
 });
 
-// Re-pinned in M1: the world now carries geology and knowledge state.
-const GOLDEN_TEN_YEAR_HASH = "0cd85969804339";
+// Re-pinned in M1 (geology and knowledge state) and again for the drilling operations ledger.
+const GOLDEN_TEN_YEAR_HASH = "0caecc7396c06d";

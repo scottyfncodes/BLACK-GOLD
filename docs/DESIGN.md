@@ -495,6 +495,30 @@ Where the build deliberately differs from the plan above. Each milestone appends
 - **Rendering is cached rather than tiled.** The renderer uses one cached print layer (rebuilt when a pan or zoom settles) plus a manuscript layer drawn every frame. That meets M1's needs, so tiles and worker rendering are deferred until frame times require them.
 - **The dev god view** (`src/debug/godview.ts`, press G) loads only in development. CI fails the build if it appears in production.
 
+**First Gusher (drilling brought forward, ahead of M2)**
+
+- **Why the order changed.** Play-testing M1 showed the game had no fun loop: every action was a button and a timer, and the defining experience (the rig) was two milestones away. The cable-tool rig (§4.3) is now built ahead of M2's land and money. Leases, the ledger and the bank come later, folded in as far as the rig needs them.
+- **Stakes, kept minimal on purpose:**
+  - $1,500 to start;
+  - $350 to raise a derrick;
+  - $12 a day;
+  - casing at $1.10 a foot;
+  - $60 for a fishing job.
+
+  Running out of money ends the well. Leases are not modelled yet, so any surveyed land can be drilled.
+- **Drilling model.** Penetration depends on how squarely the tools strike, which the player sets by feeding the temper screw, and on the rock at the bit (truth), the bit's sharpness and the cuttings cushion. Uncased sands heave in. Stuck tools come from slack, caving and dirty holes, and every stuck event carries its cause. Bailing returns a sample, which is evidence. A gusher happens only where the truth holds oil or gas (tested).
+- **Pace.** About 60 ft a day in practice, which is period-plausible. From a well-chosen site, the automatic driller brings in about 75% of wells within budget; the failures are deep pays where the money runs out short of the oil. Manual play with good rhythm is faster.
+- **The rig view** is an animated plate drawn on canvas, with sound synthesized through Web Audio, so there are no asset files:
+  - the derrick goes up in stages while rigging;
+  - walking beam, band wheel, engine house, the crew at work, and the site around them;
+  - a sun or moon crossing the sky with the hour, casting the derrick's shadow;
+  - a cutaway inked only from bailer samples, with blank paper below the bit;
+  - the driller's log written up as you go;
+  - oil and gas blowouts drawn differently.
+- **The living map:** daylight, Beaumont's mill smoke, the train, the field party riding the survey it is walking, the company's derricks in ink, and oil staining the paper where a well came in.
+- **Time at the rig.** 1× is ten game minutes a second, so the feed rhythm is playable. Operations (bailing, dressing, casing, fishing) fast-forward. Stuck tools, a gusher or a dry hole pause the game.
+- **Guidance.** The plate states the goal ("Bring in a well before the money runs out.") and one plain next step.
+
 ## 9. Open decisions
 
 Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.

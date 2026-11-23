@@ -3,7 +3,8 @@ import { formatClock, formatDate, type GameRuntime, type Snapshot, type Speed } 
 import type { Selection } from "../render/plate/map";
 import { CampaignMenu } from "./CampaignMenu";
 import { FieldNotes } from "./FieldNotes";
-import { MapFigure } from "./MapFigure";
+import { MapFigure, type Tool } from "./MapFigure";
+import { RigView } from "./RigView";
 import { SectionFigure } from "./SectionFigure";
 
 function useSnapshot(runtime: GameRuntime): Snapshot {
@@ -30,6 +31,9 @@ export function App({ runtime }: { runtime: GameRuntime }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
   const onSelect = useCallback((s: Selection) => setSelection(s), []);
+  const [tool, setTool] = useState<Tool>("select");
+  const [rigOpen, setRigOpen] = useState(false);
+  const openRig = useCallback(() => setRigOpen(true), []);
 
   // Forget a selection that no longer exists (rubbed out, or a different world loaded).
   useEffect(() => {
@@ -39,7 +43,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (menuOpen || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (menuOpen || rigOpen || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement) {
         if (e.key === " ") return;
       }
@@ -54,13 +58,16 @@ export function App({ runtime }: { runtime: GameRuntime }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [runtime, menuOpen]);
+  }, [runtime, menuOpen, rigOpen]);
 
   const sections = snap.knowledge.interp.sections;
   const line = selection?.kind === "section" ? sections.find((s) => s.id === selection.id) : sections[sections.length - 1];
 
+  const showRig = rigOpen && !!snap.ops.well;
   return (
-    <div class="plate">
+    <>
+    {/* While the rig is open, the plate behind it is inert: not focusable, not announced. */}
+    <div class="plate" inert={showRig} aria-hidden={showRig ? "true" : undefined}>
       <header class="plate-head">
         <p class="plate-no">PLATE I</p>
         <h1>Jefferson County, Texas</h1>
@@ -68,12 +75,12 @@ export function App({ runtime }: { runtime: GameRuntime }) {
       </header>
 
       <div class="figs">
-        <MapFigure runtime={runtime} snap={snap} selection={selection} onSelect={onSelect} />
+        <MapFigure runtime={runtime} snap={snap} selection={selection} onSelect={onSelect} tool={tool} setTool={setTool} onOpenRig={openRig} />
         <SectionFigure runtime={runtime} snap={snap} line={line} />
       </div>
 
       <aside class="notes" aria-label="Field notes">
-        <FieldNotes runtime={runtime} snap={snap} selection={selection} onSelect={onSelect} />
+        <FieldNotes runtime={runtime} snap={snap} selection={selection} onSelect={onSelect} onStake={() => setTool("stake")} onOpenRig={openRig} />
       </aside>
 
       <footer class="clock">
@@ -96,5 +103,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
 
       <CampaignMenu runtime={runtime} snap={snap} open={menuOpen} onClose={() => setMenuOpen(false)} />
     </div>
+    {showRig && <RigView runtime={runtime} snap={snap} onClose={() => setRigOpen(false)} />}
+    </>
   );
 }

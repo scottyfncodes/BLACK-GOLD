@@ -1,4 +1,4 @@
-import { CAMPAIGN_START, gameEngine, knowledgeOf, printedMap, startOfNextMonth, toCalendar, type Json, type KnowledgeView, type PrintedMap, type Seed, type SimEvent, type WorldState } from "../sim";
+import { CAMPAIGN_START, gameEngine, knowledgeOf, operationsOf, printedMap, type OperationsView, startOfNextMonth, toCalendar, type Json, type KnowledgeView, type PrintedMap, type Seed, type SimEvent, type WorldState } from "../sim";
 import { createSave, decodeSave, encodeSave, SaveError, type SaveFile } from "./save/format";
 import { gunzip, gzip } from "./save/gzip";
 import { autosaveId, saveStore, type SaveSummary } from "./save/store";
@@ -21,6 +21,11 @@ export const SPEED_RATE: Record<Speed, number> = {
   skip: 86_400,
 };
 
+/** At the rig, time runs slower so the driller's rhythm is playable: 1× is ten minutes a second. */
+export const RIG_RATE: Record<Speed, number> = { paused: 0, "1x": 10, "4x": 40, "16x": 160, skip: 1440 };
+/** Rigging up and operations (bailing, dressing, casing, fishing) pass quickly. */
+const RIG_BUSY_RATE = 300;
+
 /** Longest real-time gap one frame may simulate (a backgrounded tab must not lurch). */
 const MAX_FRAME_MS = 250;
 
@@ -31,6 +36,10 @@ export interface Snapshot {
   /** The published 1890 survey for this world. */
   print: PrintedMap;
   rev: number;
+  /** Money and the well being drilled. */
+  ops: OperationsView;
+  /** The rig view is open (time runs at rig pace). */
+  atRig: boolean;
   speed: Speed;
   seed: Seed;
   status: string;
@@ -58,6 +67,7 @@ export class GameRuntime {
   private listeners = new Set<() => void>();
   private snap: Snapshot;
   private rev = 0;
+  private atRig = false;
 
   constructor(seed: Seed = randomSeed()) {
     this.world = gameEngine.createWorld(seed, CAMPAIGN_START);
@@ -97,14 +107,23 @@ export class GameRuntime {
     this.changed();
   }
 
+  /** Open or close the rig view; time runs at rig pace while it is open. */
+  setAtRig(on: boolean): void {
+    this.atRig = on;
+    this.carry = 0;
+    this.changed();
+  }
+
   togglePause(): void {
     this.setSpeed(this.speed === "paused" ? "1x" : "paused");
   }
 
   /** Called once per animation frame with the real milliseconds since the last frame. */
   tick(dtMs: number): void {
-    const rate = SPEED_RATE[this.speed];
+    let rate = this.atRig ? RIG_RATE[this.speed] : SPEED_RATE[this.speed];
     if (rate === 0) return;
+    const well = operationsOf(this.world).well;
+    if (this.atRig && well && (well.busy || well.status === "rigging")) rate = Math.max(rate, RIG_BUSY_RATE);
     this.carry += (Math.min(dtMs, MAX_FRAME_MS) / 1000) * rate;
     const whole = Math.floor(this.carry);
     if (whole === 0) return;
@@ -138,6 +157,12 @@ export class GameRuntime {
   private handleEvents(events: SimEvent[]): void {
     for (const e of events) {
       if (e.type === "calendar.newMonth") void this.autosave();
+      if (e.type === "rig.report") {
+        this.rev++;
+        this.status = String((e.data as { message?: string } | undefined)?.message ?? "");
+        // Stuck tools, a gusher or a dry hole: stop the clock so the player can act.
+        if (e.interrupt) { this.speed = "paused"; this.carry = 0; }
+      }
       if (e.type === "fieldwork.report") {
         this.rev++;
         this.status = String((e.data as { message?: string } | undefined)?.message ?? "The party is back.");
@@ -248,7 +273,7 @@ export class GameRuntime {
   }
 
   private makeSnapshot(): Snapshot {
-    return { time: this.world.time, knowledge: knowledgeOf(this.world), print: printedMap(this.world.seed), rev: this.rev, speed: this.speed, seed: this.world.seed, status: this.status, saves: this.saves, busy: this.busy };
+    return { time: this.world.time, knowledge: knowledgeOf(this.world), print: printedMap(this.world.seed), rev: this.rev, ops: operationsOf(this.world), atRig: this.atRig, speed: this.speed, seed: this.world.seed, status: this.status, saves: this.saves, busy: this.busy };
   }
 
   private changed(): void {
