@@ -21,10 +21,11 @@ export { printedMap, PRINT_RELIEF_FT, type PrintedMap, type PrintedHill, type Pr
 export { WALK_DAYS, CONSULT_DAYS, INQUIRE_DAYS } from "./systems/fieldwork";
 export { GEOLOGY_VERSION } from "./geology/truth/model";
 export { MIGRATIONS, worldProblem, type Migration } from "./migrations";
+export { creditLimitCents, collateralCents, RATE_PERCENT, BORROW_STEP_CENTS, USED_RIG_PRICE, HIRE_OUT_DAYS, HIRE_OUT_WAGES, STRIKES_TO_FORECLOSE, type BankState } from "./company/bank";
 export { CAP_COST, HAUL_LIMIT_BBL, OIL_PRICE_CENTS, HAULING_CENTS, type Producer, type ProductionBook } from "./company/production";
 export { activeLease, askingTerms, ROYALTY, TERM_DAYS, LOWER_OFFER, type Lease, type LeaseBook, type Terms, type PublicNews } from "./company/leases";
 export { cashCents, debtCents, type Ledger, type Entry, type Category, type Account } from "./company/ledger";
-export { operationsOf, COSTS, STARTING_CASH, type OperationsView, type Well, type WellStatus, type Operation } from "./operations";
+export { operationsOf, COSTS, RIG_VALUE, STARTING_CASH, type OperationsView, type Well, type WellStatus, type Operation } from "./operations";
 export { FEED_RATE, SWEET_FT, MAX_DEPTH_FT, TICK_MINUTES, contactFor } from "./systems/rig";
 
 /** Every system in the shipping game, in a fixed order (order is part of determinism). */

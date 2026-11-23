@@ -3,6 +3,7 @@ import { CAMPAIGN_START, fromCalendar, gameEngine, MINUTES_PER_DAY, operationsOf
 import { canonicalJson } from "../../src/sim/core/hash";
 import { recompute } from "../../src/sim/company/ledger";
 import { dayBarrels, HAUL_LIMIT_BBL, HAULING_CENTS, OIL_PRICE_CENTS, type Producer } from "../../src/sim/company/production";
+import { creditLimitCents } from "../../src/sim/company/bank";
 import { columnAt, generateGeology, isCharged } from "../../src/sim/geology/truth/model";
 import { SURVEYS, insidePoly } from "../../src/content/geography/surveys";
 
@@ -55,6 +56,15 @@ describe("production", () => {
     cmd(w, "prod.cap");
     expect(ops(w).production.producers).toHaveLength(1);
     expect(ops(w).cash).toBe(cash - 80);
+  });
+
+  it("a producing well raises what the bank will lend", () => {
+    const w = strike(oil);
+    const before = creditLimitCents(ops(w).bank, ops(w).production, 40_000);
+    expect(before).toBe(20_000);
+    cmd(w, "prod.cap");
+    gameEngine.advance(w, w.time + 2 * MINUTES_PER_DAY);
+    expect(creditLimitCents(ops(w).bank, ops(w).production, 40_000)).toBeGreaterThan(before);
   });
 
   it("sells each month in whole cents: oil at the railhead, hauling, one-eighth royalty", () => {

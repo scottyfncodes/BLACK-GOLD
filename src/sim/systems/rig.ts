@@ -17,11 +17,12 @@ import { SURVEYS, insidePoly } from "../../content/geography/surveys";
 import { generateGeology, rockAt, type Lithology, type RockAt } from "../geology/truth/model";
 import type { SampleEvidence } from "../knowledge/types";
 import { accruedCents, COSTS, RIG_VALUE, STARTING_CASH, type Operation, type OperationsState, type Well } from "../operations";
-import { cashCents, dollarsToCents, emptyLedger, pay, post, receive } from "../company/ledger";
+import { cashCents, debtCents, dollarsToCents, emptyLedger, pay, post, receive } from "../company/ledger";
 import { rngKey } from "../core/rng";
 import { activeLease, askingTerms, emptyLeaseBook, ownerAccepts, REFUSAL_DAYS, surveyById, termEnd, type PublicNews } from "../company/leases";
 import { printedMap } from "../surface/print";
 import { CAP_COST, dayBarrels, emptyProductionBook, HAULING_CENTS, OIL_PRICE_CENTS } from "../company/production";
+import { ACCRUAL_UNITS, RATE_PERCENT, BORROW_STEP_CENTS, creditLimitCents, dayAccrual, emptyBank, HIRE_OUT_DAYS, HIRE_OUT_WAGES, STRIKES_TO_FORECLOSE, USED_RIG_PRICE } from "../company/bank";
 
 type Ctx = SystemContext<Json>;
 const S = (ctx: Ctx) => ctx.state as unknown as OperationsState;
@@ -183,6 +184,60 @@ function complete(ctx: Ctx, w: Well, op: Operation): void {
   }
 }
 
+/** Crew wages come in when a spell of hired work ends. */
+function hireOutDue(ctx: Ctx): void {
+  const st = S(ctx);
+  if (st.bank.hiredOutUntil === null || ctx.now < st.bank.hiredOutUntil) return;
+  st.bank.hiredOutUntil = null;
+  receive(st.ledger, ctx.now, "operating", "Wages for the crew, hired out to another operator", "wages", dollarsToCents(HIRE_OUT_WAGES));
+  notice(ctx, `The crew is back with $${HIRE_OUT_WAGES} in wages.`);
+}
+
+/** Month end, bank: a lien takes oil revenue first; then the month's interest is charged. */
+function settleBank(ctx: Ctx, month: string, oilNetCents: number): void {
+  const st = S(ctx);
+  if (st.bank.lien && oilNetCents > 0 && debtCents(st.ledger) > 0) {
+    const take = Math.min(oilNetCents, debtCents(st.ledger), Math.max(0, cashCents(st.ledger) - accruedCents(st)));
+    if (take > 0) pay(st.ledger, ctx.now, "bank", `Oil revenue taken by the bank under its lien, ${month}`, "loan", take);
+    if (debtCents(st.ledger) === 0) { st.bank.lien = false; notice(ctx, "The bank's lien is lifted: the loan is clear."); }
+  }
+  const interest = Math.floor(st.bank.accrued / ACCRUAL_UNITS);
+  st.bank.accrued -= interest * ACCRUAL_UNITS;
+  if (interest <= 0) return;
+  if (available(st) >= interest) {
+    pay(st.ledger, ctx.now, "bank", `Interest to the bank, ${month}, at ${RATE_PERCENT}% a year`, "interest", interest);
+    st.bank.strikes = 0;
+    return;
+  }
+  // Unpaid: the interest is added to the loan, and the bank counts it against the company.
+  post(st.ledger, ctx.now, "bank", `Interest unpaid, ${month}: added to the loan`, [{ account: "interest", cents: interest }, { account: "loan", cents: -interest }]);
+  st.bank.strikes++;
+  if (st.bank.strikes >= STRIKES_TO_FORECLOSE) foreclose(ctx);
+  else ctx.emit({ type: "company.notice", severity: "warning", interrupt: true, data: { message: `The bank warns: ${month}'s interest went unpaid. Another month unpaid and it will foreclose on the rig.` } });
+}
+
+/** The bank takes the rig. The company keeps its land and wells; the way back stays open. */
+function foreclose(ctx: Ctx): void {
+  const st = S(ctx);
+  const w = st.well;
+  if (w && (w.status === "rigging" || w.status === "drilling" || w.status === "stuck")) {
+    flushRigTime(ctx, ctx.now);
+    finish(ctx, w, "dry", `The bank has seized the rig. The ${w.name} is abandoned at ${Math.round(w.depthFt)} ft.`);
+  }
+  const rig = dollarsToCents(RIG_VALUE), debt = debtCents(st.ledger);
+  const credited = Math.min(rig, debt);
+  // The rig leaves the books; its value is set against the loan, any surplus paid to the company.
+  post(st.ledger, ctx.now, "bank", "Rig seized by the bank and set against the loan", [
+    { account: "loan", cents: credited },
+    { account: "cash", cents: rig - credited },
+    { account: "equipment", cents: -rig },
+  ]);
+  st.bank.rigOwned = false;
+  st.bank.strikes = 0;
+  st.bank.lien = debtCents(st.ledger) > 0;
+  ctx.emit({ type: "company.notice", severity: "critical", interrupt: true, data: { message: st.bank.lien ? "The bank has foreclosed and taken the rig. It will take oil revenue until the loan is clear. Your land is still yours." : "The bank has foreclosed and taken the rig; the loan is clear. Your land is still yours." } });
+}
+
 /** One day's oil from every capped well. */
 function produceDay(ctx: Ctx): void {
   const pb = S(ctx).production;
@@ -200,6 +255,7 @@ function settleMonth(ctx: Ctx, dayOf: number): void {
   const st = S(ctx);
   const c = toCalendar(Math.max(0, dayOf));
   const month = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][c.month - 1];
+  let oilNet = 0;
   for (const p of st.production.producers) {
     const bbl = p.monthBbl;
     p.monthBbl = 0;
@@ -210,8 +266,11 @@ function settleMonth(ctx: Ctx, dayOf: number): void {
     pay(st.ledger, ctx.now, "production", `Hauling to the railhead, ${month}: ${bbl.toLocaleString("en-US")} bbl`, "hauling", bbl * HAULING_CENTS, ref);
     const lease = st.leases.leases.find((l) => l.surveyId === p.surveyId);
     const owner = surveyById(p.surveyId)?.owner ?? "the owner";
-    pay(st.ledger, ctx.now, "production", `Royalty to ${owner}, ${month}: one-eighth`, "royalty", Math.round(gross * (lease?.royalty ?? 1 / 8)), ref);
+    const royalty = Math.round(gross * (lease?.royalty ?? 1 / 8));
+    pay(st.ledger, ctx.now, "production", `Royalty to ${owner}, ${month}: one-eighth`, "royalty", royalty, ref);
+    oilNet += gross - bbl * HAULING_CENTS - royalty;
   }
+  settleBank(ctx, month!, oilNet);
 }
 
 function notice(ctx: Ctx, message: string): void {
@@ -263,7 +322,7 @@ function well(ctx: Ctx): Well {
 
 export const rig: System<Json> = {
   id: "operations",
-  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), well: null, past: [], samples: [], next: 1 }) as unknown as Json,
+  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), bank: emptyBank(), well: null, past: [], samples: [], next: 1 }) as unknown as Json,
   init(ctx) {
     const st = S(ctx);
     post(st.ledger, ctx.now, "opening", "Capital paid in", [{ account: "cash", cents: dollarsToCents(STARTING_CASH) }, { account: "equity", cents: -dollarsToCents(STARTING_CASH) }]);
@@ -277,6 +336,9 @@ export const rig: System<Json> = {
       // the month) the month's settlement.
       flushRigTime(ctx, ctx.now - 1);
       produceDay(ctx);
+      // Interest accrues daily on the loan, in exact integer units.
+      S(ctx).bank.accrued += dayAccrual(debtCents(S(ctx).ledger));
+      hireOutDue(ctx);
       if (toCalendar(ctx.now).day === 1) settleMonth(ctx, ctx.now - 1);
       ctx.schedule(nextMidnight(ctx.now), "company.day");
     },
@@ -334,6 +396,7 @@ export const rig: System<Json> = {
       const survey = SURVEYS.find((s) => insidePoly(s.poly, p.x as number, p.y as number));
       if (!survey) throw new CommandRejected("Drill on surveyed land.");
       if (!activeLease(st.leases, survey.id, ctx.now)) throw new CommandRejected(`You hold no lease on the ${survey.name} survey. Lease it first.`);
+      if (!st.bank.rigOwned) throw new CommandRejected("The company owns no rig. Buy a used one first.");
       if (available(st) < dollarsToCents(COSTS.rigUp)) throw new CommandRejected(`Raising a derrick costs $${COSTS.rigUp}. You have $${Math.floor(available(st) / 100)}.`);
       if (st.well) st.past.push(st.well);
       const n = st.past.length + 1;
@@ -367,6 +430,42 @@ export const rig: System<Json> = {
       st.leases.leases.push({ surveyId: survey.id, signedAt: ctx.now, expiresAt, acres: survey.acres, bonusCents: cents, royalty: t.royalty, status: "active", renewals: 0 });
       ctx.schedule(expiresAt, "lease.term", { surveyId: survey.id });
       notice(ctx, `Leased the ${survey.name} survey for $${cents / 100}: one year, one-eighth royalty to ${survey.owner}.`);
+    },
+    "bank.borrow"(ctx, c: Command) {
+      const st = S(ctx);
+      const cents = (c.payload as { cents?: unknown })?.cents;
+      if (typeof cents !== "number" || !Number.isSafeInteger(cents) || cents <= 0 || cents % BORROW_STEP_CENTS !== 0) throw new CommandRejected("Borrow in steps of $50.");
+      if (st.bank.lien) throw new CommandRejected("The bank will lend nothing more until the old loan is cleared.");
+      const room = creditLimitCents(st.bank, st.production, dollarsToCents(RIG_VALUE)) - debtCents(st.ledger);
+      if (cents > room) throw new CommandRejected(room > 0 ? `The bank will lend up to $${room / 100} more.` : "The bank will lend nothing more on what the company owns.");
+      receive(st.ledger, ctx.now, "bank", `Loan from the First National Bank of Beaumont`, "loan", cents);
+      notice(ctx, `Borrowed $${cents / 100} at ${RATE_PERCENT}% a year. Interest is due at each month's end.`);
+    },
+    "bank.repay"(ctx, c: Command) {
+      const st = S(ctx);
+      const want = (c.payload as { cents?: unknown })?.cents;
+      if (typeof want !== "number" || !Number.isSafeInteger(want) || want <= 0) throw new CommandRejected("Repay a sum in whole cents.");
+      const cents = Math.min(want, debtCents(st.ledger), Math.max(0, available(st)));
+      if (cents <= 0) throw new CommandRejected(debtCents(st.ledger) <= 0 ? "The company owes the bank nothing." : "There is no cash to repay with.");
+      pay(st.ledger, ctx.now, "bank", "Repaid to the bank", "loan", cents);
+      if (debtCents(st.ledger) === 0) st.bank.lien = false;
+      notice(ctx, debtCents(st.ledger) === 0 ? "The loan is paid off." : `Repaid $${(cents / 100).toFixed(2)}.`);
+    },
+    "company.buyRig"(ctx) {
+      const st = S(ctx);
+      if (st.bank.rigOwned) throw new CommandRejected("The company already owns a rig.");
+      if (available(st) < dollarsToCents(USED_RIG_PRICE)) throw new CommandRejected(`A used rig costs $${USED_RIG_PRICE}.`);
+      pay(st.ledger, ctx.now, "equipment", "Used cable-tool rig and tools, bought", "equipment", dollarsToCents(USED_RIG_PRICE));
+      st.bank.rigOwned = true;
+      st.bank.hiredOutUntil = null;
+      notice(ctx, "The company owns a rig again.");
+    },
+    "company.hireOut"(ctx) {
+      const st = S(ctx);
+      if (st.bank.rigOwned) throw new CommandRejected("With a rig of your own, drill your own wells.");
+      if (st.bank.hiredOutUntil !== null) throw new CommandRejected("The crew is already working for another operator.");
+      st.bank.hiredOutUntil = nextMidnight(ctx.now) + (HIRE_OUT_DAYS - 1) * MINUTES_PER_DAY;
+      notice(ctx, `The crew has hired on with another operator for ${HIRE_OUT_DAYS} days.`);
     },
     "prod.cap"(ctx) {
       const st = S(ctx);

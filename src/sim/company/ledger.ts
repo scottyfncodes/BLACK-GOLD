@@ -23,6 +23,7 @@ export type Account =
   | "oilSales"
   | "royalty"
   | "hauling"
+  | "wages"
   | "interest"
   | "loan";
 
@@ -82,7 +83,7 @@ export function receive(l: Ledger, t: GameTime, category: Category, memo: string
 export const balance = (l: Ledger, a: Account): number => l.balances[a] ?? 0;
 export const cashCents = (l: Ledger): number => balance(l, "cash");
 /** What the company owes the bank (cents, positive). */
-export const debtCents = (l: Ledger): number => -balance(l, "loan");
+export const debtCents = (l: Ledger): number => 0 - balance(l, "loan");
 
 /** Recompute every balance from the entries (for tests and save validation). */
 export function recompute(l: Ledger): Partial<Record<Account, number>> {

@@ -10,6 +10,7 @@ import type { SampleEvidence } from "./knowledge/types";
 import { cashCents, debtCents, type Ledger } from "./company/ledger";
 import type { LeaseBook } from "./company/leases";
 import type { ProductionBook } from "./company/production";
+import type { BankState } from "./company/bank";
 
 export type WellStatus = "rigging" | "drilling" | "stuck" | "gusher" | "dry";
 export type Operation = "rigup" | "bail" | "dress" | "case" | "fish";
@@ -55,6 +56,8 @@ export interface OperationsState {
   leases: LeaseBook;
   /** Capped oil wells selling their oil. */
   production: ProductionBook;
+  /** The bank: interest accrued, warnings, lien, and whether the company owns a rig. */
+  bank: BankState;
   well: Well | null;
   /** Earlier wells (finished). */
   past: Well[];
@@ -75,6 +78,7 @@ export interface OperationsView {
   ledger: Ledger;
   leases: LeaseBook;
   production: ProductionBook;
+  bank: BankState;
   well: Well | null;
   past: Well[];
 }
@@ -86,7 +90,7 @@ export function accruedCents(o: OperationsState): number {
 
 export function operationsOf(world: Readonly<WorldState>): OperationsView {
   const o = world.systems.operations as unknown as OperationsState;
-  return { cash: (cashCents(o.ledger) - accruedCents(o)) / 100, debt: debtCents(o.ledger) / 100, ledger: o.ledger, leases: o.leases, production: o.production, well: o.well, past: o.past };
+  return { cash: (cashCents(o.ledger) - accruedCents(o)) / 100, debt: debtCents(o.ledger) / 100, ledger: o.ledger, leases: o.leases, production: o.production, bank: o.bank, well: o.well, past: o.past };
 }
 
 /** Samples are evidence like any other; they join the knowledge view. */
