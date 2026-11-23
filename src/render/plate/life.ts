@@ -16,6 +16,8 @@ export interface LifeInputs {
   gameTime: number;
   knowledge: KnowledgeView;
   wells: Well[];
+  /** Wells capped and selling oil. */
+  producing?: string[];
 }
 
 export function drawLife(ctx: CanvasRenderingContext2D, v: MapView, inp: LifeInputs): void {
@@ -84,7 +86,7 @@ export function drawLife(ctx: CanvasRenderingContext2D, v: MapView, inp: LifeInp
     ctx.font = `italic 12px ${FONT}`;
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    const label = w.status === "gusher" ? `${w.name}: ${w.outcome?.startsWith("GAS") ? "gas" : "oil"} at ${Math.floor(w.depthFt)} ft` : w.status === "dry" ? `${w.name}: dry, ${Math.floor(w.depthFt)} ft` : `${w.name}: ${Math.floor(w.depthFt)} ft`;
+    const label = inp.producing?.includes(w.id) ? `${w.name}: producing` : w.status === "gusher" ? `${w.name}: ${w.outcome?.startsWith("GAS") ? "gas" : "oil"} at ${Math.floor(w.depthFt)} ft` : w.status === "dry" ? `${w.name}: dry, ${Math.floor(w.depthFt)} ft` : `${w.name}: ${Math.floor(w.depthFt)} ft`;
     ctx.lineWidth = 3;
     ctx.strokeStyle = INK.paper;
     ctx.strokeText(label, x + 10, y - 6);

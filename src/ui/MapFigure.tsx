@@ -111,7 +111,7 @@ export function MapFigure({ runtime, snap, selection, onSelect, tool, setTool, o
       const { snap: s, selection: sel, draft: d } = latest.current;
       const leased = s.ops.leases.leases.filter((l) => l.status === "active" && l.expiresAt > s.time).map((l) => l.surveyId);
       drawManuscript(ctx, v, { knowledge: s.knowledge, print: s.print, selection: sel, draft: d, leased });
-      drawLife(ctx, v, { anim: (performance.now() - started) / 1000, gameTime: s.time, knowledge: s.knowledge, wells: s.ops.well ? [...s.ops.past, s.ops.well] : s.ops.past });
+      drawLife(ctx, v, { anim: (performance.now() - started) / 1000, gameTime: s.time, knowledge: s.knowledge, wells: s.ops.well ? [...s.ops.past, s.ops.well] : s.ops.past, producing: s.ops.production.producers.map((p) => p.wellId) });
       devOverlay()?.map(ctx, v, runtime.currentWorld.seed);
     };
     raf = requestAnimationFrame(frame);

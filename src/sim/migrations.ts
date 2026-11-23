@@ -8,6 +8,7 @@ import { MINUTES_PER_DAY } from "./core/time";
 import { emptyLedger, post, recompute, dollarsToCents, type Ledger } from "./company/ledger";
 import { RIG_VALUE } from "./operations";
 import { emptyLeaseBook, ROYALTY, termEnd, type LeaseBook } from "./company/leases";
+import { emptyProductionBook } from "./company/production";
 import { SURVEYS } from "../content/geography/surveys";
 
 export type Migration = (world: Record<string, unknown>) => Record<string, unknown>;
@@ -45,6 +46,7 @@ export function v1ToV2(input: Record<string, unknown>): Record<string, unknown> 
     }
     ops.leases = book as unknown as Record<string, unknown>;
   }
+  if (!("production" in ops)) ops.production = emptyProductionBook() as unknown as Record<string, unknown>;
   if (!world.queue.some((e) => e.type === "company.day")) insertScheduled(world, nextMidnight(world.time), "company.day");
   return world;
 }

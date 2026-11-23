@@ -121,10 +121,18 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
       <button type="button" class="button button-primary" data-testid="to-rig" onClick={onOpenRig}>Go to the rig</button>
     </div>
   ) : null;
+  const producers = snap.ops.production.producers;
   const busy = (
     <>
       {task ? <p class="task" data-testid="task">{taskLine(task, snap)}</p> : null}
       {wellLine}
+      {producers.length > 0 && (
+        <div class="producing" data-testid="producing">
+          {producers.map((p) => (
+            <p key={p.wellId}><b>{p.name}</b> · producing {p.lastDayBbl} bbl a day · {p.monthBbl.toLocaleString("en-US")} bbl hauled this month</p>
+          ))}
+        </div>
+      )}
     </>
   );
 

@@ -84,5 +84,5 @@ describe("performance", () => {
   });
 });
 
-// Re-pinned on purpose: M1 (geology, knowledge), the rig, the company's books (ledger) and its leases.
-const GOLDEN_TEN_YEAR_HASH = "04822bf53fe821";
+// Re-pinned on purpose: M1 (geology, knowledge), the rig, the company's books (ledger), its leases and production.
+const GOLDEN_TEN_YEAR_HASH = "1fb69d67165256";

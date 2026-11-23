@@ -17,9 +17,11 @@ import { SURVEYS, insidePoly } from "../../content/geography/surveys";
 import { generateGeology, rockAt, type Lithology, type RockAt } from "../geology/truth/model";
 import type { SampleEvidence } from "../knowledge/types";
 import { accruedCents, COSTS, RIG_VALUE, STARTING_CASH, type Operation, type OperationsState, type Well } from "../operations";
-import { cashCents, dollarsToCents, emptyLedger, pay, post } from "../company/ledger";
+import { cashCents, dollarsToCents, emptyLedger, pay, post, receive } from "../company/ledger";
+import { rngKey } from "../core/rng";
 import { activeLease, askingTerms, emptyLeaseBook, ownerAccepts, REFUSAL_DAYS, surveyById, termEnd, type PublicNews } from "../company/leases";
 import { printedMap } from "../surface/print";
+import { CAP_COST, dayBarrels, emptyProductionBook, HAULING_CENTS, OIL_PRICE_CENTS } from "../company/production";
 
 type Ctx = SystemContext<Json>;
 const S = (ctx: Ctx) => ctx.state as unknown as OperationsState;
@@ -181,6 +183,37 @@ function complete(ctx: Ctx, w: Well, op: Operation): void {
   }
 }
 
+/** One day's oil from every capped well. */
+function produceDay(ctx: Ctx): void {
+  const pb = S(ctx).production;
+  for (const p of pb.producers) {
+    const bbl = dayBarrels(p, pb.drawn[p.trap] ?? 0);
+    p.lastDayBbl = bbl;
+    p.cumBbl += bbl;
+    p.monthBbl += bbl;
+    pb.drawn[p.trap] = (pb.drawn[p.trap] ?? 0) + bbl;
+  }
+}
+
+/** Month end. Oil: sold at the railhead, hauling and royalty paid, one entry each per well. */
+function settleMonth(ctx: Ctx, dayOf: number): void {
+  const st = S(ctx);
+  const c = toCalendar(Math.max(0, dayOf));
+  const month = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][c.month - 1];
+  for (const p of st.production.producers) {
+    const bbl = p.monthBbl;
+    p.monthBbl = 0;
+    if (bbl <= 0) continue;
+    const gross = bbl * OIL_PRICE_CENTS;
+    const ref = { wellId: p.wellId, surveyId: p.surveyId };
+    receive(st.ledger, ctx.now, "production", `Oil sold at Beaumont, ${month}: ${bbl.toLocaleString("en-US")} bbl from the ${p.name}`, "oilSales", gross, ref);
+    pay(st.ledger, ctx.now, "production", `Hauling to the railhead, ${month}: ${bbl.toLocaleString("en-US")} bbl`, "hauling", bbl * HAULING_CENTS, ref);
+    const lease = st.leases.leases.find((l) => l.surveyId === p.surveyId);
+    const owner = surveyById(p.surveyId)?.owner ?? "the owner";
+    pay(st.ledger, ctx.now, "production", `Royalty to ${owner}, ${month}: one-eighth`, "royalty", Math.round(gross * (lease?.royalty ?? 1 / 8)), ref);
+  }
+}
+
 function notice(ctx: Ctx, message: string): void {
   ctx.emit({ type: "company.notice", severity: "notice", interrupt: false, data: { message } });
 }
@@ -230,7 +263,7 @@ function well(ctx: Ctx): Well {
 
 export const rig: System<Json> = {
   id: "operations",
-  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), well: null, past: [], samples: [], next: 1 }) as unknown as Json,
+  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), well: null, past: [], samples: [], next: 1 }) as unknown as Json,
   init(ctx) {
     const st = S(ctx);
     post(st.ledger, ctx.now, "opening", "Capital paid in", [{ account: "cash", cents: dollarsToCents(STARTING_CASH) }, { account: "equity", cents: -dollarsToCents(STARTING_CASH) }]);
@@ -240,7 +273,11 @@ export const rig: System<Json> = {
   events: {
     "company.day"(ctx) {
       // Rig time is entered in the books once a day, for the day just ended.
+      // One event, one fixed order: the day's rig time, the day's oil, then (on the first of
+      // the month) the month's settlement.
       flushRigTime(ctx, ctx.now - 1);
+      produceDay(ctx);
+      if (toCalendar(ctx.now).day === 1) settleMonth(ctx, ctx.now - 1);
       ctx.schedule(nextMidnight(ctx.now), "company.day");
     },
     "lease.term"(ctx, payload) {
@@ -253,6 +290,11 @@ export const rig: System<Json> = {
       // Held by operations: a well being drilled on the lease keeps it.
       if (w && w.surveyId === surveyId && (w.status === "rigging" || w.status === "drilling" || w.status === "stuck")) {
         renew(ctx, lease, `The ${name} lease is held by the well being drilled on it.`);
+        return;
+      }
+      // Held by production.
+      if (st.production.producers.some((p) => p.surveyId === surveyId)) {
+        renew(ctx, lease, `The ${name} lease is held by production.`);
         return;
       }
       const t = askingTerms(surveyById(surveyId)!, printedMap(ctx.seed), news(st));
@@ -326,6 +368,25 @@ export const rig: System<Json> = {
       ctx.schedule(expiresAt, "lease.term", { surveyId: survey.id });
       notice(ctx, `Leased the ${survey.name} survey for $${cents / 100}: one year, one-eighth royalty to ${survey.owner}.`);
     },
+    "prod.cap"(ctx) {
+      const st = S(ctx);
+      const w = st.well;
+      if (!w || w.status !== "gusher") throw new CommandRejected("There is no gusher to cap.");
+      if (!w.outcome?.startsWith("OIL")) throw new CommandRejected("Gas has no buyer in 1890. There is nothing to sell.");
+      if (st.production.producers.some((p) => p.wellId === w.id)) throw new CommandRejected("That well is already capped and selling.");
+      if (available(st) < dollarsToCents(CAP_COST)) throw new CommandRejected(`Capping the well costs $${CAP_COST}.`);
+      const r = rock(ctx, w, w.depthFt);
+      const t = r.trap;
+      const dome = generateGeology(ctx.seed).domes.find((d) => d.id === t?.domeId);
+      // The flow and the oil in reach come from the ground the well drains.
+      const fill = dome?.charge.fill ?? 0.3;
+      const initialBbl = Math.round(220 + 1600 * fill);
+      const reserveBbl = Math.round((t?.kind === "caprock" ? 160_000 : 90_000) * (0.4 + fill));
+      const trap = rngKey(ctx.seed, "trap", t ? `${t.domeId}:${t.formation}` : w.id).toString(16);
+      pay(st.ledger, ctx.now, "production", `Capping the ${w.name}`, "drilling", dollarsToCents(CAP_COST), { wellId: w.id, surveyId: w.surveyId });
+      st.production.producers.push({ wellId: w.id, name: w.name, surveyId: w.surveyId, x: w.x, y: w.y, since: ctx.now, trap, initialBbl, reserveBbl, cumBbl: 0, monthBbl: 0, lastDayBbl: 0 });
+      notice(ctx, `The ${w.name} is capped. Teamsters will haul up to 150 barrels a day to the railhead.`);
+    },
     "lease.release"(ctx, c: Command) {
       const st = S(ctx);
       const surveyId = (c.payload as { surveyId?: string })?.surveyId ?? "";
@@ -333,6 +394,7 @@ export const rig: System<Json> = {
       if (!lease) throw new CommandRejected("You hold no lease there.");
       const w = st.well;
       if (w && w.surveyId === surveyId && w.status !== "gusher" && w.status !== "dry") throw new CommandRejected("You are drilling on that lease.");
+      if (st.production.producers.some((p) => p.surveyId === surveyId)) throw new CommandRejected("A producing well holds that lease.");
       lease.status = "released";
       notice(ctx, `Released the ${surveyById(surveyId)?.name ?? ""} lease.`);
     },

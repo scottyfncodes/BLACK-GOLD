@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatClock, formatDate, type GameRuntime, type Snapshot, type Speed } from "../app/runtime";
-import { COSTS, SWEET_FT, MINUTES_PER_DAY, type SampleEvidence } from "../sim";
+import { CAP_COST, COSTS, HAUL_LIMIT_BBL, SWEET_FT, MINUTES_PER_DAY, type SampleEvidence } from "../sim";
 import { drawScene, SceneState } from "../render/rig/scene";
 import { RigAudio } from "./rigAudio";
 
@@ -118,6 +118,7 @@ export function RigView({ runtime, snap, onClose }: Props) {
   });
 
   if (!well) return null;
+  const capped = snap.ops.production.producers.some((p) => p.wellId === well.id);
   const slack = well.reachFt - well.depthFt;
   const needle = Math.max(-1, Math.min(1, slack < 0 ? slack / 1.5 - 0.3 : slack <= SWEET_FT ? -0.3 + (slack / SWEET_FT) * 0.6 : 0.3 + (slack - SWEET_FT) / 6));
   const lineWord = slack < 0 ? "Tools short of bottom" : slack <= SWEET_FT ? "Striking square" : "Slack in the line";
@@ -201,7 +202,14 @@ export function RigView({ runtime, snap, onClose }: Props) {
           <p class="result-word">{well.status === "gusher" ? (well.outcome?.startsWith("GAS") ? "Gas." : "Oil.") : "Dry hole."}</p>
           <p>{well.outcome}</p>
           <p class="result-meta">{Math.floor(well.depthFt)} ft in {days} days · ${Math.floor(snap.ops.cash)} left</p>
-          <button type="button" class="button button-primary" onClick={onClose}>Back to the map</button>
+          {well.status === "gusher" && well.outcome?.startsWith("OIL") && !capped && (
+            <button type="button" class="button button-primary" data-testid="cap" disabled={snap.ops.cash < CAP_COST} onClick={act("prod.cap")}>
+              Cap it and sell the oil<small>${CAP_COST} · up to {HAUL_LIMIT_BBL} bbl a day by wagon</small>
+            </button>
+          )}
+          {capped && <p class="result-meta" data-testid="capped">Capped. Teamsters haul the oil to Beaumont; it is sold at the month's end.</p>}
+          {well.status === "gusher" && well.outcome?.startsWith("GAS") && <p class="result-meta">Gas has no buyer in 1890. Look for oil below or nearby.</p>}
+          <button type="button" class={`button ${capped || well.status !== "gusher" || !well.outcome?.startsWith("OIL") ? "button-primary" : ""}`} onClick={onClose}>Back to the map</button>
         </div>
       )}
     </div>

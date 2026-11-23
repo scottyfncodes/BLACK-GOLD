@@ -1073,3 +1073,22 @@ table.log td:nth-child(-n + 2) {
   border-color: var(--accent);
   border-width: 1px 1px 1px 3px;
 }
+.producing {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-left: 3px solid #140e0a;
+  background: rgba(20, 14, 10, 0.05);
+}
+.producing p {
+  margin: 0 !important;
+  font-size: 14.5px;
+}
+.result .button small {
+  display: block;
+  font-style: italic;
+  font-size: 12px;
+  opacity: 0.8;
+}
+.result .button + .button {
+  margin-top: 8px;
+}
