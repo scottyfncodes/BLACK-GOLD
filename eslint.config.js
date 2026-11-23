@@ -12,7 +12,7 @@ import tseslint from "typescript-eslint";
 const TRUTH = ["**/sim/geology/truth", "**/sim/geology/truth/**", "**/geology/truth", "**/geology/truth/**"];
 
 export default tseslint.config(
-  { ignores: ["dist", "node_modules", "test-results", "playwright-report"] },
+  { ignores: ["dist", "node_modules", "test-results", "playwright-report", "gitcraft-out"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

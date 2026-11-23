@@ -1,18 +1,41 @@
-/* Functional M0 styling. Final Era I art direction is chosen at the interface milestone. */
+/* Art direction: B · Geologist's Plate (docs/ART-DIRECTION.md). Tokens here are the source of truth. */
+@font-face { font-family: "Bodoni Moda"; src: url(/fonts/bodoni-moda-latin-400-normal.woff2) format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Bodoni Moda"; src: url(/fonts/bodoni-moda-latin-400-italic.woff2) format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Bodoni Moda"; src: url(/fonts/bodoni-moda-latin-700-normal.woff2) format("woff2"); font-weight: 700; font-display: swap; }
+
 :root {
-  --paper: #efe6d2;
-  --paper-deep: #e4d8bd;
-  --paper-edge: #cdbd9c;
-  --ink: #211b15;
-  --ink-soft: #5b4f40;
-  --accent: #8a3b12;
-  --accent-ink: #fff7ea;
-  --danger: #9b1c1c;
-  --radius: 8px;
+  /* Paper and ink */
+  --paper: #f3ead5;
+  --paper-deep: #ebdfc4;
+  --paper-edge: #cdb896;
+  --ink: #2a2118;
+  --ink-soft: #6a5a48;
+  /* The one accent: carmine is the company's own hand (selection, notes, claims) */
+  --accent: #a3302a;
+  --accent-ink: #fbf3e6;
+  --danger: #8f1d17;
+  /* Washes: landcover and geology only, never infrastructure */
+  --wash-prairie: rgba(214, 178, 108, 0.12);
+  --wash-wood: rgba(104, 122, 70, 0.17);
+  --wash-marsh: rgba(92, 140, 142, 0.15);
+  --wash-water: rgba(80, 130, 160, 0.42);
+  --wash-town: rgba(196, 92, 82, 0.42);
+  --water: #355f7a;
+  --relief: #9a5b2e;
+  /* Lithology tints (always paired with the standard pattern) */
+  --lith-sand: #d6aa52;
+  --lith-clay: #788c80;
+  --lith-limestone: #9fb3c2;
+  --lith-salt: #e3c6c0;
+  --lith-caprock: #b9a37a;
+  /* Shape and rhythm */
+  --radius: 0;
   --gutter: 16px;
   --tap: 44px;
-  --font-body: Georgia, "Times New Roman", serif;
-  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --hairline: 1px;
+  /* Type: Bodoni Moda throughout; figures and captions in italic */
+  --font-body: "Bodoni Moda", Didot, "Bodoni 72", Georgia, serif;
+  --font-ui: "Bodoni Moda", Didot, "Bodoni 72", Georgia, serif;
   color-scheme: light;
 }
 
@@ -218,7 +241,8 @@ body {
   margin: auto 0 0;
   padding: 0;
   border: 0;
-  border-radius: 14px 14px 0 0;
+  border-radius: var(--radius);
+  border-top: 2px solid var(--ink);
   background: var(--paper);
   color: var(--ink);
   box-shadow: 0 -8px 40px rgba(33, 27, 21, 0.3);
@@ -233,7 +257,7 @@ body {
   .sheet {
     max-width: 560px;
     margin: auto;
-    border-radius: 14px;
+    border-radius: var(--radius);
   }
 }
 .sheet-head {

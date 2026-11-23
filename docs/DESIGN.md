@@ -351,7 +351,7 @@ Assistance is on by default: the driller comments in plain language ("line's goi
 
 ### Look and feel (Era I)
 
-A paper and ink world: field maps on aged paper with hand-inked annotations, a ledger set in period typography, cast-iron and brass gauges, a sepia and oil-black palette with a single hot accent for fire and gushers. Sound is half the feel: engine thump, cable slap, the bailer's gurgle, steam. The final direction gets picked visually before UI work starts (see the [open decisions](#9-open-decisions)).
+**Decided: B · Geologist's Plate.** The game looks like a hand-coloured plate from a state geological survey report. Every view is a numbered plate, with the section and the map as captioned figures. Watercolour washes are for land and rock only, and infrastructure is drawn in ink. The company's own knowledge is written in carmine, using the conventions geologists used for certainty, and blank paper means "not known". Set in Bodoni Moda. The rules, tokens and what is ruled out are in [`docs/ART-DIRECTION.md`](ART-DIRECTION.md). Sound is half the feel: engine thump, cable slap, the bailer's gurgle, steam.
 
 ### Slice success criterion (from the prompt, made testable)
 
@@ -477,10 +477,10 @@ Where the build deliberately differs from the plan above. Each milestone appends
 
 ## 9. Open decisions
 
-These need your call before or during M0. Defaults are noted, and work proceeds on the default unless you say otherwise.
+Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.
 
 1. **Platform:** web-first with per-PR live preview links. *Default: yes.*
 2. **Hosting:** Vercel static deploy with preview URLs per PR. This needs the repository connected to a Vercel project, which is your approval to give. *Default: Vercel, set up at M0.*
-3. **Visual direction:** before M6 UI work, two or three Era I style frames get rendered for you to pick from (paper map + ledger + cockpit). *Default: "paper, ink and cast iron," as described in Section 5.*
+3. **Visual direction:** *Decided: B · Geologist's Plate*, chosen from three rendered directions in review round 1. See [`docs/ART-DIRECTION.md`](ART-DIRECTION.md).
 4. **Units:** period oilfield units displayed by default with an SI toggle. *Default: yes.*
 5. **Historical naming:** real places, fictional people and companies. *Default: yes.*
