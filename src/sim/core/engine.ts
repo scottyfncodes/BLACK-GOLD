@@ -228,6 +228,12 @@ function before(a: ScheduledEvent, b: ScheduledEvent): boolean {
   return a.at < b.at || (a.at === b.at && a.seq < b.seq);
 }
 
+/** Schedule an event directly on a world (for save migrations, outside any system). */
+export function insertScheduled(world: WorldState, at: GameTime, type: string, payload: Json = null): void {
+  assertGameTime(at);
+  heapPush(world.queue, { at, seq: world.seq++, type, payload });
+}
+
 function heapPush(h: ScheduledEvent[], e: ScheduledEvent): void {
   h.push(e);
   let i = h.length - 1;

@@ -11,12 +11,13 @@
  * them, and then the well comes in.
  */
 import { CommandRejected, type Command, type Json, type System, type SystemContext } from "../core/engine";
-import { MINUTES_PER_DAY } from "../core/time";
+import { MINUTES_PER_DAY, toCalendar } from "../core/time";
 import { ftToM } from "../math/units";
 import { SURVEYS, insidePoly } from "../../content/geography/surveys";
 import { generateGeology, rockAt, type Lithology, type RockAt } from "../geology/truth/model";
 import type { SampleEvidence } from "../knowledge/types";
-import { COSTS, STARTING_CASH, type Operation, type OperationsState, type Well } from "../operations";
+import { accruedCents, COSTS, RIG_VALUE, STARTING_CASH, type Operation, type OperationsState, type Well } from "../operations";
+import { cashCents, dollarsToCents, emptyLedger, pay, post } from "../company/ledger";
 
 type Ctx = SystemContext<Json>;
 const S = (ctx: Ctx) => ctx.state as unknown as OperationsState;
@@ -159,7 +160,8 @@ function complete(ctx: Ctx, w: Well, op: Operation): void {
       return;
     case "case": {
       const st = S(ctx);
-      st.cash -= Math.max(0, w.depthFt - w.casedFt) * COSTS.casingPerFt;
+      const ft = Math.max(0, w.depthFt - w.casedFt);
+      pay(st.ledger, ctx.now, "drilling", `Casing set from ${Math.round(w.casedFt)} to ${Math.round(w.depthFt)} ft in the ${w.name}`, "drilling", dollarsToCents(ft * COSTS.casingPerFt), { wellId: w.id, surveyId: w.surveyId });
       w.casedFt = w.depthFt;
       w.openSandFt = 0;
       w.reachFt = w.depthFt + 1;
@@ -177,6 +179,29 @@ function complete(ctx: Ctx, w: Well, op: Operation): void {
   }
 }
 
+/** Cash that can be spent now: the books less rig time run today and not yet entered. */
+function available(st: OperationsState): number {
+  return cashCents(st.ledger) - accruedCents(st);
+}
+
+export function nextMidnight(t: number): number {
+  return (Math.floor(t / MINUTES_PER_DAY) + 1) * MINUTES_PER_DAY;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"];
+
+/** Enter the rig time run since the last posting as one line in the books. */
+function flushRigTime(ctx: Ctx, dayOf: number): void {
+  const st = S(ctx);
+  const cents = accruedCents(st);
+  const hours = Math.round((st.accrued.ticks * TICK_MINUTES) / 60);
+  st.accrued.ticks = 0;
+  if (cents <= 0) return;
+  const c = toCalendar(Math.max(0, dayOf));
+  const w = st.well ?? st.past[st.past.length - 1];
+  pay(st.ledger, ctx.now, "operating", `Rig crew, fuel and water, ${c.day} ${MONTHS[c.month - 1]} (${hours} h)`, "operating", cents, w ? { wellId: w.id, surveyId: w.surveyId } : undefined);
+}
+
 function well(ctx: Ctx): Well {
   const w = S(ctx).well;
   if (!w || w.status === "gusher" || w.status === "dry") throw new CommandRejected("There is no well being drilled.");
@@ -185,18 +210,31 @@ function well(ctx: Ctx): Well {
 
 export const rig: System<Json> = {
   id: "operations",
-  initialState: () => ({ cash: STARTING_CASH, well: null, past: [], samples: [], next: 1 }) as unknown as Json,
+  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, well: null, past: [], samples: [], next: 1 }) as unknown as Json,
+  init(ctx) {
+    const st = S(ctx);
+    post(st.ledger, ctx.now, "opening", "Capital paid in", [{ account: "cash", cents: dollarsToCents(STARTING_CASH) }, { account: "equity", cents: -dollarsToCents(STARTING_CASH) }]);
+    post(st.ledger, ctx.now, "opening", "Cable-tool rig and tools, owned", [{ account: "equipment", cents: dollarsToCents(RIG_VALUE) }, { account: "equity", cents: -dollarsToCents(RIG_VALUE) }]);
+    ctx.schedule(nextMidnight(ctx.now), "company.day");
+  },
   events: {
+    "company.day"(ctx) {
+      // Rig time is entered in the books once a day, for the day just ended.
+      flushRigTime(ctx, ctx.now - 1);
+      ctx.schedule(nextMidnight(ctx.now), "company.day");
+    },
     "rig.tick"(ctx) {
       const st = S(ctx);
       const w = st.well;
       if (!w || w.status === "gusher" || w.status === "dry") return;
-      st.cash -= (COSTS.perDay * TICK_MINUTES) / MINUTES_PER_DAY;
-      if (st.cash <= 0) {
-        st.cash = 0;
+      // The money is gone when today's rig time can no longer be paid.
+      const perTick = (COSTS.perDay * 100) / 288;
+      if (cashCents(st.ledger) - accruedCents(st) - perTick < 0) {
+        flushRigTime(ctx, ctx.now);
         finish(ctx, w, "dry", `The money is gone. The ${w.name} is abandoned at ${Math.round(w.depthFt)} ft.`);
         return;
       }
+      st.accrued.ticks++;
       if (w.busy && ctx.now >= w.busy.until) complete(ctx, w, w.busy.op);
       else if (!w.busy && w.status === "drilling") drill(ctx, w);
       // complete() and drill() may have ended the well; re-read its status.
@@ -212,10 +250,10 @@ export const rig: System<Json> = {
       if (typeof p?.x !== "number" || typeof p?.y !== "number") throw new CommandRejected("Choose a place to drill.");
       const survey = SURVEYS.find((s) => insidePoly(s.poly, p.x as number, p.y as number));
       if (!survey) throw new CommandRejected("Drill on surveyed land.");
-      if (st.cash < COSTS.rigUp) throw new CommandRejected(`Raising a derrick costs $${COSTS.rigUp}. You have $${Math.floor(st.cash)}.`);
+      if (available(st) < dollarsToCents(COSTS.rigUp)) throw new CommandRejected(`Raising a derrick costs $${COSTS.rigUp}. You have $${Math.floor(available(st) / 100)}.`);
       if (st.well) st.past.push(st.well);
-      st.cash -= COSTS.rigUp;
       const n = st.past.length + 1;
+      pay(st.ledger, ctx.now, "drilling", `Derrick raised for the ${survey.name} No. ${n}`, "drilling", dollarsToCents(COSTS.rigUp), { wellId: `ours-${n}`, surveyId: survey.id });
       st.well = {
         id: `ours-${n}`, name: `${survey.name} No. ${n}`, x: p.x, y: p.y, surveyId: survey.id, spudAt: ctx.now,
         status: "rigging", depthFt: 0, reachFt: 1, fillFt: 0, sharp: 1, casedFt: 0, openSandFt: 0,
@@ -248,13 +286,15 @@ export const rig: System<Json> = {
       if (w.busy || w.status !== "drilling") throw new CommandRejected("Not now.");
       if (w.depthFt - w.casedFt < 20) throw new CommandRejected("The hole is already cased almost to bottom.");
       const cost = (w.depthFt - w.casedFt) * COSTS.casingPerFt;
-      if (S(ctx).cash < cost) throw new CommandRejected(`Casing to bottom costs $${Math.ceil(cost)}.`);
+      if (available(S(ctx)) < dollarsToCents(cost)) throw new CommandRejected(`Casing to bottom costs $${Math.ceil(cost)}.`);
       startOp(ctx, w, "case");
     },
     "rig.fish"(ctx) {
       const w = well(ctx);
       if (w.status !== "stuck" || w.busy) throw new CommandRejected("The tools are not stuck.");
-      S(ctx).cash -= COSTS.fishing;
+      const st = S(ctx);
+      if (available(st) < dollarsToCents(COSTS.fishing)) throw new CommandRejected(`A fishing job costs $${COSTS.fishing}.`);
+      pay(st.ledger, ctx.now, "drilling", `Fishing job on the ${w.name}`, "drilling", dollarsToCents(COSTS.fishing), { wellId: w.id, surveyId: w.surveyId });
       startOp(ctx, w, "fish");
     },
     "rig.abandon"(ctx) {

@@ -1,4 +1,4 @@
-import { GEOLOGY_VERSION, isSeed, type Engine, type WorldState } from "../../sim";
+import { GEOLOGY_VERSION, isSeed, MIGRATIONS as SIM_MIGRATIONS, worldProblem, type Engine, type WorldState } from "../../sim";
 
 /**
  * The save file format. Pure (no I/O) so it is fully testable in Node.
@@ -12,7 +12,7 @@ import { GEOLOGY_VERSION, isSeed, type Engine, type WorldState } from "../../sim
  *   3. add a test that loads a fixture saved at the old version.
  */
 export const SAVE_FORMAT = "black-gold-save";
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export interface SaveFile {
   format: typeof SAVE_FORMAT;
@@ -27,7 +27,7 @@ export interface SaveFile {
 export type Migration = (world: Record<string, unknown>) => Record<string, unknown>;
 
 /** MIGRATIONS[n] upgrades a world saved at schema version n to version n + 1. */
-export const MIGRATIONS: Readonly<Record<number, Migration>> = {};
+export const MIGRATIONS: Readonly<Record<number, Migration>> = SIM_MIGRATIONS;
 
 export class SaveError extends Error {}
 
@@ -69,6 +69,8 @@ export function decodeSave(
   }
 
   assertLoadable(world, engine);
+  const problem = worldProblem(world as unknown as WorldState);
+  if (problem) throw new SaveError(`The save is damaged: ${problem}.`);
   return {
     format: SAVE_FORMAT,
     schemaVersion: currentVersion,

@@ -51,21 +51,21 @@ describe("save format", () => {
   });
 
   it("migrates old saves forward one version at a time", () => {
-    const v1 = freshSaveText();
+    const current = freshSaveText();
     const seen: number[] = [];
     const migrations: Record<number, Migration> = {
-      1: (w) => (seen.push(1), { ...w, systems: { ...(w.systems as object), weather: null } }),
-      2: (w) => (seen.push(2), { ...w, renamedInV3: true }),
+      2: (w) => (seen.push(2), { ...w, systems: { ...(w.systems as object), weather: null } }),
+      3: (w) => (seen.push(3), { ...w, renamedInV3: true }),
     };
-    const out = decodeSave(v1, gameEngine, migrations, 3);
-    expect(seen).toEqual([1, 2]);
-    expect(out.schemaVersion).toBe(3);
+    const out = decodeSave(current, gameEngine, migrations, 4);
+    expect(seen).toEqual([2, 3]);
+    expect(out.schemaVersion).toBe(4);
     expect(out.world.systems.weather).toBeNull();
     expect((out.world as unknown as Record<string, unknown>).renamedInV3).toBe(true);
   });
 
   it("refuses to load when a migration is missing", () => {
-    expect(() => decodeSave(freshSaveText(), gameEngine, {}, 2)).toThrow(/No migration from schema 1 to 2/);
+    expect(() => decodeSave(freshSaveText(), gameEngine, {}, 3)).toThrow(/No migration from schema 2 to 3/);
   });
 });
 

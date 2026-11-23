@@ -105,7 +105,9 @@ describe("cable-tool drilling", () => {
     const at = { x: (SURVEYS[6]!.poly[0]![0] + SURVEYS[6]!.poly[2]![0]) / 2, y: (SURVEYS[6]!.poly[0]![1] + SURVEYS[6]!.poly[2]![1]) / 2 };
     const w = rigged("00000000000000dd", at);
     gameEngine.advance(w, w.time + 200 * MINUTES_PER_DAY);
-    expect(operationsOf(w).cash).toBe(0);
+    // The well stops when today's rig time can no longer be paid: less than a dollar is left.
+    expect(operationsOf(w).cash).toBeGreaterThanOrEqual(0);
+    expect(operationsOf(w).cash).toBeLessThan(1);
     expect(operationsOf(w).well!.status).toBe("dry");
   });
 });

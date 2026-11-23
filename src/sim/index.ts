@@ -20,6 +20,8 @@ export type * from "./knowledge/types";
 export { printedMap, PRINT_RELIEF_FT, type PrintedMap, type PrintedHill, type PrintedWell } from "./surface/print";
 export { WALK_DAYS, CONSULT_DAYS, INQUIRE_DAYS } from "./systems/fieldwork";
 export { GEOLOGY_VERSION } from "./geology/truth/model";
+export { MIGRATIONS, worldProblem, type Migration } from "./migrations";
+export { cashCents, debtCents, type Ledger, type Entry, type Category, type Account } from "./company/ledger";
 export { operationsOf, COSTS, STARTING_CASH, type OperationsView, type Well, type WellStatus, type Operation } from "./operations";
 export { FEED_RATE, SWEET_FT, MAX_DEPTH_FT, TICK_MINUTES, contactFor } from "./systems/rig";
 

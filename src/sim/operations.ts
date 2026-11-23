@@ -7,6 +7,7 @@
 import type { WorldState } from "./core/engine";
 import type { GameTime } from "./core/time";
 import type { SampleEvidence } from "./knowledge/types";
+import { cashCents, debtCents, type Ledger } from "./company/ledger";
 
 export type WellStatus = "rigging" | "drilling" | "stuck" | "gusher" | "dry";
 export type Operation = "rigup" | "bail" | "dress" | "case" | "fish";
@@ -44,7 +45,10 @@ export interface Well {
 }
 
 export interface OperationsState {
-  cash: number;
+  /** The company's books: the only record of money (see company/ledger.ts). */
+  ledger: Ledger;
+  /** Rig time run today and not yet entered in the books (posted at midnight). */
+  accrued: { ticks: number };
   well: Well | null;
   /** Earlier wells (finished). */
   past: Well[];
@@ -53,17 +57,28 @@ export interface OperationsState {
 }
 
 export const STARTING_CASH = 1500;
+/** The rig and tools the company starts with, carried in the books at this value. */
+export const RIG_VALUE = 400;
 export const COSTS = { rigUp: 350, perDay: 12, casingPerFt: 1.1, fishing: 60 } as const;
 
 export interface OperationsView {
+  /** Cash in hand (dollars), from the books, less rig time not yet entered. */
   cash: number;
+  /** Owed to the bank (dollars). */
+  debt: number;
+  ledger: Ledger;
   well: Well | null;
   past: Well[];
 }
 
+/** Rig time accrued today, in cents (whole cents, rounded once). */
+export function accruedCents(o: OperationsState): number {
+  return Math.round((COSTS.perDay * 100 * o.accrued.ticks) / 288);
+}
+
 export function operationsOf(world: Readonly<WorldState>): OperationsView {
   const o = world.systems.operations as unknown as OperationsState;
-  return { cash: o.cash, well: o.well, past: o.past };
+  return { cash: (cashCents(o.ledger) - accruedCents(o)) / 100, debt: debtCents(o.ledger) / 100, ledger: o.ledger, well: o.well, past: o.past };
 }
 
 /** Samples are evidence like any other; they join the knowledge view. */

@@ -84,5 +84,5 @@ describe("performance", () => {
   });
 });
 
-// Re-pinned in M1 (geology and knowledge state) and again for the drilling operations ledger.
-const GOLDEN_TEN_YEAR_HASH = "0caecc7396c06d";
+// Re-pinned on purpose: M1 (geology, knowledge), the rig, and the company's books (ledger).
+const GOLDEN_TEN_YEAR_HASH = "0b607139f9e3b6";
