@@ -35,29 +35,29 @@ test("borrow against the rig, pay a month's interest, and repay the loan", async
   test.setTimeout(60_000);
   await page.getByTestId("books").click();
   const books = page.getByRole("dialog", { name: "The Company's Books" });
-  await expect(books.getByTestId("bank")).toContainText("up to $200");
+  await expect(books.getByTestId("bank")).toContainText("up to $300");
   await books.getByTestId("borrow-all").click();
-  await expect(books.getByTestId("books-debt")).toHaveText("$200.00");
+  await expect(books.getByTestId("books-debt")).toHaveText("$300.00");
   await expect(books.getByTestId("borrow")).toBeDisabled();
   await books.getByRole("button", { name: "Close" }).click();
-  await expect(page.getByTestId("debt")).toHaveText("owes $200");
-  await expect(page.getByTestId("cash")).toHaveText("$1,700");
+  await expect(page.getByTestId("debt")).toHaveText("owes $300");
+  await expect(page.getByTestId("cash")).toHaveText("$1,800");
 
   // Skip runs to the start of next month, where the interest is taken.
   await page.getByRole("radio", { name: "Skip" }).click();
-  await expect.poll(async () => (await snap(page)).ops.cash, { timeout: 30_000 }).toBeLessThan(1700);
+  await expect.poll(async () => (await snap(page)).ops.cash, { timeout: 30_000 }).toBeLessThan(1800);
   await page.getByRole("radio", { name: "Pause" }).click();
-  expect((await snap(page)).ops.cash).toBeCloseTo(1698.65, 2); // 31 days at 8% on $200: $1.35
+  expect((await snap(page)).ops.cash).toBeCloseTo(1797.97, 2); // 31 days at 8% on $300: $2.03
 
   await page.getByTestId("books").click();
   await expect(books.getByTestId("ledger")).toContainText("February 1890");
   await books.getByText("Every entry").first().click();
   await expect(books.getByRole("cell", { name: /Interest to the bank, January, at 8% a year/ })).toBeVisible();
   await books.getByTestId("repay").click();
-  await expect(books.getByTestId("books-debt")).toHaveText("$150.00");
+  await expect(books.getByTestId("books-debt")).toHaveText("$250.00");
   await books.getByTestId("repay-all").click();
   await expect(books.getByTestId("books-debt")).toHaveText("Nothing");
-  await expect(books.getByTestId("books-cash")).toHaveText("$1,498.65");
+  await expect(books.getByTestId("books-cash")).toHaveText("$1,497.97");
   await books.getByRole("button", { name: "Close" }).click();
   await expect(page.getByTestId("debt")).toHaveCount(0);
 });

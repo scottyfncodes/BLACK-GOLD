@@ -1,4 +1,4 @@
-import { CAMPAIGN_START, gameEngine, knowledgeOf, operationsOf, printedMap, type OperationsView, startOfNextMonth, toCalendar, type Json, type KnowledgeView, type PrintedMap, type Seed, type SimEvent, type WorldState } from "../sim";
+import { CAMPAIGN_START, gameEngine, knowledgeOf, operationsOf, positionOf, printedMap, recoveryPaths, type OperationsView, type RecoveryPath, startOfNextMonth, toCalendar, type Json, type KnowledgeView, type PrintedMap, type Seed, type SimEvent, type WorldState } from "../sim";
 import { createSave, decodeSave, encodeSave, SaveError, type SaveFile } from "./save/format";
 import { gunzip, gzip } from "./save/gzip";
 import { autosaveId, saveStore, type SaveSummary } from "./save/store";
@@ -38,6 +38,10 @@ export interface Snapshot {
   rev: number;
   /** Money and the well being drilled. */
   ops: OperationsView;
+  /** What the company can still do (empty only when the campaign has ended). All advice comes from this. */
+  paths: RecoveryPath[];
+  /** A milestone just reached (the first producing well), until the player acknowledges it. */
+  milestone: string | null;
   /** The rig view is open (time runs at rig pace). */
   atRig: boolean;
   speed: Speed;
@@ -68,6 +72,7 @@ export class GameRuntime {
   private snap: Snapshot;
   private rev = 0;
   private atRig = false;
+  private milestone: string | null = null;
 
   constructor(seed: Seed = randomSeed()) {
     this.world = gameEngine.createWorld(seed, CAMPAIGN_START);
@@ -111,6 +116,17 @@ export class GameRuntime {
   setAtRig(on: boolean): void {
     this.atRig = on;
     this.carry = 0;
+    this.changed();
+  }
+
+  /** Put a message in the status line (for things the UI does on the player's behalf). */
+  notify(message: string): void {
+    this.setStatus(message);
+  }
+
+  /** The player has seen the milestone. */
+  dismissMilestone(): void {
+    this.milestone = null;
     this.changed();
   }
 
@@ -163,9 +179,12 @@ export class GameRuntime {
         // Stuck tools, a gusher or a dry hole: stop the clock so the player can act.
         if (e.interrupt) { this.speed = "paused"; this.carry = 0; }
       }
-      if (e.type === "company.notice") {
+      if (e.type === "company.notice" || e.type === "company.concluded" || e.type === "company.milestone") {
         this.rev++;
         this.status = String((e.data as { message?: string } | undefined)?.message ?? "");
+        // A warning from the bank, a contract done, the first producing well, the end: stop the clock.
+        if (e.interrupt) { this.speed = "paused"; this.carry = 0; }
+        if (e.type === "company.milestone") this.milestone = this.status;
       }
       if (e.type === "fieldwork.report") {
         this.rev++;
@@ -177,6 +196,7 @@ export class GameRuntime {
   async newCampaign(seed: Seed): Promise<void> {
     this.world = gameEngine.createWorld(seed, CAMPAIGN_START);
     this.rev++;
+    this.milestone = null;
     this.speed = "paused";
     this.carry = 0;
     this.setStatus(`New campaign started with seed ${seed}.`);
@@ -242,6 +262,7 @@ export class GameRuntime {
   private adopt(save: SaveFile): void {
     this.world = save.world;
     this.rev++;
+    this.milestone = null;
     this.speed = "paused";
     this.carry = 0;
   }
@@ -277,7 +298,9 @@ export class GameRuntime {
   }
 
   private makeSnapshot(): Snapshot {
-    return { time: this.world.time, knowledge: knowledgeOf(this.world), print: printedMap(this.world.seed), rev: this.rev, ops: operationsOf(this.world), atRig: this.atRig, speed: this.speed, seed: this.world.seed, status: this.status, saves: this.saves, busy: this.busy };
+    const ops = operationsOf(this.world);
+    const paths = ops.outcome.endedAt === null ? recoveryPaths(positionOf(this.world.systems.operations as never, this.world.seed, this.world.time)) : [];
+    return { time: this.world.time, knowledge: knowledgeOf(this.world), print: printedMap(this.world.seed), rev: this.rev, ops, paths, milestone: this.milestone, atRig: this.atRig, speed: this.speed, seed: this.world.seed, status: this.status, saves: this.saves, busy: this.busy };
   }
 
   private changed(): void {

@@ -127,6 +127,10 @@ export function RigView({ runtime, snap, onClose }: Props) {
   const caseCost = Math.ceil(Math.max(0, well.depthFt - well.casedFt) * COSTS.casingPerFt);
   const busy = well.busy ? OPS[well.busy.op] : null;
   const speeds: [Speed, string][] = [["paused", "Pause"], ["1x", "1×"], ["4x", "4×"], ["16x", "16×"]];
+  // Nobody on the line for an hour or more: say so, plainly and in red.
+  const idle = well.status === "drilling" && !well.auto && !well.busy && well.idleTicks >= 12;
+  const capPath = snap.paths.find((p) => p.kind === "cap");
+  const capBorrow = capPath && capPath.kind === "cap" ? capPath.borrowCents : 0;
 
   return (
     <div class="rig" role="dialog" aria-label={`The rig: ${well.name}`}>
@@ -138,7 +142,7 @@ export function RigView({ runtime, snap, onClose }: Props) {
         <button type="button" class="rig-back" onClick={onClose}>← Map</button>
         <div class="rig-title">
           <h2>{well.name}</h2>
-          <p data-testid="rig-status">{done ? well.outcome : busy ? `${busy}…` : well.status === "stuck" ? "The tools are stuck." : well.auto ? "The driller is running the tools." : "Hold Feed to let out line. Keep the needle in the band."}</p>
+          <p data-testid="rig-status" class={idle ? "red" : ""}>{done ? well.outcome : busy ? `${busy}…${well.status === "rigging" && well.auto ? " The driller will start when it is up." : ""}` : well.status === "stuck" ? "The tools are stuck." : well.auto ? "The driller is running the tools." : idle ? `Nobody is working the line. Rig time runs on at $${COSTS.perDay} a day.` : "Hold Feed to let out line and keep the needle in the band, or let the driller work."}</p>
         </div>
         <button type="button" class="rig-back" aria-pressed={muted} onClick={() => { setMuted(!muted); audio.current.setMuted(!muted); }}>{muted ? "Sound off" : "Sound on"}</button>
       </header>
@@ -185,7 +189,7 @@ export function RigView({ runtime, snap, onClose }: Props) {
                 <button type="button" class="button" disabled={!!busy || well.status !== "drilling"} onClick={act("rig.bail")}>Bail<small>B · sample</small></button>
                 <button type="button" class="button" disabled={!!busy || well.status !== "drilling"} onClick={act("rig.dress")}>Dress bit<small>D</small></button>
                 <button type="button" class="button" disabled={!!busy || well.status !== "drilling" || caseCost < 22} onClick={act("rig.case")}>Set casing<small>${caseCost}</small></button>
-                <button type="button" class="button" aria-pressed={well.auto} disabled={well.status !== "drilling"} onClick={act("rig.auto", { on: !well.auto })}>{well.auto ? "Take the controls" : "Let the driller"}<small>A</small></button>
+                <button type="button" class={`button ${idle ? "button-primary" : ""}`} data-testid="driller" aria-pressed={well.auto} disabled={well.status !== "drilling" && well.status !== "rigging"} onClick={act("rig.auto", { on: !well.auto })}>{well.auto ? (well.status === "rigging" ? "Driller ready" : "Take the controls") : "Let the driller"}<small>{well.status === "rigging" && well.auto ? "when it's up" : "A"}</small></button>
               </div>
               <div class="rig-speeds" role="radiogroup" aria-label="Rig speed">
                 {speeds.map(([sp, label]) => (
@@ -203,9 +207,15 @@ export function RigView({ runtime, snap, onClose }: Props) {
           <p>{well.outcome}</p>
           <p class="result-meta">{Math.floor(well.depthFt)} ft in {days} days · ${Math.floor(snap.ops.cash)} left</p>
           {well.status === "gusher" && well.outcome?.startsWith("OIL") && !capped && (
-            <button type="button" class="button button-primary" data-testid="cap" disabled={snap.ops.cash < CAP_COST} onClick={act("prod.cap")}>
-              Cap it and sell the oil<small>${CAP_COST} · up to {HAUL_LIMIT_BBL} bbl a day by wagon</small>
-            </button>
+            capBorrow > 0 ? (
+              <button type="button" class="button button-primary" data-testid="cap" onClick={() => { audio.current.start(); if (!runtime.command("bank.borrow", { cents: capBorrow })) runtime.command("prod.cap", {}); }}>
+                Borrow ${capBorrow / 100} and cap it<small>${CAP_COST} · up to {HAUL_LIMIT_BBL} bbl a day by wagon</small>
+              </button>
+            ) : (
+              <button type="button" class="button button-primary" data-testid="cap" disabled={!capPath} onClick={act("prod.cap")}>
+                Cap it and sell the oil<small>{capPath ? `$${CAP_COST} · up to ${HAUL_LIMIT_BBL} bbl a day by wagon` : `$${CAP_COST}, more than the company can raise`}</small>
+              </button>
+            )
           )}
           {capped && <p class="result-meta" data-testid="capped">Capped. Teamsters haul the oil to Beaumont; it is sold at the month's end.</p>}
           {well.status === "gusher" && well.outcome?.startsWith("GAS") && <p class="result-meta">Gas has no buyer in 1890. Look for oil below or nearby.</p>}

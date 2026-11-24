@@ -58,10 +58,25 @@ describe("production", () => {
     expect(ops(w).cash).toBe(cash - 80);
   });
 
+  it("the first producing well is acknowledged once, and recorded", () => {
+    const w = strike(oil);
+    expect(ops(w).outcome.firstOilAt).toBeNull();
+    const r = gameEngine.advance(w, w.time, { commands: [{ t: w.time, actor: "player", type: "prod.cap", payload: null }] });
+    const m = r.events.filter((e) => e.type === "company.milestone");
+    expect(m).toHaveLength(1);
+    expect(m[0]!.interrupt).toBe(true);
+    expect(m[0]!.data).toMatchObject({ kind: "firstOil", message: expect.stringMatching(/first producing well/) });
+    expect(ops(w).outcome.firstOilAt).toBe(w.time);
+    expect(ops(w).outcome.firstOilWell).toBe(ops(w).well!.name);
+    const later = gameEngine.advance(w, w.time + 60 * MINUTES_PER_DAY);
+    expect(later.events.some((e) => e.type === "company.milestone")).toBe(false);
+    expect(ops(w).outcome.endedAt).toBeNull();
+  });
+
   it("a producing well raises what the bank will lend", () => {
     const w = strike(oil);
     const before = creditLimitCents(ops(w).bank, ops(w).production, 40_000);
-    expect(before).toBe(20_000);
+    expect(before).toBe(30_000); // three quarters of the rig's $400
     cmd(w, "prod.cap");
     gameEngine.advance(w, w.time + 2 * MINUTES_PER_DAY);
     expect(creditLimitCents(ops(w).bank, ops(w).production, 40_000)).toBeGreaterThan(before);

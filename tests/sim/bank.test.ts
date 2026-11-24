@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { CAMPAIGN_START, fromCalendar, gameEngine, MINUTES_PER_DAY, operationsOf, type WorldState } from "../../src/sim";
 import { canonicalJson } from "../../src/sim/core/hash";
 import { balance, debtCents, post, recompute } from "../../src/sim/company/ledger";
-import { HIRE_OUT_DAYS, HIRE_OUT_WAGES, USED_RIG_PRICE } from "../../src/sim/company/bank";
 import { SURVEYS } from "../../src/content/geography/surveys";
 import { MIGRATIONS, worldProblem } from "../../src/sim/migrations";
 import v1 from "../fixtures/save-v1.json";
@@ -26,10 +25,10 @@ describe("bank", () => {
   it("lends against the rig in steps of $50, and no further", () => {
     const w = gameEngine.createWorld(SEED, CAMPAIGN_START);
     expect(rejected(cmd(w, "bank.borrow", { cents: 2_500 }))).toBe(true); // not a $50 step
-    expect(rejected(cmd(w, "bank.borrow", { cents: 25_000 }))).toBe(true); // over half the rig's $400
-    expect(rejected(cmd(w, "bank.borrow", { cents: 20_000 }))).toBe(false);
-    expect(ops(w).debt).toBe(200);
-    expect(ops(w).cash).toBe(1700);
+    expect(rejected(cmd(w, "bank.borrow", { cents: 35_000 }))).toBe(true); // over three quarters of the rig's $400
+    expect(rejected(cmd(w, "bank.borrow", { cents: 30_000 }))).toBe(false);
+    expect(ops(w).debt).toBe(300);
+    expect(ops(w).cash).toBe(1800);
     expect(rejected(cmd(w, "bank.borrow", { cents: 5_000 }))).toBe(true);
   });
 
@@ -72,7 +71,7 @@ describe("bank", () => {
     expect(interest(w)).toHaveLength(0); // repaid the same day: no midnight on the books
   });
 
-  it("warns after one unpaid month and forecloses on the rig after two; the land stays", () => {
+  it("warns after one unpaid month and forecloses on the rig after two; the land stays (mechanics)", () => {
     const w = gameEngine.createWorld(SEED, CAMPAIGN_START);
     const s = SURVEYS[0]!;
     cmd(w, "lease.take", { surveyId: s.id, offer: "asking" });
@@ -91,6 +90,8 @@ describe("bank", () => {
     expect(ops(w).bank.lien).toBe(false);
     expect(ops(w).cash).toBeGreaterThan(190);
     expect(ops(w).leases.leases.find((l) => l.surveyId === s.id)!.status).toBe("active");
+    // With no cash and the credit spent, the company had no way forward: the campaign ended first.
+    expect(ops(w).outcome.ended).toBe("bankrupt");
     expect(worldProblem(w)).toBeNull();
   });
 
@@ -116,34 +117,10 @@ describe("bank", () => {
     expect(worldProblem(w)).toBeNull();
   });
 
-  it("never traps the company: hire the crew out for wages, then buy a used rig", () => {
-    const w = gameEngine.createWorld(SEED, CAMPAIGN_START);
-    const s = SURVEYS[0]!;
-    cmd(w, "lease.take", { surveyId: s.id, offer: "asking" });
-    cmd(w, "bank.borrow", { cents: 20_000 });
-    drain(w);
-    gameEngine.advance(w, fromCalendar(1890, 3, 1, 0, 1));
-    expect(ops(w).bank.rigOwned).toBe(false);
-    drain(w); // spend the bank's surplus too
-    expect(rejected(cmd(w, "rig.spud", { x: s.poly[0]![0], y: s.poly[0]![1] }))).toBe(true);
-    expect(rejected(cmd(w, "company.buyRig"))).toBe(true);
-    for (let k = 0; k < 4; k++) {
-      expect(rejected(cmd(w, "company.hireOut"))).toBe(false);
-      expect(rejected(cmd(w, "company.hireOut"))).toBe(true); // already out
-      gameEngine.advance(w, w.time + (HIRE_OUT_DAYS + 1) * MINUTES_PER_DAY);
-    }
-    expect(ops(w).cash).toBe((4 * HIRE_OUT_WAGES));
-    expect(rejected(cmd(w, "company.buyRig"))).toBe(false);
-    expect(ops(w).bank.rigOwned).toBe(true);
-    expect(ops(w).cash).toBe(4 * HIRE_OUT_WAGES - USED_RIG_PRICE);
-    expect(rejected(cmd(w, "company.hireOut"))).toBe(true); // a rig of your own now
-    expect(worldProblem(w)).toBeNull();
-  });
-
   it("gives a version-1 save an empty account at the bank, idempotently", () => {
-    const world = MIGRATIONS[1]!(structuredClone(v1.world) as never) as unknown as WorldState;
+    const world = MIGRATIONS[2]!(MIGRATIONS[1]!(structuredClone(v1.world) as never)) as unknown as WorldState;
     const once = canonicalJson(world as never);
-    expect(canonicalJson(MIGRATIONS[1]!(world as never) as never)).toBe(once);
-    expect(ops(world).bank).toEqual({ accrued: 0, strikes: 0, lien: false, rigOwned: true, hiredOutUntil: null });
+    expect(canonicalJson(MIGRATIONS[2]!(MIGRATIONS[1]!(world as never)) as never)).toBe(once);
+    expect(ops(world).bank).toEqual({ accrued: 0, strikes: 0, lien: false, rigOwned: true });
   });
 });

@@ -45,7 +45,26 @@ export interface Well {
   contact: number;
   /** Why the well ended, in words. */
   outcome?: string;
+  /** Rig ticks in a row with nobody working: no hole made by hand, or stuck tools left waiting. */
+  idleTicks: number;
+  /** The low-money warning has been given for this well. */
+  lowFundsWarned: boolean;
 }
+
+/** A month's contract drilling for another operator, with the company's own rig. */
+export interface Contract {
+  until: number;
+}
+
+/** How the campaign has gone: its first producing well, and whether it has ended. */
+export interface CampaignOutcome {
+  firstOilAt: number | null;
+  firstOilWell: string | null;
+  endedAt: number | null;
+  ended: "bankrupt" | null;
+}
+
+export const emptyOutcome = (): CampaignOutcome => ({ firstOilAt: null, firstOilWell: null, endedAt: null, ended: null });
 
 export interface OperationsState {
   /** The company's books: the only record of money (see company/ledger.ts). */
@@ -58,6 +77,9 @@ export interface OperationsState {
   production: ProductionBook;
   /** The bank: interest accrued, warnings, lien, and whether the company owns a rig. */
   bank: BankState;
+  /** The rig is out on contract to another operator. */
+  contract: Contract | null;
+  outcome: CampaignOutcome;
   well: Well | null;
   /** Earlier wells (finished). */
   past: Well[];
@@ -79,6 +101,8 @@ export interface OperationsView {
   leases: LeaseBook;
   production: ProductionBook;
   bank: BankState;
+  contract: Contract | null;
+  outcome: CampaignOutcome;
   well: Well | null;
   past: Well[];
 }
@@ -90,7 +114,7 @@ export function accruedCents(o: OperationsState): number {
 
 export function operationsOf(world: Readonly<WorldState>): OperationsView {
   const o = world.systems.operations as unknown as OperationsState;
-  return { cash: (cashCents(o.ledger) - accruedCents(o)) / 100, debt: debtCents(o.ledger) / 100, ledger: o.ledger, leases: o.leases, production: o.production, bank: o.bank, well: o.well, past: o.past };
+  return { cash: (cashCents(o.ledger) - accruedCents(o)) / 100, debt: debtCents(o.ledger) / 100, ledger: o.ledger, leases: o.leases, production: o.production, bank: o.bank, contract: o.contract, outcome: o.outcome, well: o.well, past: o.past };
 }
 
 /** Samples are evidence like any other; they join the knowledge view. */

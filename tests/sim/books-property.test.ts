@@ -36,7 +36,7 @@ function randomAction(r: () => number): [string, unknown] | ["wait", number] {
   if (k < 0.82) return ["rig.auto", { on: true }];
   if (k < 0.86) return ["rig.fish", null];
   if (k < 0.9) return ["prod.cap", null];
-  if (k < 0.95) return ["company.hireOut", null];
+  if (k < 0.95) return ["company.contract", null];
   return ["company.buyRig", null];
 }
 

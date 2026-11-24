@@ -6,7 +6,7 @@
 import { insertScheduled, type WorldState } from "./core/engine";
 import { MINUTES_PER_DAY } from "./core/time";
 import { emptyLedger, post, recompute, dollarsToCents, type Ledger } from "./company/ledger";
-import { RIG_VALUE } from "./operations";
+import { emptyOutcome, RIG_VALUE } from "./operations";
 import { emptyLeaseBook, ROYALTY, termEnd, type LeaseBook } from "./company/leases";
 import { emptyProductionBook } from "./company/production";
 import { emptyBank } from "./company/bank";
@@ -53,7 +53,36 @@ export function v1ToV2(input: Record<string, unknown>): Record<string, unknown> 
   return world;
 }
 
-export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2 };
+/**
+ * v2 → v3: the revision that guards the rig and makes the company's fate explicit.
+ * - Each well tracks idle rig time and whether the low-money warning was given.
+ * - Crew hire-out (which surrendered the rig) becomes contract drilling with the rig: a crew
+ *   that was hired out simply comes home; nothing is owed either way.
+ * - The campaign records its first producing well and whether it has ended. A save that
+ *   already has a producing well is credited with it, from the day it was capped.
+ */
+export function v2ToV3(input: Record<string, unknown>): Record<string, unknown> {
+  const world = structuredClone(input) as unknown as WorldState & Record<string, unknown>;
+  const ops = world.systems.operations as Record<string, unknown> | undefined;
+  if (!ops) return world;
+  for (const w of [ops.well, ...((ops.past as unknown[]) ?? [])] as (Record<string, unknown> | null)[]) {
+    if (!w) continue;
+    if (!("idleTicks" in w)) w.idleTicks = 0;
+    if (!("lowFundsWarned" in w)) w.lowFundsWarned = false;
+  }
+  const bank = ops.bank as Record<string, unknown> | undefined;
+  if (bank && "hiredOutUntil" in bank) delete bank.hiredOutUntil;
+  if (!("contract" in ops)) ops.contract = null;
+  if (!("outcome" in ops)) {
+    const outcome = emptyOutcome();
+    const first = ((ops.production as { producers?: { since: number; name: string }[] } | undefined)?.producers ?? [])[0];
+    if (first) { outcome.firstOilAt = first.since; outcome.firstOilWell = first.name; }
+    ops.outcome = outcome as unknown as Record<string, unknown>;
+  }
+  return world;
+}
+
+export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2, 2: v2ToV3 };
 
 /** Invariants a loaded world must hold beyond its shape. Returns a reason, or null. */
 export function worldProblem(world: WorldState): string | null {

@@ -434,6 +434,58 @@ table.log td:nth-child(-n + 2) {
   color: rgba(243, 234, 213, 0.85);
 }
 
+/* The rig line: what the rig is doing and what time costs, in view while a well is going. */
+.rigline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 0 2px;
+  border-top: 1px solid rgba(243, 234, 213, 0.18);
+  font-size: 13.5px;
+  line-height: 1.3;
+  color: rgba(243, 234, 213, 0.9);
+}
+.rigline-text {
+  flex: 1;
+  min-width: 0;
+}
+.rigline b {
+  font-weight: 600;
+}
+@media (max-width: 559px) {
+  .rigline-name {
+    display: none;
+  }
+}
+.rigline-idle {
+  color: #f1b3aa;
+}
+.rigline-idle b {
+  color: var(--paper);
+}
+.rigline-act {
+  flex: none;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid rgba(243, 234, 213, 0.55);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--paper);
+  font: italic 14px var(--font-body);
+  cursor: pointer;
+}
+.rigline-idle .rigline-act {
+  border-color: var(--paper);
+  background: var(--paper);
+  color: var(--ink);
+  font-style: normal;
+}
+.rigline-act:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .speed:focus-visible,
 .button:focus-visible,
 .tool:focus-visible,
@@ -742,6 +794,44 @@ table.book tr.nocash td {
   table.book td {
     padding-right: 4px;
   }
+}
+
+.rig-title p.red {
+  color: var(--accent);
+  font-style: normal;
+}
+
+/* The campaign's verdicts: the first producing well, and the end */
+.outcome .sheet-body {
+  padding-top: 22px;
+}
+.outcome-kicker {
+  margin: 0 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.outcome-title {
+  margin: 0 0 10px;
+  font: 400 2.25rem/1.1 var(--font-body);
+}
+.outcome-lede {
+  margin: 0 0 16px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+.outcome h3 {
+  margin: 16px 0 6px;
+}
+.outcome-wells {
+  margin: 0 0 4px;
+  padding-left: 1.2em;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.outcome .row {
+  margin-top: 18px;
 }
 
 /* Campaign sheet: a bottom sheet on phones, a centred panel on wider screens */

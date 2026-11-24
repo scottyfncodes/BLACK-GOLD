@@ -16,13 +16,15 @@ import { ftToM } from "../math/units";
 import { SURVEYS, insidePoly } from "../../content/geography/surveys";
 import { generateGeology, rockAt, type Lithology, type RockAt } from "../geology/truth/model";
 import type { SampleEvidence } from "../knowledge/types";
-import { accruedCents, COSTS, RIG_VALUE, STARTING_CASH, type Operation, type OperationsState, type Well } from "../operations";
+import { accruedCents, COSTS, emptyOutcome, RIG_VALUE, STARTING_CASH, type Operation, type OperationsState, type Well } from "../operations";
 import { cashCents, debtCents, dollarsToCents, emptyLedger, pay, post, receive } from "../company/ledger";
 import { rngKey } from "../core/rng";
 import { activeLease, askingTerms, emptyLeaseBook, ownerAccepts, REFUSAL_DAYS, surveyById, termEnd, type PublicNews } from "../company/leases";
 import { printedMap } from "../surface/print";
 import { CAP_COST, dayBarrels, emptyProductionBook, HAULING_CENTS, OIL_PRICE_CENTS } from "../company/production";
-import { ACCRUAL_UNITS, RATE_PERCENT, BORROW_STEP_CENTS, creditLimitCents, dayAccrual, emptyBank, HIRE_OUT_DAYS, HIRE_OUT_WAGES, STRIKES_TO_FORECLOSE, USED_RIG_PRICE } from "../company/bank";
+import { ACCRUAL_UNITS, RATE_PERCENT, BORROW_STEP_CENTS, creditLimitCents, dayAccrual, emptyBank, STRIKES_TO_FORECLOSE, USED_RIG_PRICE } from "../company/bank";
+import { CONTRACT_DAYS, CONTRACT_PAY, CONTRACT_WAGES, contractOffered, recoveryPaths, type Position } from "../company/recovery";
+import { SURVEYS as ALL_SURVEYS } from "../../content/geography/surveys";
 
 type Ctx = SystemContext<Json>;
 const S = (ctx: Ctx) => ctx.state as unknown as OperationsState;
@@ -39,6 +41,10 @@ export const FEED_RATE = 12;
 export const SWEET_FT = 3;
 export const MAX_DEPTH_FT = 2500;
 const RIGUP_DAYS = 3;
+/** An idle rig (nobody on the line, or stuck tools left waiting) stops the clock every three hours. */
+export const IDLE_WARN_TICKS = 36;
+/** Warn once a well when cash covers only this many more days of rig time. */
+export const LOW_FUNDS_DAYS = 3;
 
 const rock = (ctx: Ctx, w: Well, ft: number): RockAt => rockAt(generateGeology(ctx.seed), w.x, w.y, ftToM(ft));
 
@@ -104,6 +110,7 @@ function finish(ctx: Ctx, w: Well, status: "gusher" | "dry", outcome: string): v
   w.busy = null;
   w.feeding = false;
   report(ctx, status, outcome, true);
+  review(ctx);
 }
 
 function drill(ctx: Ctx, w: Well): void {
@@ -155,7 +162,7 @@ function complete(ctx: Ctx, w: Well, op: Operation): void {
   switch (op) {
     case "rigup":
       w.status = "drilling";
-      report(ctx, "rigged", `The derrick is up over the ${w.name}. Time to make hole.`, true);
+      report(ctx, "rigged", w.auto ? `The derrick is up over the ${w.name}. The driller is making hole.` : `The derrick is up over the ${w.name}. Take the controls, or let the driller work.`, true);
       return;
     case "bail": return bail(ctx, w);
     case "dress":
@@ -184,13 +191,52 @@ function complete(ctx: Ctx, w: Well, op: Operation): void {
   }
 }
 
-/** Crew wages come in when a spell of hired work ends. */
-function hireOutDue(ctx: Ctx): void {
+/** A contract job ends: the operator pays, and the rig is the company's own again. */
+function contractDue(ctx: Ctx): void {
   const st = S(ctx);
-  if (st.bank.hiredOutUntil === null || ctx.now < st.bank.hiredOutUntil) return;
-  st.bank.hiredOutUntil = null;
-  receive(st.ledger, ctx.now, "operating", "Wages for the crew, hired out to another operator", "wages", dollarsToCents(HIRE_OUT_WAGES));
-  notice(ctx, `The crew is back with $${HIRE_OUT_WAGES} in wages.`);
+  if (!st.contract || ctx.now < st.contract.until) return;
+  st.contract = null;
+  receive(st.ledger, ctx.now, "operating", "Contract drilling for another operator, paid", "wages", dollarsToCents(CONTRACT_PAY));
+  ctx.emit({ type: "company.notice", severity: "notice", interrupt: true, data: { message: `The contract is done: the operator paid $${CONTRACT_PAY}, and the rig is back.` } });
+}
+
+/** The company's position, for recovery and advice. Public information only. */
+export function positionOf(st: OperationsState, seed: string, now: number): Position {
+  const debt = debtCents(st.ledger);
+  const w = st.well;
+  const active = !!w && (w.status === "rigging" || w.status === "drilling" || w.status === "stuck");
+  return {
+    cashCents: available(st),
+    creditRoomCents: Math.max(0, creditLimitCents(st.bank, st.production, dollarsToCents(RIG_VALUE)) - debt),
+    creditRoomWithRigCents: Math.max(0, creditLimitCents({ ...st.bank, rigOwned: true }, st.production, dollarsToCents(RIG_VALUE)) - debt),
+    rigOwned: st.bank.rigOwned,
+    producers: st.production.producers.length,
+    wellActive: active,
+    uncappedOil: !!w && w.status === "gusher" && !!w.outcome?.startsWith("OIL") && !st.production.producers.some((p) => p.wellId === w.id),
+    contractUntil: st.contract?.until ?? null,
+    heldLeases: st.leases.leases.filter((l) => l.status === "active" && l.expiresAt > now).map((l) => l.surveyId),
+    cheapestLease: () => {
+      const print = printedMap(seed), nw = news(st);
+      let best: { surveyId: string; cents: number } | null = null;
+      for (const s of ALL_SURVEYS) {
+        const t = askingTerms(s, print, nw);
+        if (!best || t.askingCents < best.cents) best = { surveyId: s.id, cents: t.askingCents };
+      }
+      return best;
+    },
+    derrickCents: dollarsToCents(COSTS.rigUp),
+    dayCents: dollarsToCents(COSTS.perDay),
+  };
+}
+
+/** If the company has no way forward left, the campaign ends here, and says so. */
+function review(ctx: Ctx): void {
+  const st = S(ctx);
+  if (st.outcome.endedAt !== null) return;
+  if (recoveryPaths(positionOf(st, ctx.seed, ctx.now)).length > 0) return;
+  st.outcome.endedAt = ctx.now;
+  st.outcome.ended = "bankrupt";
+  ctx.emit({ type: "company.concluded", severity: "critical", interrupt: true, data: { message: "The company is finished: no oil, no money, and no credit left to try again." } });
 }
 
 /** Month end, bank: a lien takes oil revenue first; then the month's interest is charged. */
@@ -236,6 +282,33 @@ function foreclose(ctx: Ctx): void {
   st.bank.strikes = 0;
   st.bank.lien = debtCents(st.ledger) > 0;
   ctx.emit({ type: "company.notice", severity: "critical", interrupt: true, data: { message: st.bank.lien ? "The bank has foreclosed and taken the rig. It will take oil revenue until the loan is clear. Your land is still yours." : "The bank has foreclosed and taken the rig; the loan is clear. Your land is still yours." } });
+}
+
+/**
+ * Nobody may lose the company to a rig left standing. An idle rig (no hole made and nobody on
+ * the line, or stuck tools left waiting) stops the clock every three hours, and the company is
+ * warned once a well when only a few days of rig time are left.
+ */
+function guard(ctx: Ctx, w: Well, before: number): void {
+  const st = S(ctx);
+  const status = w.status as Well["status"];
+  if (status === "gusher" || status === "dry") return;
+  const idle = !w.busy && ((status === "drilling" && !w.auto && !w.feeding && w.depthFt - before < 1e-9) || status === "stuck");
+  w.idleTicks = idle ? w.idleTicks + 1 : 0;
+  if (idle && w.idleTicks % IDLE_WARN_TICKS === 0) {
+    const hours = Math.round((w.idleTicks * TICK_MINUTES) / 60);
+    report(ctx, "idle", status === "stuck"
+      ? `The tools are still stuck in the ${w.name} and the crew is waiting (${hours} h). Rig time runs on at $${COSTS.perDay} a day: fish for them or abandon the hole.`
+      : `Nobody is working the line on the ${w.name} (${hours} h). Rig time runs on at $${COSTS.perDay} a day: take the controls, or let the driller work.`, true);
+  }
+  const days = (available(st) / 100) / COSTS.perDay;
+  if (!w.lowFundsWarned && status !== "rigging" && days < LOW_FUNDS_DAYS) {
+    w.lowFundsWarned = true;
+    const room = creditLimitCents(st.bank, st.production, dollarsToCents(RIG_VALUE)) - debtCents(st.ledger);
+    report(ctx, "lowfunds", room >= BORROW_STEP_CENTS
+      ? `Money for less than ${LOW_FUNDS_DAYS} more days of rig time. Borrow from the bank to keep drilling, or plan to stop.`
+      : `Money for less than ${LOW_FUNDS_DAYS} more days of rig time, and the bank will lend no more. Decide whether to stop.`, true);
+  }
 }
 
 /** One day's oil from every capped well. */
@@ -322,7 +395,7 @@ function well(ctx: Ctx): Well {
 
 export const rig: System<Json> = {
   id: "operations",
-  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), bank: emptyBank(), well: null, past: [], samples: [], next: 1 }) as unknown as Json,
+  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), bank: emptyBank(), contract: null, outcome: emptyOutcome(), well: null, past: [], samples: [], next: 1 }) as unknown as Json,
   init(ctx) {
     const st = S(ctx);
     post(st.ledger, ctx.now, "opening", "Capital paid in", [{ account: "cash", cents: dollarsToCents(STARTING_CASH) }, { account: "equity", cents: -dollarsToCents(STARTING_CASH) }]);
@@ -338,8 +411,9 @@ export const rig: System<Json> = {
       produceDay(ctx);
       // Interest accrues daily on the loan, in exact integer units.
       S(ctx).bank.accrued += dayAccrual(debtCents(S(ctx).ledger));
-      hireOutDue(ctx);
+      contractDue(ctx);
       if (toCalendar(ctx.now).day === 1) settleMonth(ctx, ctx.now - 1);
+      review(ctx);
       ctx.schedule(nextMidnight(ctx.now), "company.day");
     },
     "lease.term"(ctx, payload) {
@@ -380,14 +454,16 @@ export const rig: System<Json> = {
         return;
       }
       st.accrued.ticks++;
+      const before = w.depthFt;
       if (w.busy && ctx.now >= w.busy.until) complete(ctx, w, w.busy.op);
       else if (!w.busy && w.status === "drilling") drill(ctx, w);
+      guard(ctx, w, before);
       // complete() and drill() may have ended the well; re-read its status.
       const status = w.status as Well["status"];
       if (status !== "gusher" && status !== "dry") ctx.schedule(ctx.now + TICK_MINUTES, "rig.tick");
     },
   },
-  commands: {
+  commands: guarded({
     "rig.spud"(ctx, c: Command) {
       const st = S(ctx);
       if (st.well && st.well.status !== "gusher" && st.well.status !== "dry") throw new CommandRejected("You already have a well going.");
@@ -397,6 +473,7 @@ export const rig: System<Json> = {
       if (!survey) throw new CommandRejected("Drill on surveyed land.");
       if (!activeLease(st.leases, survey.id, ctx.now)) throw new CommandRejected(`You hold no lease on the ${survey.name} survey. Lease it first.`);
       if (!st.bank.rigOwned) throw new CommandRejected("The company owns no rig. Buy a used one first.");
+      if (st.contract) throw new CommandRejected(`The rig is out on contract until ${toCalendar(st.contract.until).day} ${MONTHS[toCalendar(st.contract.until).month - 1]}.`);
       if (available(st) < dollarsToCents(COSTS.rigUp)) throw new CommandRejected(`Raising a derrick costs $${COSTS.rigUp}. You have $${Math.floor(available(st) / 100)}.`);
       if (st.well) st.past.push(st.well);
       const n = st.past.length + 1;
@@ -404,7 +481,7 @@ export const rig: System<Json> = {
       st.well = {
         id: `ours-${n}`, name: `${survey.name} No. ${n}`, x: p.x, y: p.y, surveyId: survey.id, spudAt: ctx.now,
         status: "rigging", depthFt: 0, reachFt: 1, fillFt: 0, sharp: 1, casedFt: 0, openSandFt: 0,
-        feeding: false, auto: false, busy: null, lastBailFt: 0, rop: 0, contact: 0,
+        feeding: false, auto: false, busy: null, lastBailFt: 0, rop: 0, contact: 0, idleTicks: 0, lowFundsWarned: false,
       };
       startOp(ctx, st.well, "rigup");
       ctx.schedule(ctx.now + TICK_MINUTES, "rig.tick");
@@ -457,15 +534,20 @@ export const rig: System<Json> = {
       if (available(st) < dollarsToCents(USED_RIG_PRICE)) throw new CommandRejected(`A used rig costs $${USED_RIG_PRICE}.`);
       pay(st.ledger, ctx.now, "equipment", "Used cable-tool rig and tools, bought", "equipment", dollarsToCents(USED_RIG_PRICE));
       st.bank.rigOwned = true;
-      st.bank.hiredOutUntil = null;
       notice(ctx, "The company owns a rig again.");
     },
-    "company.hireOut"(ctx) {
+    "company.contract"(ctx) {
       const st = S(ctx);
-      if (st.bank.rigOwned) throw new CommandRejected("With a rig of your own, drill your own wells.");
-      if (st.bank.hiredOutUntil !== null) throw new CommandRejected("The crew is already working for another operator.");
-      st.bank.hiredOutUntil = nextMidnight(ctx.now) + (HIRE_OUT_DAYS - 1) * MINUTES_PER_DAY;
-      notice(ctx, `The crew has hired on with another operator for ${HIRE_OUT_DAYS} days.`);
+      if (!st.bank.rigOwned) throw new CommandRejected("Contract drilling needs a rig. Buy a used one first.");
+      if (st.contract) throw new CommandRejected("The rig is already out on contract.");
+      const w = st.well;
+      if (w && (w.status === "rigging" || w.status === "drilling" || w.status === "stuck")) throw new CommandRejected("The rig is busy on the company's own well.");
+      const p = positionOf(st, ctx.seed, ctx.now);
+      if (!contractOffered(p)) throw new CommandRejected("Contract work is for lean times. With money for a well of your own, drill it.");
+      if (available(st) < dollarsToCents(CONTRACT_WAGES)) throw new CommandRejected(`The crew's wages and fuel for the month come to $${CONTRACT_WAGES}, paid before the rig moves.`);
+      pay(st.ledger, ctx.now, "operating", `Crew wages and fuel for a month's contract drilling`, "operating", dollarsToCents(CONTRACT_WAGES));
+      st.contract = { until: nextMidnight(ctx.now) + (CONTRACT_DAYS - 1) * MINUTES_PER_DAY };
+      notice(ctx, `The rig is out on contract for ${CONTRACT_DAYS} days. The operator pays $${CONTRACT_PAY} when the job is done.`);
     },
     "prod.cap"(ctx) {
       const st = S(ctx);
@@ -485,6 +567,11 @@ export const rig: System<Json> = {
       pay(st.ledger, ctx.now, "production", `Capping the ${w.name}`, "drilling", dollarsToCents(CAP_COST), { wellId: w.id, surveyId: w.surveyId });
       st.production.producers.push({ wellId: w.id, name: w.name, surveyId: w.surveyId, x: w.x, y: w.y, since: ctx.now, trap, initialBbl, reserveBbl, cumBbl: 0, monthBbl: 0, lastDayBbl: 0 });
       notice(ctx, `The ${w.name} is capped. Teamsters will haul up to 150 barrels a day to the railhead.`);
+      if (st.outcome.firstOilAt === null) {
+        st.outcome.firstOilAt = ctx.now;
+        st.outcome.firstOilWell = w.name;
+        ctx.emit({ type: "company.milestone", severity: "notice", interrupt: true, data: { kind: "firstOil", wellId: w.id, message: `The ${w.name} is the company's first producing well.` } });
+      }
     },
     "lease.release"(ctx, c: Command) {
       const st = S(ctx);
@@ -536,5 +623,18 @@ export const rig: System<Json> = {
       const w = well(ctx);
       finish(ctx, w, "dry", `The ${w.name} is plugged and abandoned at ${Math.round(w.depthFt)} ft.`);
     },
-  },
+  }),
 };
+
+/** Every company command: refused once the campaign has ended; the position reviewed after. */
+function guarded(commands: Record<string, (ctx: Ctx, c: Command) => void>): Record<string, (ctx: Ctx, c: Command) => void> {
+  const out: Record<string, (ctx: Ctx, c: Command) => void> = {};
+  for (const [type, fn] of Object.entries(commands)) {
+    out[type] = (ctx, c) => {
+      if (S(ctx).outcome.endedAt !== null) throw new CommandRejected("The company is finished. Start a new campaign from the Campaign menu.");
+      fn(ctx, c);
+      review(ctx);
+    };
+  }
+  return out;
+}

@@ -4,8 +4,9 @@ import {
   ACCRUAL_UNITS,
   BORROW_STEP_CENTS,
   creditLimitCents,
-  HIRE_OUT_DAYS,
-  HIRE_OUT_WAGES,
+  CONTRACT_DAYS,
+  CONTRACT_PAY,
+  CONTRACT_WAGES,
   RATE_PERCENT,
   RIG_VALUE,
   STRIKES_TO_FORECLOSE,
@@ -90,7 +91,10 @@ export function Books({ runtime, snap, open, onClose }: Props) {
   const roomSteps = Math.floor(room / BORROW_STEP_CENTS) * BORROW_STEP_CENTS;
   const accruedCents = Math.floor(bank.accrued / ACCRUAL_UNITS);
   const act = (type: string, payload: Record<string, number> | null = null) => () => runtime.command(type, payload);
-  const working = bank.hiredOutUntil !== null;
+  const contract = snap.ops.contract;
+  const offer = snap.paths.find((p) => p.kind === "contract");
+  const w = snap.ops.well;
+  const rigBusy = !!w && (w.status === "rigging" || w.status === "drilling" || w.status === "stuck");
 
   return (
     <dialog ref={dialog} class="sheet books" aria-labelledby="books-title" onClose={onClose} onClick={(e) => e.target === dialog.current && onClose()}>
@@ -103,7 +107,7 @@ export function Books({ runtime, snap, open, onClose }: Props) {
         <dl class="position" data-testid="position">
           <div><dt>Cash in hand</dt><dd data-testid="books-cash">{money(cash)}</dd></div>
           <div><dt>Owed to the bank</dt><dd data-testid="books-debt" class={debt > 0 ? "owed" : ""}>{debt > 0 ? money(debt) : "Nothing"}</dd></div>
-          <div><dt>Rig and tools</dt><dd>{bank.rigOwned ? "Owned" : "Taken by the bank"}</dd></div>
+          <div><dt>Rig and tools</dt><dd>{!bank.rigOwned ? "None" : contract ? "Out on contract" : "Owned"}</dd></div>
           <div><dt>Wells producing</dt><dd>{production.producers.length || "None"}</dd></div>
         </dl>
 
@@ -118,7 +122,7 @@ export function Books({ runtime, snap, open, onClose }: Props) {
             <p>The bank foreclosed and holds a lien: it takes the oil money first until the loan is clear. It lends nothing more until then.</p>
           ) : (
             <p>
-              The bank lends half the value of what the company owns: the rig{production.producers.length ? " and the oil its wells bring in" : ""}. It will lend up to <b>{wholeDollars(limit)}</b> in all, at {RATE_PERCENT}% a year. Interest is taken from cash at each month's end; repay whenever you like.
+              The bank lends three quarters of the value of what the company owns: the rig{production.producers.length ? " and the oil its wells bring in" : ""}. It will lend up to <b>{wholeDollars(limit)}</b> in all, at {RATE_PERCENT}% a year. Interest is taken from cash at each month's end; repay whenever you like.
             </p>
           )}
           {debt > 0 && accruedCents > 0 && <p class="meta">Interest so far this month: {money(accruedCents)}.</p>}
@@ -140,15 +144,35 @@ export function Books({ runtime, snap, open, onClose }: Props) {
               </button>
             )}
           </div>
+          {contract && (
+            <div class="recover" data-testid="contract">
+              <p>The rig is out on contract to another operator until <b>{formatDate(contract.until)}</b>. The operator pays {wholeDollars(CONTRACT_PAY * 100)} when the job is done.</p>
+            </div>
+          )}
+          {!contract && bank.rigOwned && !rigBusy && offer && (
+            <div class="recover" data-testid="contract">
+              <p>
+                Until the company can afford a well of its own, the rig can drill on contract for another operator: {CONTRACT_DAYS} days, {wholeDollars(CONTRACT_WAGES * 100)} for the crew's wages and fuel now, {wholeDollars(CONTRACT_PAY * 100)} when the job is done. The rig stays the company's.
+              </p>
+              <div class="row">
+                {offer.kind === "contract" && offer.borrowCents > 0 ? (
+                  <button type="button" class="button button-primary" data-testid="take-contract" onClick={() => { if (!runtime.command("bank.borrow", { cents: offer.borrowCents })) runtime.command("company.contract", null); }}>
+                    Borrow {wholeDollars(offer.borrowCents)} and take a contract<small>{wholeDollars(CONTRACT_PAY * 100)} in {CONTRACT_DAYS} days</small>
+                  </button>
+                ) : (
+                  <button type="button" class="button button-primary" data-testid="take-contract" onClick={act("company.contract")}>
+                    Take a contract<small>{wholeDollars(CONTRACT_WAGES * 100)} now · {wholeDollars(CONTRACT_PAY * 100)} in {CONTRACT_DAYS} days</small>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           {!bank.rigOwned && (
             <div class="recover" data-testid="recover">
-              <p>Without a rig the company cannot drill. A used rig and tools can be had in Beaumont, and until then the crew can hire on with another operator.</p>
+              <p>Without a rig the company can neither drill nor take contract work. A used rig and tools cost {wholeDollars(USED_RIG_PRICE * 100)} in Beaumont.</p>
               <div class="row">
-                <button type="button" class="button button-primary" data-testid="buy-rig" disabled={snap.ops.cash < USED_RIG_PRICE} onClick={act("company.buyRig")}>
+                <button type="button" class="button button-primary" data-testid="buy-rig" disabled={cash < USED_RIG_PRICE * 100} onClick={act("company.buyRig")}>
                   Buy a used rig<small>{wholeDollars(USED_RIG_PRICE * 100)}</small>
-                </button>
-                <button type="button" class="button" data-testid="hire-out" disabled={working} onClick={act("company.hireOut")}>
-                  Hire the crew out<small>{working ? `back ${formatDate(bank.hiredOutUntil!)}` : `${HIRE_OUT_DAYS} days for ${wholeDollars(HIRE_OUT_WAGES * 100)}`}</small>
                 </button>
               </div>
             </div>

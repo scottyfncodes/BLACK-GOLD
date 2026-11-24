@@ -94,7 +94,8 @@ describe("version 1 saves", () => {
     expect(worldProblem(w)).toBeNull();
     const o = operationsOf(w);
     expect(Math.abs(o.cash - opsBefore.cash)).toBeLessThan(0.01);
-    expect(canonicalJson(o.well)).toBe(canonicalJson(opsBefore.well));
+    // The well is untouched apart from the idle-rig fields schema 3 adds, which start at rest.
+    expect(canonicalJson(o.well)).toBe(canonicalJson({ ...(opsBefore.well as object), idleTicks: 0, lowFundsWarned: false }));
     expect(canonicalJson((w.systems.operations as unknown as { samples: unknown }).samples)).toBe(canonicalJson(opsBefore.samples));
     expect(canonicalJson(w.systems.knowledge)).toBe(canonicalJson(before.systems.knowledge));
     expect(w.time).toBe(before.time);
