@@ -540,12 +540,13 @@ Where the build deliberately differs from the plan above. Each milestone appends
   - oil sells at 60¢ a barrel at the railhead, less 20¢ hauling and the royalty.
 
   Gas has no buyer in 1890. Uncapped gushers earn nothing. Gusher and victory behaviour are unchanged; capping is a separate, deliberate step.
-- **The bank** (`sim/company/bank.ts`): the First National Bank of Beaumont lends half the value of the rig and the producing wells, in $50 steps, at 8% a year. Discovering oil raises the credit limit. The player can repay at any time.
-  - **Default is consequential but recoverable.** One unpaid month brings a warning, and the interest is added to the loan. Two in a row bring foreclosure:
+- **The bank** (`sim/company/bank.ts`): the First National Bank of Beaumont lends three quarters of the value of the rig and the producing wells (half, as first built; see the revision below), in $50 steps, at 8% a year. Discovering oil raises the credit limit. The player can repay at any time.
+  - **Default.** One unpaid month brings a warning, and the interest is added to the loan. Two in a row bring foreclosure:
     - the bank takes the rig and sets its value against the loan, paying back any surplus;
     - a well being drilled is abandoned;
     - if debt remains, the bank keeps a lien on oil revenue until it is clear.
-  - **The land and wells stay with the company.** Without a rig, the crew can hire out for 30 days at $90, and a used rig costs $300, so no state is unwinnable.
+  - **The land and wells stay with the company** through a foreclosure.
+  - **Correction.** As first built, this note claimed that no state was unwinnable. That was wrong: the gameplay review found that the commonest failure (a company that still owns its rig and has run out of money) had no way back, because hiring out the crew required giving up the rig. The revision below replaces that guarantee with an honest rule: the game always shows the way back when one exists, and says plainly when none does. Bankruptcy is a real outcome.
 - **Saves: schema 2.** The version-1 migration turns the stored cash into "Balance brought forward" plus the rig on the books, grants an active well's land a lease, and adds empty lease, production and bank books. It is idempotent and tested against a real version-1 save. Loading validates that every entry balances and that the balances match a recompute.
 - **The books in the UI.** The clock bar shows cash in hand and any debt, and opens the Company's Books:
   - the position;
@@ -554,6 +555,44 @@ Where the build deliberately differs from the plan above. Each milestone appends
 
   Daily rig-time entries are aggregated in the month summary, so the book stays readable.
 - **Not yet:** the cash-flow forecast (M2) and the monthly statement as a document. The month summary in the books stands in for both until the economy (M5) gives them something to forecast.
+
+**Revision after the PR #5 gameplay review**
+
+The review played the build on an iPhone and ran campaign simulations over many seeded worlds. It found that an unattended rig could lose the whole campaign in a second of real time; that a failed first well usually left no way back; and that the game never said when the goal was met or the company was finished. This revision fixes those, and nothing more.
+
+- **Idle-rig guard** (`systems/rig.ts`).
+  - A rig left standing stops the clock every three game hours, with the reason. That covers drilling by hand with nobody on the line, and stuck tools that nobody fishes for. The interrupt stops Skip and pauses every speed, so an unattended rig costs at most about $1.50 before the player is asked.
+  - A warning comes once a well when the cash will pay for less than three more days of rig time. It says whether the bank will still lend.
+  - The driller can be engaged while the derrick is going up, and leaving the rig view hands the tools to the driller rather than leaving the rig idle.
+  - The clock bar carries a rig line while a well is going: depth, who is on the line, and how many days of rig time the cash will pay for.
+- **Recovery** (`company/recovery.ts`).
+  - One pure function lists what the company can still do: cap an oil well, drill on land it holds, lease and drill, take contract work, or buy a used rig, each with the borrowing it needs. The end of the campaign and every piece of advice on the plate are derived from it, so the game never recommends what the company cannot do.
+  - **Contract drilling** replaces crew hire-out. The company's own rig drills a month for another operator: $150 for the crew's wages and fuel up front, $400 when the job is done. The rig stays the company's. It is offered only while the company cannot afford a well of its own, so it is a way back, not a way to get rich.
+  - **Balance.** Credit rose from half to three quarters of the collateral, so a broke company that owns its rig can always borrow the wages for a contract. Lease prices are unchanged: the simulations showed that cheaper leases did not change the outcome at the obvious prospect, where wells end when the money runs out.
+- **Verdicts** (`ui/Outcome.tsx`).
+  - Capping the first oil well is acknowledged as the campaign's goal met, once, with what it took.
+  - When no path remains, the campaign ends and says why. The sheet lists the wells, what the money went on, and what was learned, and offers a new campaign. Company commands are refused from then on.
+- **Saves: schema 3.** The v2 → v3 migration adds the idle and low-funds fields to wells, the contract and the campaign's outcome, and drops crew hire-out. It is idempotent.
+- **Measured, before → after** (hill-flank first well with the driller, 44 worlds; recovery by following the game's own paths):
+
+  | | Before | After |
+  |---|---|---|
+  | First well that ran out of money, with a way back to a second well | 0 of 38 | 37 of 37 (median 2 months: 2 contracts) |
+  | Borrow to the limit first, then fail | (not modelled) | 37 of 44 bankrupt: the campaign ends and says so |
+  | Skip twice after the derrick is up | well abandoned at 2 ft, $0 | about $3 of rig time, well still going |
+
+**Guiding principle for the next phase**
+
+BLACK GOLD should reward geological knowledge, drilling competence, calculated risk and sound business judgement. Success should never be guaranteed, but informed decisions must materially improve the player's odds. The player should become a better oilman through experience.
+
+- **Gas** should become meaningful geological information and an operational challenge, not an automatic end to a well. Today a gas sand finishes the well; the review found that a quarter of wells drilled over the shallowest oil end at a gas cap above it.
+- **Company progression** should emerge from successful exploration, production, reinvestment and expansion, not from arbitrary deadlines.
+- **Open findings from the review**, deliberately not addressed in this revision:
+  - prospecting is free, and surface signs are weakly predictive;
+  - the hired driller never sets casing, so fishing jobs dominate the cost of a well;
+  - after the first producing well, money accumulates with nothing to spend it on;
+  - on phones the goal sits below the fold;
+  - hand drilling is long and shallow.
 
 ## 9. Open decisions
 
