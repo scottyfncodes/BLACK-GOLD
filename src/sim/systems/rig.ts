@@ -182,18 +182,43 @@ function observe(st: OperationsState, w: Well): Observations {
     cashCents: available(st),
     dayCents: dayRateCents(st.crew),
     fishingCents: dollarsToCents(COSTS.fishing),
+    creditRoomCents: Math.max(0, creditLimitCents(st.bank, st.production, dollarsToCents(RIG_VALUE)) - debtCents(st.ledger)),
+    wellSpentCents: wellSpent(st, w),
+    lastShow: lastShow(own),
   };
 }
 
+/** What this hole has cost: every payment the books charge to it, and today's rig time not yet entered. */
+function wellSpent(st: OperationsState, w: Well): number {
+  let cents = 0;
+  for (const e of st.ledger.entries) {
+    if (e.ref?.wellId !== w.id) continue;
+    for (const l of e.lines) if (l.account === "cash" && l.cents < 0) cents -= l.cents;
+  }
+  return cents + accruedCents(st);
+}
+
+/** The deepest show the bailer has brought up in this hole. */
+function lastShow(own: readonly SampleEvidence[]): Observations["lastShow"] {
+  for (let i = own.length - 1; i >= 0; i--) {
+    const s = own[i]!;
+    if (s.show) return { kind: s.show, ft: s.baseFt };
+  }
+  return null;
+}
+
 /** The circumstances a recommendation was made in, to tell when they have materially changed. */
-function circumstances(w: Well): DeclineMemo {
-  return { depthFt: w.depthFt, openSandFt: w.openSandFt, strings: w.strings.length, stuckCount: w.fishCount + (w.status === "stuck" ? 1 : 0) };
+function circumstances(st: OperationsState, w: Well): DeclineMemo {
+  const capital = available(st) + Math.max(0, creditLimitCents(st.bank, st.production, dollarsToCents(RIG_VALUE)) - debtCents(st.ledger));
+  return { depthFt: w.depthFt, openSandFt: w.openSandFt, strings: w.strings.length, stuckCount: w.fishCount + (w.status === "stuck" ? 1 : 0), capitalCents: capital };
 }
 
 /** A declined recommendation stays declined until the hole has changed enough to matter. */
 function stillDeclined(m: DeclineMemo | undefined, now: DeclineMemo, kind: Advice["kind"]): boolean {
   if (!m) return false;
   if (kind === "case") return m.strings === now.strings && now.depthFt < m.depthFt + 100 && now.openSandFt < m.openSandFt + 50;
+  // Told once to drill on, he raises money again only when it has fallen by a third, or the hole is 300 ft deeper.
+  if (kind === "quit") return now.depthFt < m.depthFt + 300 && (now.capitalCents ?? 0) > (m.capitalCents ?? 0) * (2 / 3);
   return m.stuckCount === now.stuckCount && m.strings === now.strings;
 }
 
@@ -201,7 +226,7 @@ function decline(ctx: Ctx, r: Recommendation): void {
   const st = S(ctx);
   const w = st.well;
   st.crew.pending = null;
-  if (w) st.crew.declined[r.kind] = circumstances(w);
+  if (w) st.crew.declined[r.kind] = circumstances(st, w);
   note(ctx, r.wellId, "advice", r.kind === "case" ? "No pipe, then. I'll drill on." : r.kind === "fish" ? "No fishing job, then." : "We'll keep at it, then.");
 }
 
@@ -226,13 +251,14 @@ function consult(ctx: Ctx, w: Well): void {
   const bucket = Math.floor(w.depthFt / 25);
   const advice = assess(observe(st, w), a, crew.driller.temperament, rngUnit(ctx.seed, "judge", w.id, bucket), rngUnit(ctx.seed, "judge2", w.id, bucket));
   if (!advice) return;
-  if (stillDeclined(crew.declined[advice.kind], circumstances(w), advice.kind)) return;
+  if (stillDeclined(crew.declined[advice.kind], circumstances(st, w), advice.kind)) return;
   // Trusted to judge: act within this month's budget, never below the recovery reserve.
   const c = toCalendar(ctx.now), month = c.year * 12 + (c.month - 1);
   if (crew.orders.month !== month) { crew.orders.month = month; crew.orders.spentCents = 0; }
   const within = crew.orders.spentCents + advice.costCents <= crew.orders.budgetCents;
   const reserve = available(st) - advice.costCents >= reserveCents(st);
-  if (crew.orders.authority === "judgement" && advice.kind !== "abandon" && within && reserve) {
+  const spends = advice.kind === "case" || advice.kind === "fish";
+  if (crew.orders.authority === "judgement" && spends && within && reserve) {
     try {
       if (advice.kind === "case") caseNow(ctx, w);
       else fishNow(ctx, w, " (on the driller's judgement)");
@@ -244,7 +270,7 @@ function consult(ctx: Ctx, w: Well): void {
       if (!(err instanceof CommandRejected)) throw err;
     }
   }
-  const why = crew.orders.authority === "judgement" && advice.kind !== "abandon" ? (!within ? " That is past this month's allowance, so I'm asking." : !reserve ? " That would leave too little in hand, so I'm asking." : "") : "";
+  const why = crew.orders.authority === "judgement" && spends ? (!within ? " That is past this month's allowance, so I'm asking." : !reserve ? " That would leave too little in hand, so I'm asking." : "") : "";
   crew.pending = { id: crew.nextId++, kind: advice.kind, t: ctx.now, wellId: w.id, text: advice.text + why, costCents: advice.costCents };
   note(ctx, w.id, "advice", advice.text);
   ctx.emit({ type: "driller.advice", severity: "notice", interrupt: true, data: { id: crew.pending.id, kind: advice.kind, message: `${crew.driller.name}: ${advice.text}${why}` } });
@@ -869,7 +895,7 @@ export const rig: System<Json> = {
       const w = well(ctx);
       if (r.kind === "case") caseNow(ctx, w);
       else if (r.kind === "fish") fishNow(ctx, w);
-      else finish(ctx, w, "dry", `The ${w.name} is plugged and abandoned at ${Math.round(w.depthFt)} ft.`);
+      else finish(ctx, w, "dry", r.kind === "quit" ? `The ${w.name} is plugged at ${Math.round(w.depthFt)} ft to save the company's money.` : `The ${w.name} is plugged and abandoned at ${Math.round(w.depthFt)} ft.`);
       note(ctx, w.id, "acted", r.kind === "case" ? "Running the pipe, as agreed." : r.kind === "fish" ? "Rigging the jars, as agreed." : "Plugging the hole, as agreed.");
     },
     "crew.decline"(ctx, c: Command) {

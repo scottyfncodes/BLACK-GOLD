@@ -35,7 +35,7 @@ describe("the crew", () => {
     const w = gameEngine.createWorld(SEED, CAMPAIGN_START);
     const a = abilityOf(SEED, ops(w).crew.driller.id);
     const seen = canonicalJson({ ops: ops(w), position: positionOf(w.systems.operations as never, w.seed, w.time) } as never);
-    expect(seen).not.toMatch(/feel|judgement|reliability/);
+    expect(seen).not.toMatch(/feel|judgement|reliability|prudence/);
     for (const v of Object.values(a)) expect(seen).not.toContain(String(v));
   });
 

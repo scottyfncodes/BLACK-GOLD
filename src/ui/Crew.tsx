@@ -18,6 +18,7 @@ export function AdviceCard({ runtime, snap, onOpenRig }: { runtime: GameRuntime;
   if (!p || !w || w.id !== p.wellId) return null;
   const pipe = PIPE[w.strings.length];
   const yes = p.kind === "case" ? `Set the ${pipe?.name ?? "pipe"}` : p.kind === "fish" ? "Fishing job" : "Plug the hole";
+  const no = p.kind === "abandon" ? "Keep at it" : p.kind === "quit" ? "Keep drilling" : "Drill on";
   return (
     <div class="advice" role="group" aria-label="The driller's advice" data-testid="advice">
       <p class="advice-who">{snap.ops.crew.driller.name}, the driller</p>
@@ -27,7 +28,7 @@ export function AdviceCard({ runtime, snap, onOpenRig }: { runtime: GameRuntime;
           {yes}{p.costCents > 0 && <small>{quote(p.costCents)}</small>}
         </button>
         <button type="button" class="button" data-testid="advice-no" onClick={() => runtime.command("crew.decline", { id: p.id })}>
-          {p.kind === "abandon" ? "Keep at it" : "Drill on"}
+          {no}
         </button>
         {onOpenRig && <button type="button" class="button button-quiet" data-testid="advice-rig" onClick={onOpenRig}>Look at the rig first</button>}
       </div>

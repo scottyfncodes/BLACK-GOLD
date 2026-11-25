@@ -8,8 +8,8 @@ import { columnAt, generateGeology } from "../../src/sim/geology/truth/model";
 /**
  * A small seeded balance harness (docs/DESIGN.md R6), run in CI. Its full-size sibling is the
  * stage-6 harness recorded in DESIGN.md §8; this one keeps the guarantees from regressing:
- * - a capable driller, following his own advice, costs less per foot and fails less than a
- *   poor one, measured over several grounds (not strike counts on a handful of sites);
+ * - a capable driller, following his technical advice, costs less per foot and fails less than
+ *   a poor one, measured over several grounds (not strike counts on a handful of sites);
  * - the PR #5 recovery requirement: a first well that runs out of money, the company still
  *   owning its rig, leads to a second well by the game's own paths.
  * Truth is used only to choose test ground.
@@ -42,8 +42,12 @@ function extremes(seed: string): { good: Driller; poor: Driller } {
   return { good: all[0]!, poor: all.at(-1)! };
 }
 
-/** The driller drills, the player says yes to his advice. Returns the well's tally. */
-function play(seed: string, at: { x: number; y: number }, man: Driller | null) {
+/**
+ * The driller drills, the player says yes to his advice. Returns the well's tally. With
+ * `drillOn`, counsel to quit is declined: the well is drilled out, to measure drilling skill
+ * over the same holes (money sense is a separate, independent trait).
+ */
+function play(seed: string, at: { x: number; y: number }, man: Driller | null, drillOn = false) {
   const w = gameEngine.createWorld(seed, CAMPAIGN_START);
   if (man) (w.systems.operations as unknown as { crew: { driller: Driller } }).crew.driller = man;
   cmd(w, "lease.take", { surveyId: surveyAt(at.x, at.y)!.id, offer: "asking" });
@@ -57,7 +61,7 @@ function play(seed: string, at: { x: number; y: number }, man: Driller | null) {
     const r = gameEngine.advance(w, w.time + 30 * MINUTES_PER_DAY, { stopOnInterrupt: true });
     if (r.events.some((e) => e.type === "rig.report" && (e.data as { kind?: string }).kind === "stuck")) stuck++;
     const p = ops(w).crew.pending;
-    if (p) cmd(w, "crew.accept", { id: p.id });
+    if (p) cmd(w, drillOn && p.kind === "quit" ? "crew.decline" : "crew.accept", { id: p.id });
     if (ops(w).well!.status === "stuck" && !ops(w).crew.pending && !ops(w).well!.busy) cmd(w, "rig.fish");
   }
   return { w, feet: ops(w).well!.depthFt, cost: cash0 - ops(w).cash, stuck };
@@ -73,7 +77,7 @@ describe("balance (seeded)", () => {
       if (!at) continue;
       n++;
       const { good, poor } = extremes(seed);
-      const g = play(seed, at, good), p = play(seed, at, poor);
+      const g = play(seed, at, good, true), p = play(seed, at, poor, true);
       goodCost += g.cost; goodFeet += g.feet; goodStuck += g.stuck;
       poorCost += p.cost; poorFeet += p.feet; poorStuck += p.stuck;
     }

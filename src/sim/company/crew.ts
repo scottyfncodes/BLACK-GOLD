@@ -55,7 +55,8 @@ export interface Orders {
   spentCents: number;
 }
 
-export type RecommendationKind = "case" | "fish" | "abandon";
+/** "abandon": plug a hole with the tools fast in it. "quit": plug a hole that is costing more than it promises. */
+export type RecommendationKind = "case" | "fish" | "abandon" | "quit";
 
 export interface Recommendation {
   id: number;
@@ -73,6 +74,8 @@ export interface DeclineMemo {
   openSandFt: number;
   strings: number;
   stuckCount: number;
+  /** Money in hand and credit when it was declined (for "quit"). */
+  capitalCents?: number;
 }
 
 export interface DrillerNote {

@@ -15,6 +15,11 @@ export interface Ability {
   judgement: number;
   /** Steadiness: how seldom he lapses (a slack line, a careless hour). */
   reliability: number;
+  /**
+   * Prudence with money: how readily he speaks up when a hole is eating the company's capital.
+   * Independent of the three above: a fine hand on the line may be reckless with a purse.
+   */
+  prudence: number;
 }
 
 /** The company's first driller is an ordinary hand: neither green nor gifted. */
@@ -24,5 +29,5 @@ const HIRED = { lo: 0.15, hi: 0.95 };
 export function abilityOf(seed: string, id: string): Ability {
   const band = id === "d0" ? STARTING : HIRED;
   const pick = (trait: string) => band.lo + (band.hi - band.lo) * rngUnit(seed, "driller", id, trait);
-  return { feel: pick("feel"), judgement: pick("judgement"), reliability: pick("reliability") };
+  return { feel: pick("feel"), judgement: pick("judgement"), reliability: pick("reliability"), prudence: pick("prudence") };
 }
