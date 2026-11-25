@@ -21,6 +21,7 @@ export function nextStep({ ops, paths, knowledge, formatDate, surveyName }: Advi
   const w = ops.well;
   const find = <K extends RecoveryPath["kind"]>(kind: K) => paths.find((p): p is Extract<RecoveryPath, { kind: K }> => p.kind === kind);
 
+  if (ops.crew.pending && w?.id === ops.crew.pending.wellId) return `${ops.crew.driller.name} has a recommendation waiting at the rig.`;
   if (w && w.status === "rigging") return w.auto ? "The derrick is going up. The driller will start making hole when it is." : "The derrick is going up. Let the driller take over, or go to the rig and drill by hand.";
   if (w && w.status === "stuck") return "The tools are stuck. Go to the rig: fish for them, or abandon the hole.";
   if (w && w.status === "drilling") return w.auto ? `The driller is making hole. Each day costs $${ops.dayRate % 1 ? ops.dayRate.toFixed(2) : ops.dayRate}; watch the money.` : "Go to the rig and make hole, or let the driller work.";
@@ -42,7 +43,8 @@ export function nextStep({ ops, paths, knowledge, formatDate, surveyName }: Advi
   }
 
   const lead = w?.status === "dry" ? "A dry hole still teaches you the ground. " : w?.status === "gusher" ? "Gas has no buyer in 1890. " : "";
-  const drill = find("drill"), lease = find("leaseAndDrill"), contract = find("contract"), rig = find("buyRig");
+  const drill = find("drill"), lease = find("leaseAndDrill"), contract = find("contract"), rig = find("buyRig"), pull = find("pull");
+  if (pull && !drill) return `${lead}Pull the casing from the ${w?.name ?? "old hole"} first: ${Math.round(pull.costCents / (ops.dayRate * 100))} days of rig time, about ${usd(pull.valueCents)} back${borrowing(pull.borrowCents)}.`;
   if (drill) return `${lead}Choose a better spot on the ${surveyName(drill.surveyId)} lease and drill again${borrowing(drill.borrowCents)}.`;
   if (lease) return `${lead}Lease better ground (from ${usd(lease.leaseCents)}) and drill again${borrowing(lease.borrowCents)}.`;
   if (contract) return `${lead}There is not enough money for another well. Take a contract with the rig (the books): $${CONTRACT_WAGES} for the crew now, $${CONTRACT_PAY} in ${CONTRACT_DAYS} days${contract.borrowCents ? `, borrowing ${usd(contract.borrowCents)} for the wages` : ""}.`;

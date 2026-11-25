@@ -59,17 +59,19 @@ export function assess(o: Observations, a: Ability, t: Temperament, noise: numbe
   const fresh = !!o.bottom && o.depthFt - o.bottom.ft <= 15;
   const seat = fresh && (o.bottom!.lith === "clay" || o.bottom!.lith === "rock");
   const pipe = o.nextPipe, cost = o.nextCostCents;
+  // He names the rock as the bailer called it, without the trailing remarks ("grey sand", not "grey sand, water").
+  const rock = o.bottom ? o.bottom.call.split(",")[0]! : "sand";
   // Hard rock under water sands: land the pipe on it before drilling into whatever is below.
   if (fresh && o.bottom!.lith === "rock" && o.waterSeen && !o.waterShutOff && noise2 < 0.35 + 0.65 * a.judgement) {
-    return { kind: "case", reason: "cap", text: `The bailer brings up ${o.bottom!.call} at ${Math.round(o.depthFt)} ft, under the water sands. I'd land the ${pipe} on this rock before we go deeper, to keep the water off whatever is below.`, costCents: cost };
+    return { kind: "case", reason: "cap", text: `The bailer brings up ${rock} at ${Math.round(o.depthFt)} ft, under the water sands. I'd land the ${pipe} on this rock before we go deeper, to keep the water off whatever is below.`, costCents: cost };
   }
   if (seat && sand >= patience * 0.5 && a.judgement > 0.55) {
-    return { kind: "case", reason: "seat", text: `We're into ${o.bottom!.call} at ${Math.round(o.depthFt)} ft, below ${Math.round(o.openSandFt)} ft of open sand. A good place to land the ${pipe}: it should shut off the water above.`, costCents: cost };
+    return { kind: "case", reason: "seat", text: `We're into ${rock} at ${Math.round(o.depthFt)} ft, below ${Math.round(o.openSandFt)} ft of open sand. A good place to land the ${pipe}: it should shut off the water above.`, costCents: cost };
   }
   if (sand >= patience) {
-    if (seat) return { kind: "case", reason: "seat", text: `${Math.round(o.openSandFt)} ft of sand is standing open, and we're into ${o.bottom!.call} at ${Math.round(o.depthFt)} ft. I'd land the ${pipe} here.`, costCents: cost };
+    if (seat) return { kind: "case", reason: "seat", text: `${Math.round(o.openSandFt)} ft of sand is standing open, and we're into ${rock} at ${Math.round(o.depthFt)} ft. I'd land the ${pipe} here.`, costCents: cost };
     // A good judge waits longer for a seat that seals; a poor one runs pipe wherever he is.
-    if (sand >= patience * (1 + 1.2 * a.judgement)) return { kind: "case", reason: "sand", text: `The sand is caving in on us: ${Math.round(o.openSandFt)} ft open. I'd run the ${pipe} now, though the shoe will sit in ${o.bottom?.call ?? "sand"}: it will hold the walls up, not the water.`, costCents: cost };
+    if (sand >= patience * (1 + 1.2 * a.judgement)) return { kind: "case", reason: "sand", text: `The sand is caving in on us: ${Math.round(o.openSandFt)} ft open. I'd run the ${pipe} now, though the shoe will sit in ${rock}: it will hold the walls up, not the water.`, costCents: cost };
   }
   return null;
 }

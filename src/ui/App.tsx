@@ -3,6 +3,7 @@ import { formatClock, formatDate, type GameRuntime, type Snapshot, type Speed } 
 import type { Selection } from "../render/plate/map";
 import { Books } from "./Books";
 import { CampaignOver, FirstOil } from "./Outcome";
+import { AdviceSheet, CrewSheet } from "./Crew";
 import { CampaignMenu } from "./CampaignMenu";
 import { FieldNotes } from "./FieldNotes";
 import { MapFigure, type Tool } from "./MapFigure";
@@ -70,6 +71,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
   const snap = useSnapshot(runtime);
   const [menuOpen, setMenuOpen] = useState(false);
   const [booksOpen, setBooksOpen] = useState(false);
+  const [crewOpen, setCrewOpen] = useState(false);
   const openBooks = useCallback(() => setBooksOpen(true), []);
   const [selection, setSelection] = useState<Selection>(null);
   const onSelect = useCallback((s: Selection) => setSelection(s), []);
@@ -93,7 +95,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (menuOpen || booksOpen || rigOpen || e.metaKey || e.ctrlKey || e.altKey || document.querySelector("dialog[open]")) return;
+      if (menuOpen || booksOpen || crewOpen || rigOpen || e.metaKey || e.ctrlKey || e.altKey || document.querySelector("dialog[open]")) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement) {
         if (e.key === " ") return;
       }
@@ -108,7 +110,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [runtime, menuOpen, booksOpen, rigOpen]);
+  }, [runtime, menuOpen, booksOpen, crewOpen, rigOpen]);
 
   const sections = snap.knowledge.interp.sections;
   const line = selection?.kind === "section" ? sections.find((s) => s.id === selection.id) : sections[sections.length - 1];
@@ -130,7 +132,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
       </div>
 
       <aside class="notes" aria-label="Field notes">
-        <FieldNotes runtime={runtime} snap={snap} selection={selection} onSelect={onSelect} onStake={() => setTool("stake")} onOpenRig={openRig} onOpenBooks={openBooks} />
+        <FieldNotes runtime={runtime} snap={snap} selection={selection} onSelect={onSelect} onStake={() => setTool("stake")} onOpenRig={openRig} onOpenBooks={openBooks} onOpenCrew={() => setCrewOpen(true)} />
       </aside>
 
       <footer class="clock">
@@ -158,8 +160,10 @@ export function App({ runtime }: { runtime: GameRuntime }) {
 
       <CampaignMenu runtime={runtime} snap={snap} open={menuOpen} onClose={() => setMenuOpen(false)} />
       <Books runtime={runtime} snap={snap} open={booksOpen} onClose={() => setBooksOpen(false)} />
+      <CrewSheet runtime={runtime} snap={snap} open={crewOpen} onClose={() => setCrewOpen(false)} />
     </div>
     {showRig && <RigView runtime={runtime} snap={snap} onClose={closeRig} />}
+    <AdviceSheet runtime={runtime} snap={snap} hidden={showRig || booksOpen || crewOpen || menuOpen} onOpenRig={openRig} />
     <FirstOil runtime={runtime} snap={snap} />
     <CampaignOver runtime={runtime} snap={snap} />
     </>
