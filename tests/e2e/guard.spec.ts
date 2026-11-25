@@ -84,10 +84,13 @@ test("review scenario: leaving the rig after the derrick is up hands it to the d
   await expect(page.getByTestId("status")).toContainText("The driller has the tools while you are away");
   await expect(page.getByTestId("rigline")).toContainText("driller at work");
   await expect(page.getByTestId("days-left")).toContainText("days of money");
-  await page.getByRole("radio", { name: "Skip" }).click();
-  await expect.poll(async () => (await snap(page)).speed, { timeout: 15_000 }).toBe("paused");
-  await page.getByRole("radio", { name: "Skip" }).click();
-  await expect.poll(async () => (await snap(page)).speed, { timeout: 15_000 }).toBe("paused");
+  // Skip twice. If the driller stops the clock to recommend something, answer him as a player would.
+  for (let k = 0; k < 2; k++) {
+    const advice = page.getByTestId("advice-sheet");
+    if (await advice.isVisible()) await advice.getByTestId("advice-no").click();
+    await page.getByRole("radio", { name: "Skip" }).click();
+    await expect.poll(async () => (await snap(page)).speed, { timeout: 15_000 }).toBe("paused");
+  }
   const s = await snap(page);
   expect(s.ops.well!.depthFt).toBeGreaterThan(20); // the review's well was abandoned at 2 ft
   expect(s.ops.cash).toBeGreaterThan(0);

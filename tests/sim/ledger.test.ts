@@ -94,8 +94,8 @@ describe("version 1 saves", () => {
     expect(worldProblem(w)).toBeNull();
     const o = operationsOf(w);
     expect(Math.abs(o.cash - opsBefore.cash)).toBeLessThan(0.01);
-    // The well is untouched apart from the idle-rig fields schema 3 adds, which start at rest.
-    expect(canonicalJson(o.well)).toBe(canonicalJson({ ...(opsBefore.well as object), idleTicks: 0, lowFundsWarned: false }));
+    // The well is untouched apart from the fields schemas 3 and 4 add, which start at rest.
+    expect(canonicalJson(o.well)).toBe(canonicalJson({ ...(opsBefore.well as object), idleTicks: 0, lowFundsWarned: false, strings: [], leakFt: 0, waterFt: [], driller: "d0", fishCount: 0 }));
     expect(canonicalJson((w.systems.operations as unknown as { samples: unknown }).samples)).toBe(canonicalJson(opsBefore.samples));
     expect(canonicalJson(w.systems.knowledge)).toBe(canonicalJson(before.systems.knowledge));
     expect(w.time).toBe(before.time);

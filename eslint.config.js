@@ -7,9 +7,10 @@ import tseslint from "typescript-eslint";
  *  - sim/ is pure and deterministic: no UI, rendering, app or browser imports; no wall
  *    clock, Math.random or DOM globals.
  *  - ui/ and render/ may only learn about the subsurface through sim/knowledge. Geological
- *    truth (sim/geology/truth) is sealed from them.
+ *    truth (sim/geology/truth) is sealed from them, and so is everything else the player must
+ *    learn rather than be told (sim/hidden: drillers' true ability, what a casing seat seals).
  */
-const TRUTH = ["**/sim/geology/truth", "**/sim/geology/truth/**", "**/geology/truth", "**/geology/truth/**"];
+const TRUTH = ["**/sim/geology/truth", "**/sim/geology/truth/**", "**/geology/truth", "**/geology/truth/**", "**/sim/hidden", "**/sim/hidden/**", "**/hidden/**"];
 
 export default tseslint.config(
   { ignores: ["dist", "node_modules", "test-results", "playwright-report", "gitcraft-out"] },

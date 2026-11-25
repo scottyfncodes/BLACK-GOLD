@@ -113,7 +113,7 @@ test("the rig fits the screen: no horizontal scroll, controls reachable", async 
   await expect(page.getByTestId("rig-scene")).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
-  for (const name of [/^Bail/, /^Dress bit/, /^Set casing/, /Let the driller/, "← Map"]) {
+  for (const name of [/^Bail/, /^Dress bit/, /^Set 10-inch/, /Let the driller/, "← Map"]) {
     const b = (await page.getByRole("button", { name }).boundingBox())!;
     expect(b.height, String(name)).toBeGreaterThanOrEqual(44);
     expect(b.y + b.height, String(name)).toBeLessThanOrEqual((page.viewportSize()?.height ?? 900) + 1);

@@ -7,6 +7,7 @@ import { insertScheduled, type WorldState } from "./core/engine";
 import { MINUTES_PER_DAY } from "./core/time";
 import { emptyLedger, post, recompute, dollarsToCents, type Ledger } from "./company/ledger";
 import { emptyOutcome, RIG_VALUE } from "./operations";
+import { emptyCrew } from "./company/crew";
 import { emptyLeaseBook, ROYALTY, termEnd, type LeaseBook } from "./company/leases";
 import { emptyProductionBook } from "./company/production";
 import { emptyBank } from "./company/bank";
@@ -82,7 +83,35 @@ export function v2ToV3(input: Record<string, unknown>): Record<string, unknown> 
   return world;
 }
 
-export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2, 2: v2ToV3 };
+/**
+ * v3 → v4: casing strings and the company's driller.
+ * - Each well gets its strings, the sand leaking under a shoe, and where the hole made water.
+ *   Pipe already in a hole (the old single casing to `casedFt`) becomes one 10-inch string,
+ *   already paid for, counted as sealed and seen to hold: the save keeps what it had.
+ * - The company gets its first driller (the same ordinary hand a new game starts with, at the
+ *   same day rate as before), standing orders to ask before spending, and no advice pending.
+ */
+export function v3ToV4(input: Record<string, unknown>): Record<string, unknown> {
+  const world = structuredClone(input) as unknown as WorldState & Record<string, unknown>;
+  const ops = world.systems.operations as Record<string, unknown> | undefined;
+  if (!ops) return world;
+  for (const w of [ops.well, ...((ops.past as unknown[]) ?? [])] as (Record<string, unknown> | null)[]) {
+    if (!w) continue;
+    if (!("strings" in w)) {
+      const cased = typeof w.casedFt === "number" ? w.casedFt : 0;
+      w.strings = cased > 0 ? [{ size: 0, seatFt: Math.round(cased), costCents: 0, setAt: world.time, seatCall: null, observed: "dry", pulled: false }] : [];
+    }
+    if (!("leakFt" in w)) w.leakFt = 0;
+    if (!("waterFt" in w)) w.waterFt = [];
+    if (!("driller" in w)) w.driller = "d0";
+    if (!("fishCount" in w)) w.fishCount = 0;
+  }
+  if (!("crew" in ops) || ops.crew === null) ops.crew = emptyCrew(world.seed) as unknown as Record<string, unknown>;
+  for (const p of ((ops.production as { producers?: Record<string, unknown>[] } | undefined)?.producers ?? [])) if (!("waterCut" in p)) p.waterCut = 0;
+  return world;
+}
+
+export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4 };
 
 /** Invariants a loaded world must hold beyond its shape. Returns a reason, or null. */
 export function worldProblem(world: WorldState): string | null {

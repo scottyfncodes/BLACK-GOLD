@@ -13,6 +13,7 @@ interface Props {
   onStake: () => void;
   onOpenRig: () => void;
   onOpenBooks: () => void;
+  onOpenCrew: () => void;
 }
 
 const ROMAN = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii", "xiii", "xiv", "xv", "xvi", "xvii", "xviii", "xix", "xx"];
@@ -97,7 +98,7 @@ function wellWords(w: Well): string {
 
 const memoryWord = (m: number) => (m > 0.85 ? "remembers well" : m > 0.7 ? "fair memory" : "hazy memory");
 
-export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpenRig, onOpenBooks }: Props) {
+export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpenRig, onOpenBooks, onOpenCrew }: Props) {
   const k = snap.knowledge;
   const task = k.task;
   const act = (type: string, payload: Record<string, string>) => () => runtime.command(type, payload);
@@ -222,9 +223,12 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
       <div class="goal" data-testid="goal">
         <p class="goal-head" data-testid="goal-head">{snap.ops.outcome.ended ? "The company is finished." : snap.ops.outcome.firstOilAt !== null ? "You brought in a producing well." : "Bring in a well before the money runs out."}</p>
         {snap.ops.outcome.firstOilAt !== null && !snap.ops.outcome.ended && <p>The {snap.ops.outcome.firstOilWell} has sold oil since {formatDate(snap.ops.outcome.firstOilAt)}. What the company becomes now is up to you.</p>}
-        <p>You have <b>{dollars(snap.ops.cash)}</b>{snap.ops.debt > 0 ? <> and owe the bank <b>{dollars(Math.ceil(snap.ops.debt))}</b></> : null}, {snap.ops.bank.rigOwned ? (snap.ops.contract ? "a rig out on contract" : "one rig") : "no rig"} and a driller. Every day of drilling costs {dollars(COSTS.perDay)}, and raising a derrick costs {dollars(COSTS.rigUp)}.</p>
+        <p>You have <b>{dollars(snap.ops.cash)}</b>{snap.ops.debt > 0 ? <> and owe the bank <b>{dollars(Math.ceil(snap.ops.debt))}</b></> : null}, {snap.ops.bank.rigOwned ? (snap.ops.contract ? "a rig out on contract" : "one rig") : "no rig"} and a driller. Every day of drilling costs ${snap.ops.dayRate % 1 ? snap.ops.dayRate.toFixed(2) : snap.ops.dayRate}, and raising a derrick costs {dollars(COSTS.rigUp)}.</p>
         <p class="goal-next" data-testid="next"><b>Next:</b> {nextStep({ ops: snap.ops, paths: snap.paths, knowledge: snap.knowledge, formatDate: (t) => formatDate(t), surveyName: (id) => SURVEYS.find((x) => x.id === id)?.name ?? "" })}</p>
-        <div class="acts"><button type="button" class="button button-quiet" data-testid="open-books" onClick={onOpenBooks}>The books and the bank</button></div>
+        <div class="acts">
+          <button type="button" class="button button-quiet" data-testid="open-books" onClick={onOpenBooks}>The books and the bank</button>
+          <button type="button" class="button button-quiet" data-testid="open-crew" onClick={onOpenCrew}>The driller and the crew</button>
+        </div>
       </div>
       {busy}
       <p class="empty">Print is the county survey anyone can buy. Red is the company's own hand. Blank paper means unknown, not empty.</p>

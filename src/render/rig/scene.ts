@@ -358,10 +358,26 @@ function drawCutaway(ctx: CanvasRenderingContext2D, inp: SceneInput, L: Layout, 
   ctx.strokeStyle = INK.ink;
   ctx.lineWidth = 1;
   for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(X + side * 4, top); ctx.lineTo(X + side * 4, bottom); ctx.stroke(); }
-  if (well.casedFt > 0) {
-    ctx.lineWidth = 2.4;
-    for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(X + side * 5.5, top); ctx.lineTo(X + side * 5.5, L.Y(well.casedFt)); ctx.stroke(); }
+  // Casing: each string from the surface to its shoe, the largest outermost. Ink; pulled pipe faint.
+  for (const s of well.strings) {
+    const off = 9.5 - s.size * 1.8, shoe = L.Y(s.seatFt);
+    ctx.strokeStyle = s.pulled ? "rgba(42, 33, 24, 0.25)" : INK.ink;
+    ctx.lineWidth = 2;
+    ctx.setLineDash(s.pulled ? [3, 3] : []);
+    for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(X + side * off, top); ctx.lineTo(X + side * off, shoe); ctx.stroke(); }
+    ctx.setLineDash([]);
+    if (s.pulled) continue;
+    // The shoe.
+    ctx.lineWidth = 1.6;
+    for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(X + side * off, shoe); ctx.lineTo(X + side * (off + 3), shoe); ctx.stroke(); }
+    // What the crew has seen: a shoe that leaks is marked below in carmine.
+    if (s.observed === "water" || s.observed === "sand") {
+      ctx.fillStyle = INK.carmine;
+      for (let k = 0; k < 4; k++) for (const side of [-1, 1]) { ctx.beginPath(); ctx.arc(X + side * (off + 1.5), shoe + 3 + k * 3.5, 0.9, 0, Math.PI * 2); ctx.fill(); }
+    }
   }
+  ctx.strokeStyle = INK.ink;
+  ctx.lineWidth = 1;
   const fillTop = L.Y(Math.max(0, well.depthFt - well.fillFt));
   ctx.fillStyle = "rgba(122, 104, 80, 0.55)";
   ctx.fillRect(X - 3.5, fillTop, 7, Math.max(0, bottom - fillTop));

@@ -179,7 +179,7 @@ export class GameRuntime {
         // Stuck tools, a gusher or a dry hole: stop the clock so the player can act.
         if (e.interrupt) { this.speed = "paused"; this.carry = 0; }
       }
-      if (e.type === "company.notice" || e.type === "company.concluded" || e.type === "company.milestone") {
+      if (e.type === "company.notice" || e.type === "company.concluded" || e.type === "company.milestone" || e.type === "driller.advice") {
         this.rev++;
         this.status = String((e.data as { message?: string } | undefined)?.message ?? "");
         // A warning from the bank, a contract done, the first producing well, the end: stop the clock.

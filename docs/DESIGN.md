@@ -594,6 +594,97 @@ BLACK GOLD should reward geological knowledge, drilling competence, calculated r
   - on phones the goal sits below the fold;
   - hand drilling is long and shallow.
 
+**Casing and hired drillers (approved design)**
+
+Approved for implementation after the casing and driller proposal. The two systems are designed to meet: casing is where a driller's judgement shows.
+
+- **Casing strings.** Up to three telescoping strings per well: 10-inch, 8¼-inch and 6⅝-inch. Each runs from the surface to where it is set; the hole below continues at the smaller size. Three is a maximum, not a program: a well finished with fewer strings costs less, and that is its reward.
+- **Two jobs, kept apart.**
+  - *Mechanical stabilization:* any string holds up the walls above its shoe, so the sands behind it stop caving.
+  - *Hydraulic isolation:* only a string landed in an impermeable bed (clay or caprock) shuts off water. A string seated in sand still steadies the hole but does not shut off water, and sand keeps working in beneath the shoe.
+- **Water above the pay.** A water sand left open above the oil, behind no sealed string, makes the well come in cut with water, and it sells less.
+- **Pulling casing.** Pipe can be pulled from a dry hole and part of its value recovered, at the cost of rig days. Pipe seated in sand comes back worse.
+- **Driven casing through quicksand** is deferred.
+- **Drillers.** Seeded candidates in Beaumont, each with hidden ability (feel, judgement, reliability) and a public reputation. A lightweight temperament (cautious, aggressive, economical or methodical) is independent of competence: a tendency, not a ranking.
+  - True ability stays hidden. No numbers, stars or reveal meters: the player learns from what a driller says and does, and from his record across wells.
+  - His reports and recommendations come only from what he could observe: the bailer, the hole's behaviour, the line, the pipe in the hole, the money. Never from undiscovered geology or reservoir truth. Evidence and interpretation stay distinct.
+  - A declined recommendation is remembered and not raised again until circumstances change materially.
+  - **Money sense is a separate trait.** He may counsel plugging a hole on economic grounds, from what he can see: what the hole has cost, the money and credit left, the depth, and what the bailer has shown. A hidden prudence, independent of feel, judgement and reliability, sets when he speaks; temperament sets how. A fine driller can be financially reckless, and an ordinary one prudent.
+  - Only the player plugs a hole. Standing orders never authorize it.
+  - **Standing orders.** "Ask before spending" by default. "Use your judgement" gives a budget per calendar month, counted cumulatively. Autonomous spending never draws the company below its recovery reserve; beyond the budget or the reserve, he asks.
+- **The casing in the cutaway** is inspectable: each string's size, depth, cost, the seat as the bailer described it, and how it has performed. Nothing below the bit is shown.
+- **Balance** is judged across cost, time, mechanical failures, water contamination, casing efficiency and successful wells, over an expanded seeded sample. PR #5's recovery margins and the 37-of-37 second-well regression must hold.
+- **Provisional abstractions.** Pipe sizes, prices per foot, drillers' and crews' day wages, salvage fractions and the time to run and pull pipe are gameplay values, not verified history. They are marked so in the code and here, to be corrected as sources are found. Partly verified: the Gladys City dry holes of 1893, 1895 and 1896 on this hill, the difficult sand below about 300 ft, and cable-tool wells running up to about three telescoping strings with a drive shoe.
+
+**Casing and hired drillers (as built)**
+
+- **Casing** (`company/casing.ts`, `hidden/casing.ts`).
+  - Up to three strings: 10-inch, 8¼-inch and 6⅝-inch.
+  - Each string is priced by its length to the surface (provisional: 50¢, 35¢ and 22¢ a foot).
+  - Setting pipe bails the hole first, so every seat is what the bailer saw.
+  - Any string resets the open sand above its shoe. A seat in clay, caprock or salt also stops the leak beneath it; a seat in sand leaves sand working in as if 18 ft of sand stood open (provisional).
+  - The first bail after a string is set shows the crew which it is: "bails dry", "water still comes in" or "sand under the shoe".
+  - The hole records where it made water. At capping, each water sand above the pay that no sealed string covers cuts the oil: a third for one, about half for two or more (provisional).
+  - Pulling pipe from a dead hole takes rig days and recovers 50% of a sealed string's cost or 30% of a string seated in sand (provisional). It is a recovery path when the pipe fetches more than the days.
+- **Drillers** (`company/crew.ts`, `hidden/drillers.ts`).
+  - Candidates are seeded per calendar month. Ability is a pure function of the seed and the driller's id: never saved, never shown, and sealed from the UI by lint.
+  - The day rate is the crew's $9 plus his wage. The starting driller costs $3, so the old $12 a day is unchanged.
+  - Ability shapes the feed (spread), lapses of slack line, and when he bails and dresses. Temperament shifts habits only: how far he leads the line, how soon he bails, how much open sand he stands, and how many fishing jobs he will run.
+  - His record keeps outcomes only, credited to the driller in charge of each well.
+- **Judgement** (`company/judgement.ts`).
+  - `assess()` takes an Observations record (the bailer's calls, open sand, pipe left, water seen and shut off, stuck tools, money) and cannot see below the bit.
+  - A capable judge waits for a seat that seals (patience grows with judgement) and takes a clay or rock seat sooner. A poor one runs pipe wherever he stands and says plainly that it "will hold the walls up, not the water".
+  - Asking stops the clock. A declined recommendation is remembered until the hole is 100 ft deeper, has 50 ft more open sand, a new string, or a new stuck. Unanswered advice lapses after an hour of play.
+  - Under "Use his judgement" he acts within a calendar-month budget, counted cumulatively, never leaving less than the recovery reserve (contract wages plus three days of rig time), and never plugs a hole without asking.
+  - **Counsel to quit** (`moneyConcern()`). He speaks in two situations, both read only from the books, the depth and the bailer:
+    - *Running short:* the money and credit left would buy only a few weeks of rig time, too little to start another hole. The cautious man speaks at about 30 days, the economical at 24, the methodical at 16, the aggressive at 5. Hidden prudence scales those (0.3 to 1.2 times).
+    - *A long dry run:* 800 to 1,100 ft without a show (scaled by prudence; never for the aggressive man), once the hole has eaten most of the company's money.
+    - A show of oil or gas within 150 ft of the bottom is reason to keep on, and he will not counsel quitting then. Sulphur water is not.
+    - His words name what the hole has cost, the depth, the last show, and the money and days left. They never mention anything below the bit.
+    - Declined, he does not raise it again until the hole is 300 ft deeper or the money has fallen by a third.
+    - Accepting it plugs the hole at once, and the rig is free. Every value here is provisional.
+- **Interface.**
+  - The rig's casing gauge opens the casing sheet. The cutaway draws each string at its own diameter, and a shoe seen to leak is marked in carmine.
+  - His advice is a card at the rig, and a sheet on the map with "Look at the rig first".
+  - The crew sheet holds his reputation, record, notes, standing orders and the men looking for work.
+- **Saves: schema 4.** The v3 → v4 migration turns old casing into one paid-for 10-inch string and adds the crew at the old day rate. It is tested against a real schema-3 save made by the production build, which also imports through the UI.
+- **Balance, measured** (stage-6 harness: 40 seeded worlds, 29 with oil at their best site and 27 with a printed hill; the driller drills and his technical advice is accepted, his counsel to quit declined, so these rows measure drilling skill):
+
+  | Best site | Oil | Wet | Stuck per 1,000 ft | Fishing per well | Strings per well | Sealed | Casing | Cost |
+  |---|---|---|---|---|---|---|---|---|
+  | Best candidate | 52% | 3 of 15 | 1.1 | 1.1 | 1.9 | 31% | $257 | $902 |
+  | Starting driller | 38% | 6 of 11 | 1.4 | 1.4 | 2.6 | 13% | $271 | $897 |
+  | Worst candidate | 34% | 7 of 10 | 2.0 | 1.9 | 2.8 | 7% | $245 | $912 |
+  | Starting driller, casing advice refused | 10% | 3 of 3 | 3.9 | 2.7 | 0 | — | $0 | $667 |
+  | Careful hand-driller reading the bailer | 55% | 2 of 16 | 1.3 | 1.3 | 2.0 | 36% | $306 | $939 |
+
+  - Before this phase, with the same kind of ground, the hired driller struck oil in 31% of best sites (he never cased), and a careful player cased 14 times a well for $477.
+  - At the hill flank every policy strikes about 7%: the ground decides there.
+  - Trusting the driller's judgement with a $300 monthly budget reproduced accepting every recommendation exactly, without the interruptions.
+  - **Recovery (PR #5's requirement):** all 38 first wells that ran out of money at the hill flank reached a second well (median one month, one contract).
+  - Borrowing to the limit first, then failing: 12 of 44 companies went bankrupt. That is fewer than before this phase, because pipe left in a dead hole can be pulled and sold.
+- **Counsel to quit, measured** (the same harness; "followed" accepts every recommendation, "declined" refuses only the counsel to quit):
+
+  | Hill flank (poor ground) | Plugged on his advice | Money ran out | Cash left after a dry hole | Oil |
+  |---|---|---|---|---|
+  | Best candidate, followed / declined | 8 / 0 | 10 / 16 | $99 / $51 | 2 / 2 |
+  | Starting driller, followed / declined | 3 / 0 | 5 / 7 | $137 / $118 | 2 / 2 |
+  | Worst candidate, followed / declined | 3 / 0 | 5 / 6 | $125 / $118 | 2 / 2 |
+
+  | Best site (good ground) | Plugged on his advice | Oil | Cash left after a dry hole |
+  |---|---|---|---|
+  | Best candidate, followed / declined | 4 / 0 | 45% / 52% | $309 / $330 |
+  | Starting driller, followed / declined | 2 / 0 | 38% / 38% | $290 / $298 |
+  | Worst candidate, followed / declined | 3 / 0 | 31% / 34% | $322 / $304 |
+
+  - On poor ground his counsel keeps capital: fewer companies drill to the last dollar, and they leave a dry hole with more money.
+  - On good ground it has a price: the best candidate (who happens to be prudent in many worlds) plugged two holes that would have come in. Advice from observation alone cannot know which holes those are, and that is intended. Quitting is a real decision with a real cost, not a hint.
+  - The plug counts differ by driller, because prudence is independent of skill.
+  - An earlier tuning, triggered by the share of capital the hole had eaten, plugged 19 of 29 best sites and cut the best candidate's oil from 52% to 10%. It was rejected.
+  - **Recovery with the counsel followed:** 40 of 40 companies whose first well failed reached a second well (median one month, one contract). Borrowing to the limit first, then failing: 9 of 44 went bankrupt.
+- **Open findings from this phase.**
+  - Gas still ends a well, at 9 of 29 best sites. Gas development stays deferred, as do historical price research and driven casing through quicksand.
+
 ## 9. Open decisions
 
 Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.
@@ -603,3 +694,7 @@ Decisions taken so far are marked. Where a decision is still open, its default i
 3. **Visual direction:** *Decided: B · Geologist's Plate*, chosen from three rendered directions in review round 1. See [`docs/ART-DIRECTION.md`](ART-DIRECTION.md).
 4. **Units:** period oilfield units displayed by default with an SI toggle. *Default: yes.*
 5. **Historical naming:** real places, fictional people and companies. *Default: yes.*
+6. **Contract drilling:** *Decided:* a financial recovery mechanism for now. It is offered only while the company cannot afford a well of its own. Making it a legitimate, balanced business strategy is future work, and needs its own balance pass.
+7. **Bankruptcy:** *Decided:* a legitimate failure condition. The game shows the way back when one exists and ends the campaign plainly when none does; it never guarantees recovery.
+8. **First oil:** *Decided:* the first producing well marks the beginning of company growth, not final victory. It stays the current milestone; later phases build the company's growth on top of it.
+9. **Next priority:** *Decided:* casing mechanics and hired-driller intelligence. Approved with the refinements recorded under "Casing and hired drillers (approved design)" in §8.

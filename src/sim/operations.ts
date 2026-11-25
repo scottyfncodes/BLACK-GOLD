@@ -11,6 +11,8 @@ import { cashCents, debtCents, type Ledger } from "./company/ledger";
 import type { LeaseBook } from "./company/leases";
 import type { ProductionBook } from "./company/production";
 import type { BankState } from "./company/bank";
+import type { CasingString } from "./company/casing";
+import { dayRateCents, type Crew } from "./company/crew";
 
 export type WellStatus = "rigging" | "drilling" | "stuck" | "gusher" | "dry";
 export type Operation = "rigup" | "bail" | "dress" | "case" | "fish";
@@ -31,8 +33,20 @@ export interface Well {
   fillFt: number;
   /** 1 = freshly dressed bit, 0 = blunt. */
   sharp: number;
-  /** Casing set to this depth (ft). */
+  /** Casing set to this depth (ft): the deepest shoe. */
   casedFt: number;
+  /** The strings in the hole, largest first (at most three). */
+  strings: CasingString[];
+  /** Sand working in beneath a shoe seated in sand (ft of open sand it is equivalent to). */
+  leakFt: number;
+  /** Where the hole made water as it was drilled (top, base in ft): what the crew saw, nothing deeper. */
+  waterFt: [number, number][];
+  /** Fishing jobs run on this hole. */
+  fishCount: number;
+  /** The company's driller in charge of this well (his record answers for it). */
+  driller: string;
+  /** The rig is pulling this hole's casing until then. */
+  pullingUntil?: number | null;
   /** Feet of uncased sand open to the hole. Sands heave in. */
   openSandFt: number;
   feeding: boolean;
@@ -79,6 +93,8 @@ export interface OperationsState {
   bank: BankState;
   /** The rig is out on contract to another operator. */
   contract: Contract | null;
+  /** The company's driller, the men it might hire, his standing orders and his advice. */
+  crew: Crew;
   outcome: CampaignOutcome;
   well: Well | null;
   /** Earlier wells (finished). */
@@ -90,7 +106,7 @@ export interface OperationsState {
 export const STARTING_CASH = 1500;
 /** The rig and tools the company starts with, carried in the books at this value. */
 export const RIG_VALUE = 400;
-export const COSTS = { rigUp: 350, perDay: 12, casingPerFt: 1.1, fishing: 60 } as const;
+export const COSTS = { rigUp: 350, fishing: 60 } as const;
 
 export interface OperationsView {
   /** Cash in hand (dollars), from the books, less rig time not yet entered. */
@@ -103,18 +119,21 @@ export interface OperationsView {
   bank: BankState;
   contract: Contract | null;
   outcome: CampaignOutcome;
+  crew: Crew;
+  /** What a day of rig time costs now: the crew and the driller's wage (dollars). */
+  dayRate: number;
   well: Well | null;
   past: Well[];
 }
 
 /** Rig time accrued today, in cents (whole cents, rounded once). */
 export function accruedCents(o: OperationsState): number {
-  return Math.round((COSTS.perDay * 100 * o.accrued.ticks) / 288);
+  return Math.round((dayRateCents(o.crew) * o.accrued.ticks) / 288);
 }
 
 export function operationsOf(world: Readonly<WorldState>): OperationsView {
   const o = world.systems.operations as unknown as OperationsState;
-  return { cash: (cashCents(o.ledger) - accruedCents(o)) / 100, debt: debtCents(o.ledger) / 100, ledger: o.ledger, leases: o.leases, production: o.production, bank: o.bank, contract: o.contract, outcome: o.outcome, well: o.well, past: o.past };
+  return { cash: (cashCents(o.ledger) - accruedCents(o)) / 100, debt: debtCents(o.ledger) / 100, ledger: o.ledger, leases: o.leases, production: o.production, bank: o.bank, contract: o.contract, outcome: o.outcome, crew: o.crew, dayRate: dayRateCents(o.crew) / 100, well: o.well, past: o.past };
 }
 
 /** Samples are evidence like any other; they join the knowledge view. */
