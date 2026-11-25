@@ -42,6 +42,7 @@ test("stake a well, raise the derrick, feed the line, bail, and hand over to the
   test.setTimeout(75_000);
   const hill = (await snap(page)).print.hills[0]!;
   await tapKm(page, hill.x, hill.y);
+  await page.getByTestId("lease-asking").click();
   await page.getByTestId("stake").click();
   await expect(page.getByText("Tap where the derrick should stand.")).toBeVisible();
   await tapKm(page, hill.x + 0.15, hill.y + 0.1);
@@ -83,9 +84,30 @@ test("stake a well, raise the derrick, feed the line, bail, and hand over to the
   await expect(page.getByTestId("to-rig")).toBeVisible();
 });
 
+test("land must be leased before a well is staked; the bonus is paid from the books", async ({ page }) => {
+  const hill = (await snap(page)).print.hills[0]!;
+  await tapKm(page, hill.x, hill.y);
+  await expect(page.getByTestId("lease")).toContainText("asks");
+  await expect(page.getByTestId("stake")).toBeDisabled();
+  await expect(page.getByTestId("stake")).toContainText("lease the land first");
+  const cash = (await snap(page)).ops.cash;
+  // One lower offer: the owner accepts or refuses, and the notes say which.
+  await page.getByTestId("lease-lower").click();
+  const leased = await page.getByText("The company's lease").isVisible();
+  if (!leased) {
+    await expect(page.getByTestId("status")).toContainText("refused");
+    await expect(page.getByTestId("lease-lower")).toBeDisabled();
+    await page.getByTestId("lease-asking").click();
+  }
+  await expect(page.getByTestId("lease")).toContainText("The company's lease");
+  expect((await snap(page)).ops.cash).toBeLessThan(cash);
+  await expect(page.getByTestId("stake")).toBeEnabled();
+});
+
 test("the rig fits the screen: no horizontal scroll, controls reachable", async ({ page }) => {
   const hill = (await snap(page)).print.hills[0]!;
   await tapKm(page, hill.x, hill.y);
+  await page.getByTestId("lease-asking").click();
   await page.getByTestId("stake").click();
   await tapKm(page, hill.x + 0.15, hill.y + 0.1);
   await expect(page.getByTestId("rig-scene")).toBeVisible();

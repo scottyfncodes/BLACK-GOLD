@@ -34,6 +34,8 @@ export interface ManuscriptInputs {
   selection: Selection;
   /** First point of a section line being drawn. */
   draft: Pt | null;
+  /** Surveys the company holds a lease on (its own claim: drawn in carmine). */
+  leased?: string[];
 }
 
 /** County scale shows the whole sheet; field scale shows names and detail. */
@@ -394,6 +396,14 @@ export function drawManuscript(ctx: CanvasRenderingContext2D, v: MapView, m: Man
   ctx.lineWidth = 1;
   ctx.setLineDash([1.2, 3]);
   for (const s of SURVEYS) if (walked.has(s.id)) { path(ctx, inset(s.poly.map(P), 3.5), true); ctx.stroke(); }
+  ctx.setLineDash([]);
+  // Leased land: the company's claim, a solid carmine line inside the grant line.
+  ctx.lineWidth = 1.6;
+  for (const id of m.leased ?? []) {
+    const s = SURVEYS.find((x) => x.id === id);
+    if (s) { path(ctx, inset(s.poly.map(P), 6), true); ctx.stroke(); }
+  }
+  ctx.lineWidth = 1;
   ctx.setLineDash([]);
 
   // Selection: solid carmine with a tinted band inside.

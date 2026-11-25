@@ -109,8 +109,9 @@ export function MapFigure({ runtime, snap, selection, onSelect, tool, setTool, o
       ctx.drawImage(c.canvas, dx * dpr, dy * dpr, c.view.w * k * dpr, c.view.h * k * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const { snap: s, selection: sel, draft: d } = latest.current;
-      drawManuscript(ctx, v, { knowledge: s.knowledge, print: s.print, selection: sel, draft: d });
-      drawLife(ctx, v, { anim: (performance.now() - started) / 1000, gameTime: s.time, knowledge: s.knowledge, wells: s.ops.well ? [...s.ops.past, s.ops.well] : s.ops.past });
+      const leased = s.ops.leases.leases.filter((l) => l.status === "active" && l.expiresAt > s.time).map((l) => l.surveyId);
+      drawManuscript(ctx, v, { knowledge: s.knowledge, print: s.print, selection: sel, draft: d, leased });
+      drawLife(ctx, v, { anim: (performance.now() - started) / 1000, gameTime: s.time, knowledge: s.knowledge, wells: s.ops.well ? [...s.ops.past, s.ops.well] : s.ops.past, producing: s.ops.production.producers.map((p) => p.wellId) });
       devOverlay()?.map(ctx, v, runtime.currentWorld.seed);
     };
     raf = requestAnimationFrame(frame);

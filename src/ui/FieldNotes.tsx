@@ -1,8 +1,9 @@
 import type { GameRuntime, Snapshot } from "../app/runtime";
 import { formatDate } from "../app/runtime";
 import { SURVEYS, insidePoly } from "../content/geography/surveys";
-import { CONSULT_DAYS, COSTS, INQUIRE_DAYS, WALK_DAYS, type Evidence, type FieldTask, type Well } from "../sim";
+import { activeLease, askingTerms, CONSULT_DAYS, COSTS, INQUIRE_DAYS, WALK_DAYS, type Evidence, type FieldTask, type Well } from "../sim";
 import type { Selection } from "../render/plate/map";
+import { nextStep } from "./advice";
 
 interface Props {
   runtime: GameRuntime;
@@ -11,6 +12,7 @@ interface Props {
   onSelect: (s: Selection) => void;
   onStake: () => void;
   onOpenRig: () => void;
+  onOpenBooks: () => void;
 }
 
 const ROMAN = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii", "xiii", "xiv", "xv", "xvi", "xvii", "xviii", "xix", "xx"];
@@ -41,6 +43,48 @@ function evidenceLine(e: Evidence): { text: string; src: string; red?: boolean }
   }
 }
 
+/** The land: the owner's terms, or the company's lease on it. Public information only. */
+function LeaseBlock({ runtime, snap, surveyId }: { runtime: GameRuntime; snap: Snapshot; surveyId: string }) {
+  const survey = SURVEYS.find((x) => x.id === surveyId)!;
+  const lease = activeLease(snap.ops.leases, surveyId, snap.time);
+  if (lease) {
+    return (
+      <div class="lease lease-ours" data-testid="lease">
+        <h3>The company's lease</h3>
+        <p>
+          {lease.acres} acres, one-eighth royalty to {survey.owner}. Runs to <b>{formatDate(lease.expiresAt)}</b>
+          {lease.renewals ? `, renewed ${lease.renewals} time${lease.renewals > 1 ? "s" : ""}` : ""}.
+        </p>
+        <p class="empty">Held while a well is drilled on it; otherwise renewed on a delay rental if the money is there.</p>
+        <div class="acts"><button type="button" class="button button-quiet" onClick={() => runtime.command("lease.release", { surveyId })}>Release the lease</button></div>
+      </div>
+    );
+  }
+  const wells = snap.ops.well ? [...snap.ops.past, snap.ops.well] : snap.ops.past;
+  const strikes = wells.filter((w) => w.status === "gusher" && w.outcome?.startsWith("OIL")).map((w) => ({ x: w.x, y: w.y }));
+  const t = askingTerms(survey, snap.print, { strikes });
+  const refused = (snap.ops.leases.refusedUntil[surveyId] ?? -1) > snap.time;
+  const lapsed = snap.ops.leases.leases.some((l) => l.surveyId === surveyId && l.status === "lapsed");
+  return (
+    <div class="lease" data-testid="lease">
+      <h3>The land</h3>
+      <p>
+        {survey.owner} asks <b>{dollars(t.askingCents / 100)}</b> bonus for a one-year lease of {t.acres} acres, with a one-eighth royalty on any oil sold.
+        {t.reasons.length ? ` The price is up: ${t.reasons.join(", ")}.` : ""}
+      </p>
+      {lapsed && <p class="empty">Your earlier lease here has lapsed.</p>}
+      <div class="acts">
+        <button type="button" class="button button-primary" data-testid="lease-asking" disabled={snap.ops.cash < t.askingCents / 100} onClick={() => runtime.command("lease.take", { surveyId, offer: "asking" })}>
+          Lease it<small>{dollars(t.askingCents / 100)}</small>
+        </button>
+        <button type="button" class="button" data-testid="lease-lower" disabled={refused || snap.ops.cash < t.lowerCents / 100} onClick={() => runtime.command("lease.take", { surveyId, offer: "lower" })}>
+          Offer {dollars(t.lowerCents / 100)}<small>{refused ? "refused this month" : "the owner may refuse"}</small>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 const dollars = (n: number) => "$" + Math.floor(n).toLocaleString("en-US");
 const stakeNote = () => `${dollars(COSTS.rigUp)} to raise a derrick, then tap the spot`;
 
@@ -51,20 +95,9 @@ function wellWords(w: Well): string {
   return `· ${Math.floor(w.depthFt)} ft${w.status === "stuck" ? ", tools stuck" : ""}`;
 }
 
-/** One plain next step, from what the company has done so far. */
-function nextStep(snap: Snapshot): string {
-  const k = snap.knowledge, well = snap.ops.well;
-  if (well && well.status !== "gusher" && well.status !== "dry") return "Go to the rig and make hole.";
-  if (well?.status === "gusher") return "You struck it. Leases and money come next.";
-  if (well?.status === "dry") return snap.ops.cash > COSTS.rigUp + 100 ? "A dry hole still teaches you the ground. Choose a better spot and try again." : "Too little money left for another derrick.";
-  if (!k.evidence.some((e) => e.kind === "walked")) return "Tap a survey near a hill and walk the ground. Look for gas bubbling, sour springs, a rise in the prairie.";
-  if (!k.evidence.some((e) => e.kind === "surfaceSign" && e.sign !== "mound")) return "Walk more surveys. Gas and sour springs cluster where oil lies beneath.";
-  return "Signs found. Pick the most promising survey and stake a well there, on the flank of the rise rather than its crown.";
-}
-
 const memoryWord = (m: number) => (m > 0.85 ? "remembers well" : m > 0.7 ? "fair memory" : "hazy memory");
 
-export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpenRig }: Props) {
+export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpenRig, onOpenBooks }: Props) {
   const k = snap.knowledge;
   const task = k.task;
   const act = (type: string, payload: Record<string, string>) => () => runtime.command(type, payload);
@@ -79,10 +112,18 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
       <button type="button" class="button button-primary" data-testid="to-rig" onClick={onOpenRig}>Go to the rig</button>
     </div>
   ) : null;
+  const producers = snap.ops.production.producers;
   const busy = (
     <>
       {task ? <p class="task" data-testid="task">{taskLine(task, snap)}</p> : null}
       {wellLine}
+      {producers.length > 0 && (
+        <div class="producing" data-testid="producing">
+          {producers.map((p) => (
+            <p key={p.wellId}><b>{p.name}</b> · producing {p.lastDayBbl} bbl a day · {p.monthBbl.toLocaleString("en-US")} bbl hauled this month</p>
+          ))}
+        </div>
+      )}
     </>
   );
 
@@ -90,6 +131,7 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
     const s = SURVEYS.find((x) => x.id === selection.id);
     if (!s) return null;
     const wellsHere = snap.print.wells.filter((w) => insidePoly(s.poly, w.x, w.y));
+    const leased = !!activeLease(snap.ops.leases, s.id, snap.time);
     const items = k.evidence.filter((e) => ("surveyId" in e && e.surveyId === s.id) || (e.kind === "wellRecord" && wellsHere.some((w) => w.id === e.wellId)));
     return (
       <section class="notes-body" aria-labelledby="notes-h">
@@ -116,9 +158,10 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
           <button type="button" class="button" disabled={!!task} onClick={act("fieldwork.consult", { surveyId: s.id, who: "gossip" })}>Ask in Beaumont<small>{days(CONSULT_DAYS.gossip)}</small></button>
           <button type="button" class="button" disabled={!!task} onClick={act("fieldwork.consult", { surveyId: s.id, who: "geologist" })}>Send for a geologist<small>{days(CONSULT_DAYS.geologist)}</small></button>
         </div>
+        <LeaseBlock runtime={runtime} snap={snap} surveyId={s.id} />
         <div class="acts">
-          <button type="button" class="button button-drill" data-testid="stake" disabled={drilling || snap.ops.cash < COSTS.rigUp} onClick={onStake}>
-            Stake a well here<small>{drilling ? "one rig at a time" : stakeNote()}</small>
+          <button type="button" class="button button-drill" data-testid="stake" disabled={drilling || !leased || !snap.ops.bank.rigOwned || !!snap.ops.contract || !!snap.ops.outcome.ended || snap.ops.cash < COSTS.rigUp} onClick={onStake}>
+            Stake a well here<small>{snap.ops.outcome.ended ? "the company is finished" : !snap.ops.bank.rigOwned ? "the company has no rig" : snap.ops.contract ? "the rig is out on contract" : drilling ? "one rig at a time" : !leased ? "lease the land first" : stakeNote()}</small>
           </button>
         </div>
       </section>
@@ -177,9 +220,11 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
       <h2 id="notes-h">Field notes</h2>
       <p class="sub">Spring 1890. Somewhere under this prairie, perhaps, is oil.</p>
       <div class="goal" data-testid="goal">
-        <p class="goal-head">Bring in a well before the money runs out.</p>
-        <p>You have <b>{dollars(snap.ops.cash)}</b>, one rig and a driller. Every day costs money, and raising a derrick costs {dollars(COSTS.rigUp)}.</p>
-        <p class="goal-next"><b>Next:</b> {nextStep(snap)}</p>
+        <p class="goal-head" data-testid="goal-head">{snap.ops.outcome.ended ? "The company is finished." : snap.ops.outcome.firstOilAt !== null ? "You brought in a producing well." : "Bring in a well before the money runs out."}</p>
+        {snap.ops.outcome.firstOilAt !== null && !snap.ops.outcome.ended && <p>The {snap.ops.outcome.firstOilWell} has sold oil since {formatDate(snap.ops.outcome.firstOilAt)}. What the company becomes now is up to you.</p>}
+        <p>You have <b>{dollars(snap.ops.cash)}</b>{snap.ops.debt > 0 ? <> and owe the bank <b>{dollars(Math.ceil(snap.ops.debt))}</b></> : null}, {snap.ops.bank.rigOwned ? (snap.ops.contract ? "a rig out on contract" : "one rig") : "no rig"} and a driller. Every day of drilling costs {dollars(COSTS.perDay)}, and raising a derrick costs {dollars(COSTS.rigUp)}.</p>
+        <p class="goal-next" data-testid="next"><b>Next:</b> {nextStep({ ops: snap.ops, paths: snap.paths, knowledge: snap.knowledge, formatDate: (t) => formatDate(t), surveyName: (id) => SURVEYS.find((x) => x.id === id)?.name ?? "" })}</p>
+        <div class="acts"><button type="button" class="button button-quiet" data-testid="open-books" onClick={onOpenBooks}>The books and the bank</button></div>
       </div>
       {busy}
       <p class="empty">Print is the county survey anyone can buy. Red is the company's own hand. Blank paper means unknown, not empty.</p>

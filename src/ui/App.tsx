@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { formatClock, formatDate, type GameRuntime, type Snapshot, type Speed } from "../app/runtime";
 import type { Selection } from "../render/plate/map";
+import { Books } from "./Books";
+import { CampaignOver, FirstOil } from "./Outcome";
+import { COSTS } from "../sim";
 import { CampaignMenu } from "./CampaignMenu";
 import { FieldNotes } from "./FieldNotes";
 import { MapFigure, type Tool } from "./MapFigure";
@@ -26,14 +29,61 @@ const SPEEDS: { speed: Speed; label: string; title: string; key: string }[] = [
   { speed: "skip", label: "Skip", title: "Run until something needs you, at most to the start of next month (4)", key: "4" },
 ];
 
+/**
+ * What the rig is doing and what time costs, always in view while a well is going: who is on
+ * the line, the depth, and how many days of rig time the cash will pay for.
+ */
+function RigLine({ runtime, snap, onOpenRig }: { runtime: GameRuntime; snap: Snapshot; onOpenRig: () => void }) {
+  const w = snap.ops.well;
+  const c = snap.ops.contract;
+  if (c) return <p class="rigline" data-testid="rigline">The rig is out on contract until {formatDate(c.until)}.</p>;
+  if (!w || w.status === "gusher" || w.status === "dry") return null;
+  const idle = (w.status === "drilling" && !w.auto && !w.busy && w.idleTicks >= 12) || (w.status === "stuck" && w.idleTicks >= 12);
+  const who = w.status === "rigging" ? (w.auto ? "derrick going up, driller ready" : "derrick going up")
+    : w.status === "stuck" ? "tools stuck"
+    : w.auto ? "driller at work"
+    : idle ? "nobody on the line" : "you have the line";
+  const days = Math.max(0, Math.floor(snap.ops.cash / COSTS.perDay));
+  const handOver = (w.status === "drilling" || w.status === "rigging") && !w.auto;
+  return (
+    <p class={`rigline ${idle ? "rigline-idle" : ""}`} data-testid="rigline">
+      <span class="rigline-text"><b class="rigline-name">{w.name} · </b>{Math.floor(w.depthFt)} ft · {who} · <span data-testid="days-left">{days} {days === 1 ? "day" : "days"} of money</span></span>
+      {handOver ? (
+        <button type="button" class="rigline-act" data-testid="rigline-driller" onClick={() => runtime.command("rig.auto", { on: true })}>Let the driller</button>
+      ) : w.status === "stuck" ? (
+        <button type="button" class="rigline-act" onClick={onOpenRig}>Go to the rig</button>
+      ) : null}
+    </p>
+  );
+}
+
+/** The weekday gives way first when the clock bar is narrow. */
+function dateParts(t: number) {
+  const long = formatDate(t, "long");
+  const i = long.indexOf(", ");
+  return i < 0 ? long : <><span class="weekday">{long.slice(0, i + 2)}</span>{long.slice(i + 2)}</>;
+}
+const usd = (n: number) => "$" + Math.floor(n).toLocaleString("en-US");
+const cashWords = (snap: Snapshot) => `${usd(snap.ops.cash)} in hand${snap.ops.debt > 0 ? `, ${usd(Math.ceil(snap.ops.debt))} owed to the bank` : ""}`;
+
 export function App({ runtime }: { runtime: GameRuntime }) {
   const snap = useSnapshot(runtime);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [booksOpen, setBooksOpen] = useState(false);
+  const openBooks = useCallback(() => setBooksOpen(true), []);
   const [selection, setSelection] = useState<Selection>(null);
   const onSelect = useCallback((s: Selection) => setSelection(s), []);
   const [tool, setTool] = useState<Tool>("select");
   const [rigOpen, setRigOpen] = useState(false);
   const openRig = useCallback(() => setRigOpen(true), []);
+  // Leaving the rig never leaves it standing: whoever was on the line, the driller takes over.
+  const closeRig = useCallback(() => {
+    const w = runtime.snapshot().ops.well;
+    if (w && (w.status === "drilling" || w.status === "rigging") && !w.auto) {
+      if (!runtime.command("rig.auto", { on: true })) runtime.notify(`The driller has the tools while you are away. Rig time runs at $${COSTS.perDay} a day.`);
+    }
+    setRigOpen(false);
+  }, [runtime]);
 
   // Forget a selection that no longer exists (rubbed out, or a different world loaded).
   useEffect(() => {
@@ -43,7 +93,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (menuOpen || rigOpen || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (menuOpen || booksOpen || rigOpen || e.metaKey || e.ctrlKey || e.altKey || document.querySelector("dialog[open]")) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement) {
         if (e.key === " ") return;
       }
@@ -58,7 +108,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [runtime, menuOpen, rigOpen]);
+  }, [runtime, menuOpen, booksOpen, rigOpen]);
 
   const sections = snap.knowledge.interp.sections;
   const line = selection?.kind === "section" ? sections.find((s) => s.id === selection.id) : sections[sections.length - 1];
@@ -80,17 +130,22 @@ export function App({ runtime }: { runtime: GameRuntime }) {
       </div>
 
       <aside class="notes" aria-label="Field notes">
-        <FieldNotes runtime={runtime} snap={snap} selection={selection} onSelect={onSelect} onStake={() => setTool("stake")} onOpenRig={openRig} />
+        <FieldNotes runtime={runtime} snap={snap} selection={selection} onSelect={onSelect} onStake={() => setTool("stake")} onOpenRig={openRig} onOpenBooks={openBooks} />
       </aside>
 
       <footer class="clock">
         <div class="clock-row">
           <div class="when">
-            <span data-testid="date">{formatDate(snap.time, "long")}</span>
+            <span data-testid="date">{dateParts(snap.time)}</span>
             <span class="clock-time" data-testid="clock">{formatClock(snap.time)}</span>
           </div>
+          <button type="button" class="clock-menu clock-books" data-testid="books" aria-label={`The company's books: ${cashWords(snap)}`} onClick={openBooks}>
+            <span class="purse" data-testid="cash">{usd(snap.ops.cash)}</span>
+            {snap.ops.debt > 0 && <span class="owe" data-testid="debt">owes {usd(Math.ceil(snap.ops.debt))}</span>}
+          </button>
           <button type="button" class="clock-menu" onClick={() => setMenuOpen(true)}>Campaign</button>
         </div>
+        <RigLine runtime={runtime} snap={snap} onOpenRig={openRig} />
         <div class="speeds" role="radiogroup" aria-label="Game speed">
           {SPEEDS.map((s) => (
             <button key={s.speed} type="button" role="radio" aria-checked={snap.speed === s.speed} title={s.title} class="speed" data-speed={s.speed} onClick={() => runtime.setSpeed(s.speed)}>
@@ -102,8 +157,11 @@ export function App({ runtime }: { runtime: GameRuntime }) {
       </footer>
 
       <CampaignMenu runtime={runtime} snap={snap} open={menuOpen} onClose={() => setMenuOpen(false)} />
+      <Books runtime={runtime} snap={snap} open={booksOpen} onClose={() => setBooksOpen(false)} />
     </div>
-    {showRig && <RigView runtime={runtime} snap={snap} onClose={() => setRigOpen(false)} />}
+    {showRig && <RigView runtime={runtime} snap={snap} onClose={closeRig} />}
+    <FirstOil runtime={runtime} snap={snap} />
+    <CampaignOver runtime={runtime} snap={snap} />
     </>
   );
 }
