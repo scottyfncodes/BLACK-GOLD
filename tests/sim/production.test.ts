@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CAMPAIGN_START, fromCalendar, gameEngine, MINUTES_PER_DAY, operationsOf, startOfNextMonth, type WorldState } from "../../src/sim";
 import { canonicalJson } from "../../src/sim/core/hash";
 import { recompute } from "../../src/sim/company/ledger";
-import { dayBarrels, HAUL_LIMIT_BBL, HAULING_CENTS, OIL_PRICE_CENTS, type Producer } from "../../src/sim/company/production";
+import { dayBarrels, HAUL_LIMIT_BBL, HAULING_CENTS, oilPriceCents, type Producer } from "../../src/sim/company/production";
 import { creditLimitCents } from "../../src/sim/company/bank";
 import { columnAt, generateGeology, isCharged } from "../../src/sim/geology/truth/model";
 import { SURVEYS, insidePoly } from "../../src/content/geography/surveys";
@@ -75,11 +75,11 @@ describe("production", () => {
 
   it("a producing well raises what the bank will lend", () => {
     const w = strike(oil);
-    const before = creditLimitCents(ops(w).bank, ops(w).production, 40_000);
-    expect(before).toBe(30_000); // three quarters of the rig's $400
+    const before = creditLimitCents(ops(w).bank, ops(w).production, oilPriceCents(w.time));
+    expect(before).toBe(30_000); // a fifth of the rig's $1,500 on the books
     cmd(w, "prod.cap");
     gameEngine.advance(w, w.time + 2 * MINUTES_PER_DAY);
-    expect(creditLimitCents(ops(w).bank, ops(w).production, 40_000)).toBeGreaterThan(before);
+    expect(creditLimitCents(ops(w).bank, ops(w).production, oilPriceCents(w.time))).toBeGreaterThan(before);
   });
 
   it("sells each month in whole cents: oil at the railhead, hauling, one-eighth royalty", () => {
@@ -90,8 +90,9 @@ describe("production", () => {
     expect(sales.length).toBeGreaterThanOrEqual(2);
     for (const sale of sales) {
       const gross = sale.lines.find((l) => l.account === "oilSales")!.cents * -1;
-      expect(gross % OIL_PRICE_CENTS).toBe(0);
-      const bbl = gross / OIL_PRICE_CENTS;
+      const price = oilPriceCents(sale.t - 1);
+      expect(gross % price).toBe(0);
+      const bbl = gross / price;
       const hauling = ops(w).ledger.entries.find((e) => e.t === sale.t && e.memo.startsWith("Hauling"))!;
       expect(hauling.lines.find((l) => l.account === "hauling")!.cents).toBe(bbl * HAULING_CENTS);
       const royalty = ops(w).ledger.entries.find((e) => e.t === sale.t && e.memo.startsWith("Royalty"))!;
@@ -113,7 +114,7 @@ describe("production", () => {
     gameEngine.advance(w, boundary);
     const sale = ops(w).ledger.entries.filter((e) => e.memo.startsWith("Oil sold")).at(-1)!;
     expect(sale.t).toBe(boundary);
-    expect(-sale.lines.find((l) => l.account === "oilSales")!.cents).toBe(expected * OIL_PRICE_CENTS);
+    expect(-sale.lines.find((l) => l.account === "oilSales")!.cents).toBe(expected * oilPriceCents(boundary - 1));
   });
 
   it("gives identical books however time is stepped, including a two-year jump", () => {

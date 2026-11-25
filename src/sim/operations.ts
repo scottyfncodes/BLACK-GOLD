@@ -10,7 +10,8 @@ import type { SampleEvidence } from "./knowledge/types";
 import { cashCents, debtCents, type Ledger } from "./company/ledger";
 import type { LeaseBook } from "./company/leases";
 import type { ProductionBook } from "./company/production";
-import type { BankState } from "./company/bank";
+import { RIG_BOOK, type BankState } from "./company/bank";
+import { oilPriceCents } from "./company/production";
 import type { CasingString } from "./company/casing";
 import { dayRateCents, type Crew } from "./company/crew";
 
@@ -104,8 +105,8 @@ export interface OperationsState {
 }
 
 export const STARTING_CASH = 1500;
-/** The rig and tools the company starts with, carried in the books at this value. */
-export const RIG_VALUE = 400;
+/** The rig and tools the company starts with, carried in the books at this value (see company/bank.ts). */
+export const RIG_VALUE = RIG_BOOK;
 export const COSTS = { rigUp: 350, fishing: 60 } as const;
 
 export interface OperationsView {
@@ -122,6 +123,8 @@ export interface OperationsView {
   crew: Crew;
   /** What a day of rig time costs now: the crew and the driller's wage (dollars). */
   dayRate: number;
+  /** This year's price of a barrel of crude at the railhead (cents). */
+  oilPriceCents: number;
   well: Well | null;
   past: Well[];
 }
@@ -133,7 +136,7 @@ export function accruedCents(o: OperationsState): number {
 
 export function operationsOf(world: Readonly<WorldState>): OperationsView {
   const o = world.systems.operations as unknown as OperationsState;
-  return { cash: (cashCents(o.ledger) - accruedCents(o)) / 100, debt: debtCents(o.ledger) / 100, ledger: o.ledger, leases: o.leases, production: o.production, bank: o.bank, contract: o.contract, outcome: o.outcome, crew: o.crew, dayRate: dayRateCents(o.crew) / 100, well: o.well, past: o.past };
+  return { cash: (cashCents(o.ledger) - accruedCents(o)) / 100, debt: debtCents(o.ledger) / 100, ledger: o.ledger, leases: o.leases, production: o.production, bank: o.bank, contract: o.contract, outcome: o.outcome, crew: o.crew, dayRate: dayRateCents(o.crew) / 100, oilPriceCents: oilPriceCents(world.time), well: o.well, past: o.past };
 }
 
 /** Samples are evidence like any other; they join the knowledge view. */

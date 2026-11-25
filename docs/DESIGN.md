@@ -725,13 +725,117 @@ The full notes, with every figure's source and label, are in [`docs/research/eco
   - Casing may be priced at about half the period figure, but no primary source was found. It stays as it is until one is.
   - A flat 60¢ oil price hides the period's real risk: the price swung by a third or more within a few years.
 
-- **Recommendations** (presented for approval; not yet built):
-  1. **Value the rig historically, without loosening credit.** Raise its book value to about $1,500, and lower the bank's advance against it to about 20%. Credit stays near $300; the balance sheet tells the truth; a used rig sells for about $1,000. A country bank lending a fifth of a used drilling outfit's value is plausible. Selling the rig becomes a real, painful recovery option, and buying one back a real hurdle. Needs a balance pass, because recovery margins depend on it.
-  2. **Let the oil price follow the year.** Use the documented US averages (77¢ in 1890, 56¢ in 1891, 51¢ in 1892, 60¢ in 1893, 72¢ in 1894, $1.09 in 1895), with the railhead discount to be decided. That gives timing, debt and storage decisions real weight, from history rather than invention. It changes the economics of first oil, so it needs its own balance pass.
-  3. **Interest at 10%.** Raise it from 8% to the period's usual ceiling. Small effect, more credible.
-  4. **Hold:** casing prices, wages, salvage fractions, leases, hauling and contract pay. They are consistent or unconfirmed. None changes until a primary source is read.
-  5. **Before any hard number:** read USGS *Mineral Resources* (1890–1895 petroleum chapters), Bulletin 212 and the NBER chapter. That needs the research environment allowed to reach pubs.usgs.gov, nber.org and tshaonline.org.
-  6. **Order of work.** Driven casing through quicksand is the next engineering feature, once 1–3 are decided. The Gladys City holes of 1893 stopped in quicksand at about 300–418 ft. Gas development stays deferred.
+- **Recommendations, as first presented:** value the rig at about $1,500 with a 20% advance; follow the year's oil price; raise interest to 10%; hold everything else until primary sources are read. All approved by the owner, with the rig's value "subject to historical verification".
+
+**Historical economics (approved and built, schema 5)**
+
+- **Verification.** The research environment was given access to the primary sources, which were then read directly. The verified figures are in §0 of the research notes. Of the approved changes:
+  - *Rig at $1,500: supported.* A supply house's prices printed in Whiteshot (1905) put a cable-tool outfit at about $1,130–$1,900 before timber: rig irons $50–275 (a framed rig $600–750), boiler and engine $580–900, tools and cable from $500. The NBER's 1,000-ft Appalachian well of 1886–88 cost $2,119 all in, the rig, engine and boiler at minimum prices.
+  - *Oil by the year: verified* in EIA's annual series (US average first-purchase price).
+  - *Interest at 10%: not verified* against an 1890 Texas source. It is kept as a credible period rate, marked provisional.
+- **Rules (`company/bank.ts`, `company/production.ts`).**
+
+  | | Before | Now | Basis |
+  |---|---|---|---|
+  | Rig on the books | $400 | $1,500 new; $900 if bought used | Whiteshot (1905) prices; used price an estimate |
+  | What a rig fetches when sold (by the company or the bank) | the book value, at foreclosure | $750 | Estimate |
+  | A used rig to buy | $300 | $900 | Estimate |
+  | Bank's advance | 75% of rig and oil | 20% of the rig's book value; 75% of a well's next half-year of net oil | Approved; the oil advance is unchanged |
+  | Credit at the start | $300 | $300 | Preserved |
+  | Interest | 8% | 10% | Provisional |
+  | Crude | 60¢ flat | the year's US average: 77¢ (1890), 56¢, 51¢, 60¢, 72¢, $1.09 (1895), … | EIA, verified |
+  | Pulled casing sold | credited to equipment | credited back to drilling, where it was charged | Book-keeping correction |
+- **Economic integrity: what the higher value would have broken, and how it is closed.**
+  - *Foreclosure as a sale at book value.* The bank used to set the rig's full book value against the loan and pay the surplus to the company. At $1,500, borrowing $300 and defaulting on purpose would have turned the rig into about $1,200 in cash. Now the bank sells it for what a used outfit fetches, $750. The company gets $750 less what it owed, and the other $750 of book value is a loss against capital. Pinned by a test.
+  - *A free rig on credit.* Credit was computed on a constant rig value. Buying a used rig for $300 would immediately have raised $300 of credit against the new $1,500 value. Now credit follows the book value of the rig actually owned: a used rig bought for $900 carries $150 of credit.
+  - *Sell and buy back.* A rig sells for $750 and a replacement costs $900, so no round trip makes money. Pinned by a test.
+  - *Selling while in debt.* The bank is paid first from the price, because the rig is its collateral.
+  - *Foreclosure without a rig.* A company that has sold its rig and then defaults is not stripped of a rig a second time. Pinned by a test.
+  - *Old saves.* The v4 → v5 migration revalues an owned rig by a ledger entry against capital: the opening rig from $400 to $1,500, a rebought used rig from $300 to $900. A sold or seized rig is not revalued. Credit is unchanged.
+- **Selling the rig** is new: a consequential decision, not a source of cash. It is offered in the books only while the rig is idle (not drilling, pulling casing or on contract), and takes a second tap that states the stakes first:
+  - the $750 price against the $1,500 on the books;
+  - the bank paid first;
+  - no drilling or contract work without a rig;
+  - $900 to buy one back.
+
+  A company that sells its last way forward is finished, as with any other bankruptcy.
+- **Starting balance sheet.** $1,500 cash and a $1,500 rig, so capital is $3,000 (was $1,900). Credit is $300, as before.
+- **Measured against production (main at 9242bb4):** a three-year campaign harness over the same 44 seeded worlds, with the game's own recovery paths.
+
+  | Policy | Build | Survived 3 years | Struck oil | Median cash − debt with oil | Median cash − debt without | Debt peak, median / max | Rig lost to the bank |
+  |---|---|---|---|---|---|---|---|
+  | Prudent, hill flank first | production | 4 / 44 | 4 / 44 | $33,521 | −$191 | $300 / $302 | 0 |
+  | | new | 4 / 44 | 4 / 44 | $39,394 | −$191 | $300 / $300 | 0 |
+  | Reckless (borrows the limit, ignores the counsel to quit) | production | 4 / 44 | 4 / 44 | $33,451 | −$251 | $300 / $300 | 0 |
+  | | new | 4 / 44 | 4 / 44 | $39,306 | −$251 | $300 / $300 | 0 |
+  | Prudent, best site first | production | 22 / 44 | 19 / 44 | $27,713 | −$166 | $300 / $300 | 0 |
+  | | new | 22 / 44 | 19 / 44 | $30,333 | −$167 | $251 / $302 | 0 |
+
+  - *Survival, strikes, recovery and debt exposure are unchanged.* Credit is the same $300, and every failed company in these runs ran out of cash, credit and a way forward before two unpaid months could bring a foreclosure.
+  - *Profitability* follows the year's price. A company that struck in 1890 sold at 77¢ (60¢ before), then through the 1891–92 slump at 56¢ and 51¢. Over three years that came to 9–18% more for a company with oil. A strike in 1891 or 1892 would earn less than before. Nothing was tuned to offset either.
+  - *Recovery (PR #5's requirement):* 40 of 40 first wells that failed still reached a second well. Borrowing to the limit first, then failing: 9 of 44 bankrupt. Both are unchanged from PR #7.
+- **Unintended consequences, and the ones accepted on purpose.**
+  - *Losing the rig is now close to final.* After a foreclosure, a company needs $900 for another rig where it needed $300: it must have kept about $450 in hand, against about $200 before. That is historically plausible and kept. Selling equipment was a last resort, not a revolving door.
+  - *The capital figure is larger,* so anything that reports net worth reads higher. The in-game sheets report cash, debt and spending, not net worth.
+  - *Credit from oil* is now worth less in a low-price year, because it is valued at the year's price.
+  - *Not yet modelled:* depreciation of the rig, a Gulf Coast price discount (none documented for these years), storage of oil to wait for a better year (no storage exists yet).
+
+**Driven casing through quicksand (engineering design, for review; not built)**
+
+Evidence (verified; research notes §0): Isler (1902); Hayes & Kennedy, USGS Bulletin 212 (1903); Whiteshot (1905); *Mineral Resources 1889–90*; *Handbook of Texas*.
+- **What history allows.**
+  - Driving is a cable-tool technique, done with the rig's own bull wheel. A rope from the bull wheel lifts and drops a heavy maul or "monkey" onto a drive head screwed to the pipe, "much in the same manner as piles are driven" (Isler).
+  - The bottom joint carries a steel drive shoe with a chisel edge. The pipe is turned "as long as it will move before resorting to driving". Inside the pipe the bit or sand pump clears the sand ahead of the shoe.
+  - In a district whose ground is not well known, "it is much safer to use drive pipe": heavy pipe, in 10, 8, 6 and 4¼-inch sizes (Whiteshot).
+- **What history says goes wrong.**
+  - Friction grows with every foot driven: "perhaps not more than 80 or 100 ft. can be driven without the pipes being injured". Past that, the driller sets a smaller pipe inside, telescope-fashion (Isler).
+  - Joints strip or burst under the blows, "thereby causing utter failure"; an inferior tube "means total collapse of the well" (Isler).
+  - On the Gulf Coast, driving through heavy gravel "entails considerable risk, and often the loss of the well by damage to the casing" (Bulletin 212).
+  - Running sand rises 30–40 ft in the hole at a touch of the tools (Isler), and filled one Sour Lake well's casing 300 ft in a few hours (Bulletin 212). A tube collapsed in quicksand at 400 ft and the well was abandoned (*Mineral Resources*).
+  - The Gladys City company's three shallow cable-tool holes, from 1893, all failed (*Handbook of Texas*).
+- **Proposed mechanic.** A genuine decision with real engineering limits, not a button that removes an obstacle.
+  1. *Running sand in the ground (truth, hidden).* Some sand beds, chiefly the shallow Beaumont and Lissie sands, are "running". A seeded property of the bed, scaled by depth and water, sets how fast it flows into an open hole. It is never shown. It appears only as evidence:
+     - the bailer's reports ("the sand comes in as fast as we bail it: 30 ft in the hour");
+     - fill that returns at once;
+     - tools sanded up.
+  2. *Open hole fails in it.* Drilling makes little or no hole while the sand runs in. Ordinary casing lowered into the hole hangs up above the running sand and cannot be landed through it. Left open, the sand buries the tools: a stuck job, or the hole is lost.
+  3. *Driving pipe* is a casing method: "Drive pipe" instead of "Run casing". It uses one of the three strings (10, 8¼ or 6⅝-inch) and costs more than ordinary casing per foot, plus a drive shoe and drive head. It is worked in rounds:
+     - drive a few feet;
+     - clean out inside;
+     - drive again.
+
+     The driving log shows the feet made per hundred blows. Progress is fast in running sand, slower in gravel and clay. Friction grows with the length driven and with the diameter.
+  4. *Refusal.* When a round makes almost nothing, the pipe has refused. The driller can stop there and continue below with the next smaller pipe (one string fewer for the rest of the well), or pound on.
+  5. *Failures,* each with a seeded, observable cause:
+     - *Parted or stripped joint.* The string still stands, but sand and water come in at the break, so it acts like a shoe seated in sand. It is likelier the longer the pipe is pounded past refusal, and with a poor or hasty crew.
+     - *Collapsed pipe.* The hole is lost (abandon or fish at great cost). Rare, chiefly when the pipe is pounded long past refusal in deep, heavy running sand.
+     - *Sand heaving inside the pipe* when it is bailed too hard: hours lost, a stuck job possible.
+     - *Pipe sand-locked:* driven pipe comes back from a dead hole far less often than run casing.
+  6. *Seal.* Pipe driven through the running sand and into the clay beneath shuts it off for good: hydraulic isolation, as in the existing casing model. Pipe that refused inside the sand only steadies the walls above.
+  7. *The driller (existing traits only; no new traits).*
+     - Feel and judgement: how early he recognises running sand from the bailer, and when he calls refusal.
+     - Reliability: how evenly he drives, which sets the joint-failure risk.
+     - Temperament: the aggressive man pounds past refusal and risks the pipe; the cautious man stops early and spends a string size.
+
+     His advice ("This sand is running: I'd drive pipe through it", "She's refused: I'd stop and go down inside with the next size") follows the existing advice rules. It comes from observation only, and declined advice is remembered.
+  8. *Consequences downhole.* Every string spent on quicksand is one fewer for the water sands below. The smaller hole leaves less room to fish. Where a shoe was driven to clay or stopped in sand decides whether the pay comes in wet.
+- **Data and saves.**
+  - A string gains how it was set (run or driven), its driven length and any damage.
+  - The hole gains its driving log.
+  - Running-sand strength is a pure function of the seed in `hidden/`, never saved.
+  - A schema-6 migration marks existing strings "run".
+- **Stages (each with tests and green checks):**
+  1. running sand in truth and its evidence;
+  2. the drive operation, friction, refusal and failures;
+  3. the driller's judgement and advice;
+  4. the UI (driving log in the casing sheet, driven pipe and shoe in the cutaway, mobile);
+  5. a balance harness on quicksand ground, by driller and policy, across cost, days, strings spent, failures, wet wells and wells lost;
+  6. documentation.
+- **Open questions for the owner.**
+  1. *Drive-pipe price:* no primary figure was found. Proposed: about 1.6 times ordinary pipe per foot, provisional.
+  2. *Drive head and shoe:* a one-time purchase (proposed: shoe per string, head bought once), or folded into the pipe price.
+  3. *Collapse:* should it always lose the hole, or allow a very costly fishing attempt?
+  4. *Difficulty target:* thick quicksand (over about 100 ft) should usually cost two string sizes and sometimes the hole, as the Gladys City record suggests. Is that the difficulty you want?
 
 ## 9. Open decisions
 
@@ -746,3 +850,5 @@ Decisions taken so far are marked. Where a decision is still open, its default i
 7. **Bankruptcy:** *Decided:* a legitimate failure condition. The game shows the way back when one exists and ends the campaign plainly when none does; it never guarantees recovery.
 8. **First oil:** *Decided:* the first producing well marks the beginning of company growth, not final victory. It stays the current milestone; later phases build the company's growth on top of it.
 9. **Next priority:** *Decided:* casing mechanics and hired-driller intelligence. Approved with the refinements recorded under "Casing and hired drillers (approved design)" in §8.
+10. **Historical economics:** *Decided:* rig at $1,500 (verified against period supply-house prices), a 20% advance on it, 10% interest, and the year's documented crude price. Book value, resale value and replacement price are kept apart so the rig is never a cheap source of cash. Casing, wages and other figures wait for better evidence.
+11. **Next engineering feature:** driven casing through quicksand, designed for review in §8. Gas development remains deferred.

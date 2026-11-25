@@ -9,10 +9,29 @@
  * Gas has no market in 1890: a gas well cannot be capped for sale. Imports no truth; the system
  * that owns this state supplies each well's capacity from the ground.
  */
-import type { GameTime } from "../core/time";
+import { toCalendar, type GameTime } from "../core/time";
 
-/** Railhead price and wagon hauling, per barrel, in cents. */
-export const OIL_PRICE_CENTS = 60;
+/**
+ * Crude oil, cents per 42-gallon barrel, by calendar year: the US average first-purchase price
+ * (US Energy Information Administration, series F000000__3, annual; verified November 2026).
+ * The company is paid the year's price at the railhead. Before the first year and after the
+ * last, the nearest year's price holds. A Gulf Coast discount is not applied: none is
+ * documented for these years (Corsicana's 50¢ contract of 1897–98 is the nearest evidence).
+ */
+export const OIL_PRICES: Readonly<Record<number, number>> = {
+  1890: 77, 1891: 56, 1892: 51, 1893: 60, 1894: 72, 1895: 109, 1896: 96, 1897: 68, 1898: 80, 1899: 113,
+  1900: 119, 1901: 96, 1902: 80, 1903: 94, 1904: 86, 1905: 62,
+};
+const PRICE_YEARS = Object.keys(OIL_PRICES).map(Number);
+const FIRST_PRICE_YEAR = Math.min(...PRICE_YEARS), LAST_PRICE_YEAR = Math.max(...PRICE_YEARS);
+
+/** The price of a barrel at the railhead at time `t` (cents). */
+export function oilPriceCents(t: GameTime): number {
+  const y = Math.min(LAST_PRICE_YEAR, Math.max(FIRST_PRICE_YEAR, toCalendar(Math.max(0, t)).year));
+  return OIL_PRICES[y]!;
+}
+
+/** Wagon hauling to the railhead, per barrel, in cents (provisional). */
 export const HAULING_CENTS = 20;
 /** What the teamsters can carry from one well in a day (bbl). */
 export const HAUL_LIMIT_BBL = 150;

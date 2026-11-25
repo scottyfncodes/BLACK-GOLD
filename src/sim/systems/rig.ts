@@ -21,8 +21,8 @@ import { cashCents, debtCents, dollarsToCents, emptyLedger, pay, post, receive }
 import { rngKey, rngUnit } from "../core/rng";
 import { activeLease, askingTerms, emptyLeaseBook, ownerAccepts, REFUSAL_DAYS, surveyById, termEnd, type PublicNews } from "../company/leases";
 import { printedMap } from "../surface/print";
-import { CAP_COST, dayBarrels, emptyProductionBook, HAULING_CENTS, OIL_PRICE_CENTS } from "../company/production";
-import { ACCRUAL_UNITS, RATE_PERCENT, BORROW_STEP_CENTS, creditLimitCents, dayAccrual, emptyBank, STRIKES_TO_FORECLOSE, USED_RIG_PRICE } from "../company/bank";
+import { CAP_COST, dayBarrels, emptyProductionBook, HAULING_CENTS, oilPriceCents } from "../company/production";
+import { ACCRUAL_UNITS, RATE_PERCENT, BORROW_STEP_CENTS, creditLimitCents, dayAccrual, emptyBank, RIG_RESALE, STRIKES_TO_FORECLOSE, USED_RIG_PRICE } from "../company/bank";
 import { CONTRACT_DAYS, CONTRACT_PAY, CONTRACT_WAGES, contractOffered, recoveryPaths, type Position } from "../company/recovery";
 import { candidatesFor, dayRateCents, emptyCrew, emptyRecord, type Driller, type DrillerRecord } from "../company/crew";
 import { abilityOf } from "../hidden/drillers";
@@ -162,7 +162,7 @@ function note(ctx: Ctx, wellId: string, kind: DrillerNote["kind"], text: string)
 }
 
 /** What the driller can see of this hole and the purse: never the ground below the bit. */
-function observe(st: OperationsState, w: Well): Observations {
+function observe(st: OperationsState, w: Well, now: number): Observations {
   const own = st.samples.filter((s) => s.wellId === w.id);
   const last = own[own.length - 1];
   const lastWater = w.waterFt[w.waterFt.length - 1];
@@ -182,7 +182,7 @@ function observe(st: OperationsState, w: Well): Observations {
     cashCents: available(st),
     dayCents: dayRateCents(st.crew),
     fishingCents: dollarsToCents(COSTS.fishing),
-    creditRoomCents: Math.max(0, creditLimitCents(st.bank, st.production, dollarsToCents(RIG_VALUE)) - debtCents(st.ledger)),
+    creditRoomCents: Math.max(0, creditLimitCents(st.bank, st.production, oilPriceCents(now)) - debtCents(st.ledger)),
     wellSpentCents: wellSpent(st, w),
     lastShow: lastShow(own),
   };
@@ -250,7 +250,7 @@ function consult(ctx: Ctx, w: Well): void {
   if (!w.auto || w.busy || (status !== "drilling" && status !== "stuck")) return;
   const a = abilityOf(ctx.seed, crew.driller.id);
   const bucket = Math.floor(w.depthFt / 25);
-  const advice = assess(observe(st, w), a, crew.driller.temperament, rngUnit(ctx.seed, "judge", w.id, bucket), rngUnit(ctx.seed, "judge2", w.id, bucket));
+  const advice = assess(observe(st, w, ctx.now), a, crew.driller.temperament, rngUnit(ctx.seed, "judge", w.id, bucket), rngUnit(ctx.seed, "judge2", w.id, bucket));
   if (!advice) return;
   if (stillDeclined(crew.declined[advice.kind], circumstances(st, w), advice.kind)) return;
   // Trusted to judge: act within this month's budget, never below the recovery reserve.
@@ -462,8 +462,8 @@ export function positionOf(st: OperationsState, seed: string, now: number): Posi
   const active = !!w && (w.status === "rigging" || w.status === "drilling" || w.status === "stuck");
   return {
     cashCents: available(st),
-    creditRoomCents: Math.max(0, creditLimitCents(st.bank, st.production, dollarsToCents(RIG_VALUE)) - debt),
-    creditRoomWithRigCents: Math.max(0, creditLimitCents({ ...st.bank, rigOwned: true }, st.production, dollarsToCents(RIG_VALUE)) - debt),
+    creditRoomCents: Math.max(0, creditLimitCents(st.bank, st.production, oilPriceCents(now)) - debt),
+    creditRoomWithRigCents: Math.max(0, creditLimitCents({ ...st.bank, rigOwned: true, rigBookCents: dollarsToCents(USED_RIG_PRICE) }, st.production, oilPriceCents(now)) - debt),
     rigOwned: st.bank.rigOwned,
     producers: st.production.producers.length,
     wellActive: active,
@@ -518,7 +518,24 @@ function settleBank(ctx: Ctx, month: string, oilNetCents: number): void {
   else ctx.emit({ type: "company.notice", severity: "warning", interrupt: true, data: { message: `The bank warns: ${month}'s interest went unpaid. Another month unpaid and it will foreclose on the rig.` } });
 }
 
-/** The bank takes the rig. The company keeps its land and wells; the way back stays open. */
+/**
+ * The rig leaves the company, sold for what a used outfit fetches in Beaumont. `toLoanCents` of
+ * the proceeds go to the bank first, the rest to cash, and the part of its book value the sale
+ * does not recover is a loss against the company's capital.
+ */
+function disposeOfRig(st: OperationsState, t: number, category: "bank" | "equipment", memo: string, toLoanCents: number): void {
+  const book = st.bank.rigBookCents, proceeds = dollarsToCents(RIG_RESALE);
+  const lines: { account: "loan" | "cash" | "equipment" | "equity"; cents: number }[] = [];
+  if (toLoanCents > 0) lines.push({ account: "loan", cents: toLoanCents });
+  if (proceeds - toLoanCents !== 0) lines.push({ account: "cash", cents: proceeds - toLoanCents });
+  lines.push({ account: "equipment", cents: -book });
+  if (book - proceeds !== 0) lines.push({ account: "equity", cents: book - proceeds });
+  post(st.ledger, t, category, memo, lines);
+  st.bank.rigOwned = false;
+  st.bank.rigBookCents = 0;
+}
+
+/** The bank takes the rig and sells it. The company keeps its land and wells; the way back stays open. */
 function foreclose(ctx: Ctx): void {
   const st = S(ctx);
   const w = st.well;
@@ -526,18 +543,16 @@ function foreclose(ctx: Ctx): void {
     flushRigTime(ctx, ctx.now);
     finish(ctx, w, "dry", `The bank has seized the rig. The ${w.name} is abandoned at ${Math.round(w.depthFt)} ft.`);
   }
-  const rig = dollarsToCents(RIG_VALUE), debt = debtCents(st.ledger);
-  const credited = Math.min(rig, debt);
-  // The rig leaves the books; its value is set against the loan, any surplus paid to the company.
-  post(st.ledger, ctx.now, "bank", "Rig seized by the bank and set against the loan", [
-    { account: "loan", cents: credited },
-    { account: "cash", cents: rig - credited },
-    { account: "equipment", cents: -rig },
-  ]);
-  st.bank.rigOwned = false;
+  // The bank sells the rig for what a used outfit fetches; the proceeds go against the loan,
+  // any surplus to the company, and the rest of its book value is lost.
+  const owed = debtCents(st.ledger);
+  const hadRig = st.bank.rigOwned;
+  if (hadRig) disposeOfRig(st, ctx.now, "bank", `Rig seized by the bank and sold for $${RIG_RESALE}`, Math.min(dollarsToCents(RIG_RESALE), owed));
   st.bank.strikes = 0;
   st.bank.lien = debtCents(st.ledger) > 0;
-  ctx.emit({ type: "company.notice", severity: "critical", interrupt: true, data: { message: st.bank.lien ? "The bank has foreclosed and taken the rig. It will take oil revenue until the loan is clear. Your land is still yours." : "The bank has foreclosed and taken the rig; the loan is clear. Your land is still yours." } });
+  const surplus = hadRig ? Math.max(0, dollarsToCents(RIG_RESALE) - owed) : 0;
+  const sold = hadRig ? `The bank has foreclosed, taken the rig and sold it for $${RIG_RESALE}. ` : "The bank has foreclosed. ";
+  ctx.emit({ type: "company.notice", severity: "critical", interrupt: true, data: { message: sold + (st.bank.lien ? "It will take oil revenue until the loan is clear. Your land is still yours." : `The loan is clear${surplus > 0 ? `, and $${(surplus / 100).toFixed(2)} left over was paid to the company` : ""}. Your land is still yours.`) } });
 }
 
 /**
@@ -560,7 +575,7 @@ function guard(ctx: Ctx, w: Well, before: number): void {
   const days = available(st) / dayRateCents(st.crew);
   if (!w.lowFundsWarned && status !== "rigging" && days < LOW_FUNDS_DAYS) {
     w.lowFundsWarned = true;
-    const room = creditLimitCents(st.bank, st.production, dollarsToCents(RIG_VALUE)) - debtCents(st.ledger);
+    const room = creditLimitCents(st.bank, st.production, oilPriceCents(ctx.now)) - debtCents(st.ledger);
     report(ctx, "lowfunds", room >= BORROW_STEP_CENTS
       ? `Money for less than ${LOW_FUNDS_DAYS} more days of rig time. Borrow from the bank to keep drilling, or plan to stop.`
       : `Money for less than ${LOW_FUNDS_DAYS} more days of rig time, and the bank will lend no more. Decide whether to stop.`, true);
@@ -591,7 +606,7 @@ function settleMonth(ctx: Ctx, dayOf: number): void {
     const bbl = p.monthBbl;
     p.monthBbl = 0;
     if (bbl <= 0) continue;
-    const gross = bbl * OIL_PRICE_CENTS;
+    const gross = bbl * oilPriceCents(dayOf);
     const ref = { wellId: p.wellId, surveyId: p.surveyId };
     receive(st.ledger, ctx.now, "production", `Oil sold at Beaumont, ${month}: ${bbl.toLocaleString("en-US")} bbl from the ${p.name}`, "oilSales", gross, ref);
     pay(st.ledger, ctx.now, "production", `Hauling to the railhead, ${month}: ${bbl.toLocaleString("en-US")} bbl`, "hauling", bbl * HAULING_CENTS, ref);
@@ -688,7 +703,8 @@ export const rig: System<Json> = {
         s.pulled = true;
       }
       w.pullingUntil = null;
-      if (cents > 0) receive(st.ledger, ctx.now, "equipment", `Casing pulled from the ${w.name}, sold`, "equipment", cents, { wellId: w.id, surveyId: w.surveyId });
+      // Casing was charged to drilling when it was run; what the pulled pipe fetches comes back there.
+      if (cents > 0) receive(st.ledger, ctx.now, "equipment", `Casing pulled from the ${w.name}, sold`, "drilling", cents, { wellId: w.id, surveyId: w.surveyId });
       ctx.emit({ type: "company.notice", severity: "notice", interrupt: true, data: { message: `The casing is out of the ${w.name} and sold for $${(cents / 100).toFixed(2)}. The rig is free.` } });
     },
     "lease.term"(ctx, payload) {
@@ -791,7 +807,7 @@ export const rig: System<Json> = {
       const cents = (c.payload as { cents?: unknown })?.cents;
       if (typeof cents !== "number" || !Number.isSafeInteger(cents) || cents <= 0 || cents % BORROW_STEP_CENTS !== 0) throw new CommandRejected("Borrow in steps of $50.");
       if (st.bank.lien) throw new CommandRejected("The bank will lend nothing more until the old loan is cleared.");
-      const room = creditLimitCents(st.bank, st.production, dollarsToCents(RIG_VALUE)) - debtCents(st.ledger);
+      const room = creditLimitCents(st.bank, st.production, oilPriceCents(ctx.now)) - debtCents(st.ledger);
       if (cents > room) throw new CommandRejected(room > 0 ? `The bank will lend up to $${room / 100} more.` : "The bank will lend nothing more on what the company owns.");
       receive(st.ledger, ctx.now, "bank", `Loan from the First National Bank of Beaumont`, "loan", cents);
       notice(ctx, `Borrowed $${cents / 100} at ${RATE_PERCENT}% a year. Interest is due at each month's end.`);
@@ -812,7 +828,22 @@ export const rig: System<Json> = {
       if (available(st) < dollarsToCents(USED_RIG_PRICE)) throw new CommandRejected(`A used rig costs $${USED_RIG_PRICE}.`);
       pay(st.ledger, ctx.now, "equipment", "Used cable-tool rig and tools, bought", "equipment", dollarsToCents(USED_RIG_PRICE));
       st.bank.rigOwned = true;
+      st.bank.rigBookCents = dollarsToCents(USED_RIG_PRICE);
       notice(ctx, "The company owns a rig again.");
+    },
+    "company.sellRig"(ctx) {
+      const st = S(ctx);
+      if (!st.bank.rigOwned) throw new CommandRejected("The company owns no rig to sell.");
+      if (st.contract) throw new CommandRejected("The rig is out on contract. It can be sold when it is back.");
+      const w = st.well;
+      if (w && (w.status === "rigging" || w.status === "drilling" || w.status === "stuck")) throw new CommandRejected(`The rig is at work on the ${w.name}. Finish or abandon the hole first.`);
+      if (w?.pullingUntil) throw new CommandRejected("The rig is pulling casing. It can be sold when that is done.");
+      const toLoan = Math.min(dollarsToCents(RIG_RESALE), debtCents(st.ledger));
+      const book = st.bank.rigBookCents;
+      disposeOfRig(st, ctx.now, "equipment", `Rig and tools sold in Beaumont for $${RIG_RESALE}`, toLoan);
+      if (debtCents(st.ledger) === 0) { st.bank.lien = false; st.bank.strikes = 0; }
+      notice(ctx, `The rig and tools are sold for $${RIG_RESALE} (on the books at $${book / 100}).${toLoan > 0 ? ` $${(toLoan / 100).toFixed(2)} went to the bank first.` : ""} A used rig costs $${USED_RIG_PRICE} to buy back.`);
+      review(ctx);
     },
     "company.contract"(ctx) {
       const st = S(ctx);
