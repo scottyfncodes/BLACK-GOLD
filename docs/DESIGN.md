@@ -637,11 +637,11 @@ Approved for implementation after the casing and driller proposal. The two syste
   - Asking stops the clock. A declined recommendation is remembered until the hole is 100 ft deeper, has 50 ft more open sand, a new string, or a new stuck. Unanswered advice lapses after an hour of play.
   - Under "Use his judgement" he acts within a calendar-month budget, counted cumulatively, never leaving less than the recovery reserve (contract wages plus three days of rig time), and never plugs a hole without asking.
   - **Counsel to quit** (`moneyConcern()`). He speaks in two situations, both read only from the books, the depth and the bailer:
-    - *Running short:* the money and credit left would buy only a few weeks of rig time, too little to start another hole. The cautious man speaks at about 30 days, the economical at 24, the methodical at 16, the aggressive at 5. Hidden prudence scales those (0.3 to 1.2 times).
+    - *Running short:* the cash in hand would buy only a few weeks of rig time, too little to start another hole. Unborrowed credit does not count, because the rig stops when cash runs out; his words name the credit separately ("and $300 more only if you borrow"). The cautious man speaks at about 30 days, the economical at 24, the methodical at 16, the aggressive at 5. Hidden prudence scales those (0.3 to 1.2 times).
     - *A long dry run:* 800 to 1,100 ft without a show (scaled by prudence; never for the aggressive man), once the hole has eaten most of the company's money.
     - A show of oil or gas within 150 ft of the bottom is reason to keep on, and he will not counsel quitting then. Sulphur water is not.
     - His words name what the hole has cost, the depth, the last show, and the money and days left. They never mention anything below the bit.
-    - Declined, he does not raise it again until the hole is 300 ft deeper or the money has fallen by a third.
+    - Declined, he does not raise it again until the hole is 300 ft deeper or the cash in hand has fallen by a third.
     - Accepting it plugs the hole at once, and the rig is free. Every value here is provisional.
 - **Interface.**
   - The rig's casing gauge opens the casing sheet. The cutaway draws each string at its own diameter, and a shoe seen to leak is marked in carmine.
@@ -663,27 +663,75 @@ Approved for implementation after the casing and driller proposal. The two syste
   - Trusting the driller's judgement with a $300 monthly budget reproduced accepting every recommendation exactly, without the interruptions.
   - **Recovery (PR #5's requirement):** all 38 first wells that ran out of money at the hill flank reached a second well (median one month, one contract).
   - Borrowing to the limit first, then failing: 12 of 44 companies went bankrupt. That is fewer than before this phase, because pipe left in a dead hole can be pulled and sold.
-- **Counsel to quit, measured** (the same harness; "followed" accepts every recommendation, "declined" refuses only the counsel to quit):
+- **Counsel to quit, measured** (the same harness; each world drills one first well; "followed" accepts every recommendation, "declined" refuses only the counsel to quit; after the cash-in-hand correction below):
 
-  | Hill flank (poor ground) | Plugged on his advice | Money ran out | Cash left after a dry hole | Oil |
+  | Hill flank (poor ground, 27 first wells) | Plugged on his advice | Money ran out | Cash left after a dry hole | Oil |
   |---|---|---|---|---|
-  | Best candidate, followed / declined | 8 / 0 | 10 / 16 | $99 / $51 | 2 / 2 |
-  | Starting driller, followed / declined | 3 / 0 | 5 / 7 | $137 / $118 | 2 / 2 |
-  | Worst candidate, followed / declined | 3 / 0 | 5 / 6 | $125 / $118 | 2 / 2 |
+  | Best candidate, followed / declined | 22 / 0 | 0 / 13 | $182 / $64 | 1 / 2 |
+  | Starting driller, followed / declined | 20 / 0 | 0 / 6 | $195 / $121 | 2 / 2 |
+  | Worst candidate, followed / declined | 19 / 0 | 0 / 6 | $189 / $126 | 2 / 2 |
 
-  | Best site (good ground) | Plugged on his advice | Oil | Cash left after a dry hole |
+  | Best site (good ground, 29 first wells) | Plugged on his advice | Oil | Cash left after a dry hole |
   |---|---|---|---|
-  | Best candidate, followed / declined | 4 / 0 | 45% / 52% | $309 / $330 |
-  | Starting driller, followed / declined | 2 / 0 | 38% / 38% | $290 / $298 |
-  | Worst candidate, followed / declined | 3 / 0 | 31% / 34% | $322 / $304 |
+  | Best candidate, followed / declined | 7 / 0 | 41% / 52% | $316 / $330 |
+  | Starting driller, followed / declined | 5 / 0 | 38% / 38% | $301 / $298 |
+  | Worst candidate, followed / declined | 6 / 0 | 28% / 34% | $315 / $304 |
 
-  - On poor ground his counsel keeps capital: fewer companies drill to the last dollar, and they leave a dry hole with more money.
-  - On good ground it has a price: the best candidate (who happens to be prudent in many worlds) plugged two holes that would have come in. Advice from observation alone cannot know which holes those are, and that is intended. Quitting is a real decision with a real cost, not a hint.
-  - The plug counts differ by driller, because prudence is independent of skill.
+  - On poor ground his counsel keeps capital: no first well is drilled to the last dollar, and a dry hole leaves 50% to 185% more cash.
+  - On good ground it has a price: up to three holes in 29 that would have come in are plugged. Advice from observation alone cannot know which holes those are, and that is intended. Quitting is a real decision with a real cost, not a hint. His words now say how much credit is left, so a player who believes in the hole can borrow and drill on.
+  - How much is left when he speaks differs by driller and temperament, because prudence is independent of skill: an aggressive, imprudent man speaks with two or three days of rig time in hand, a cautious, prudent one with a month.
   - An earlier tuning, triggered by the share of capital the hole had eaten, plugged 19 of 29 best sites and cut the best candidate's oil from 52% to 10%. It was rejected.
-  - **Recovery with the counsel followed:** 40 of 40 companies whose first well failed reached a second well (median one month, one contract). Borrowing to the limit first, then failing: 9 of 44 went bankrupt.
+  - **Recovery with the counsel followed:** 40 of 40 companies whose first well failed reached a second well (median one month, one contract), and 16 of them could start it at once (7 before the correction). Borrowing to the limit first, then failing: 9 of 44 went bankrupt.
+- **Investigation: "$99 vs $51 kept, but 10 vs 16 wells drilled"** (owner's question after PR #6).
+  - *The reading.* The 10 and 16 were not wells drilled. Each world drills one first well; they count how many of the 27 first wells ended because the money ran out. Following his counsel, fewer ran dry (10 against 16), and those that were plugged kept cash. On that reading the two figures agree.
+  - *The flaw the question exposed.* A per-world breakdown showed that in all 10 wells that still ran dry, he had never spoken. Several of those men were fairly prudent (a methodical driller at prudence 0.67, an economical one at 0.59).
+  - *Cause.* He measured the money left as cash plus unborrowed credit ($300 at the start). The rig stops when cash alone cannot pay the day: credit is drawn only when the owner borrows. The $300 always looked like 25 more days, so he never judged the company short, right up to the day the well was abandoned.
+  - *Correction.* He now judges by cash in hand, and names the credit separately. Neither his thresholds nor any personality changed. Pinned by a unit test (little cash and unused credit: a fairly prudent methodical man speaks).
+  - *Not changed.* Imprudent and aggressive men still speak late, with two or three days in hand. That is the intended consequence of financial recklessness, and it still costs those companies.
 - **Open findings from this phase.**
-  - Gas still ends a well, at 9 of 29 best sites. Gas development stays deferred, as do historical price research and driven casing through quicksand.
+  - Gas still ends a well, at 9 of 29 best sites. Gas development stays deferred. Driven casing through quicksand is the next engineering feature, after the economic foundation (§8, "Historical economics").
+
+**Historical economics (research, November 2026)**
+
+The full notes, with every figure's source and label, are in [`docs/research/economics-1885-1905.md`](research/economics-1885-1905.md). Labels:
+- **Documented:** a source states it.
+- **Unverified:** recalled, not yet confirmed in a source.
+- **Estimate:** derived, with the method shown.
+
+*Limit of this research.* The primary volumes could not be read directly from the research environment. Those are USGS *Mineral Resources of the United States* 1890–1902, Hayes & Kennedy, USGS Bulletin 212 (1903), the NBER petroleum chapter (Williamson, Andreano & Menezes, 1966) and the *Handbook of Texas*. The "documented" figures come from those sources' text as quoted by search engines. Read the volumes before any figure becomes a hard number in the game.
+
+- **What the period says, against the game:**
+
+  | Item | Period evidence | Label | The game now | Verdict |
+  |---|---|---|---|---|
+  | Drilling by contract, per foot | $1.00 (1877–78), $0.60 (1886–88), $0.45 (1897–98), western Pennsylvania; $0.90–$1.00 "moderate depth", c. 1900–10 | Documented (NBER; *Britannica* 1911) | Own rig: derrick $350 plus about $160 of rig time for about 1,000 ft, so about $0.50/ft before casing | Consistent |
+  | A whole well, about 1,000 ft | About $1,500–$3,000 (a 1,600-ft Bradford well cost $3,434 in the early 1880s) | Estimate, from a documented anchor | About $850–$900 with casing, rig already owned | Low, but the rig is already paid for. Gulf Coast holes probably cost more per foot than Pennsylvania (quicksand, gas). |
+  | Driller and tool dresser | About $3–4 and $2.50–3 a 12-hour tour; Texas common labour about $1 a day | Unverified; Texas labour documented, undated | $12 a day: crew $9 plus driller $3 | Plausible for one tour with fuel and water; unconfirmed |
+  | A standard rig, new | About $1,500–$2,500 (engine and boiler, derrick, irons, tools, cable). A Drake-era engine cost $500 in 1858. | Estimate, low confidence | Rig valued at $400; used rig $300 | **Undervalued, perhaps four to six times** |
+  | Casing, per foot | 6⅝-inch about $0.40–0.60, 8¼-inch about $0.75–1.00, 10-inch about $1.00–1.40. Carload freight alone was 20¢ a foot in Kansas. | Estimate scaled by weight, low confidence. Freight documented, undated. | 22¢, 35¢, 50¢ | Possibly half the period price; no primary figure found |
+  | Pulled casing | Routine; recovered value unsourced | Practice documented; value an estimate | 50% sealed, 30% in sand | Keep |
+  | Royalty | One-eighth, the usual rate | Documented (Pa. 1894; Texas courts) | One-eighth | Matches |
+  | Land and leases near Beaumont | Land asked at $6 an acre at Spindletop in the early 1890s; $200 for 15 acres; $1 an acre for a large tract. Lease bonus or rental 10¢–$1 an acre. | Land documented (secondary); lease terms unverified | Bonus about 40¢ an acre ($110–$340 for 280–800 acres); rental about 7¢ an acre a year | Consistent |
+  | Crude, per barrel | US average: 77¢ (1890), 56¢ (1891), 51¢ (1892), 60¢ (1893), 72¢ (1894), $1.09 (1895). Corsicana 50¢ (1897–98), 98¢–$1.10 (1899–1900). Lima 15¢–72½¢. Spindletop's 1901 glut fell to a few cents. | Documented (EIA series; *Handbook of Texas*) | 60¢ at the railhead, flat | Within the range. The real price moved by a third or more from year to year. |
+  | Hauling and gathering | About 20¢ a barrel pipeline gathering; wooden barrels about $1–1.50 | Unverified; barrel an estimate | 20¢ hauling | Plausible |
+  | Contract income | Contractors earned $0.45–$0.60 a foot around 1890; a shallow Gulf Coast hole took 30–60 days | Documented rates; days an estimate | $400 for 30 days' work, $150 wages | Consistent, slightly generous |
+  | Interest | Texas usury ceiling about 10–12% in the 1890s; high-interest lending widespread | Ceiling unverified; practice documented | 8% a year | Somewhat low |
+  | Company capital | Gladys City Oil, Gas & Manufacturing Co. incorporated 1892, its capital not found. Lucas's first hole stopped at 575 ft when the money ran out. | Documented / not found | $1,500 cash and a rig | Consistent with small, fragile ventures |
+  | Production | Corsicana: 22 bbl a day from one well (1896); 544,620 bbl from 342 wells (1898) | Documented | Up to 150 bbl a day a well, limited by hauling | Generous for the 1890s Gulf Coast, before Spindletop |
+
+- **Conclusions.**
+  - The game's running economy (cost per foot, wages, royalty, leases, oil price, contract work) is within the period's range. It is credible as it stands.
+  - The rig is the clear outlier. It is the company's main asset, valued at $400 where the period suggests well over $1,000. That figure also sets the company's credit: 75% of the rig, $300.
+  - Casing may be priced at about half the period figure, but no primary source was found. It stays as it is until one is.
+  - A flat 60¢ oil price hides the period's real risk: the price swung by a third or more within a few years.
+
+- **Recommendations** (presented for approval; not yet built):
+  1. **Value the rig historically, without loosening credit.** Raise its book value to about $1,500, and lower the bank's advance against it to about 20%. Credit stays near $300; the balance sheet tells the truth; a used rig sells for about $1,000. A country bank lending a fifth of a used drilling outfit's value is plausible. Selling the rig becomes a real, painful recovery option, and buying one back a real hurdle. Needs a balance pass, because recovery margins depend on it.
+  2. **Let the oil price follow the year.** Use the documented US averages (77¢ in 1890, 56¢ in 1891, 51¢ in 1892, 60¢ in 1893, 72¢ in 1894, $1.09 in 1895), with the railhead discount to be decided. That gives timing, debt and storage decisions real weight, from history rather than invention. It changes the economics of first oil, so it needs its own balance pass.
+  3. **Interest at 10%.** Raise it from 8% to the period's usual ceiling. Small effect, more credible.
+  4. **Hold:** casing prices, wages, salvage fractions, leases, hauling and contract pay. They are consistent or unconfirmed. None changes until a primary source is read.
+  5. **Before any hard number:** read USGS *Mineral Resources* (1890–1895 petroleum chapters), Bulletin 212 and the NBER chapter. That needs the research environment allowed to reach pubs.usgs.gov, nber.org and tshaonline.org.
+  6. **Order of work.** Driven casing through quicksand is the next engineering feature, once 1–3 are decided. The Gladys City holes of 1893 stopped in quicksand at about 300–418 ft. Gas development stays deferred.
 
 ## 9. Open decisions
 

@@ -209,7 +209,8 @@ function lastShow(own: readonly SampleEvidence[]): Observations["lastShow"] {
 
 /** The circumstances a recommendation was made in, to tell when they have materially changed. */
 function circumstances(st: OperationsState, w: Well): DeclineMemo {
-  const capital = available(st) + Math.max(0, creditLimitCents(st.bank, st.production, dollarsToCents(RIG_VALUE)) - debtCents(st.ledger));
+  // Cash in hand, as he judges it: credit counts only once it is borrowed.
+  const capital = available(st);
   return { depthFt: w.depthFt, openSandFt: w.openSandFt, strings: w.strings.length, stuckCount: w.fishCount + (w.status === "stuck" ? 1 : 0), capitalCents: capital };
 }
 
@@ -217,7 +218,7 @@ function circumstances(st: OperationsState, w: Well): DeclineMemo {
 function stillDeclined(m: DeclineMemo | undefined, now: DeclineMemo, kind: Advice["kind"]): boolean {
   if (!m) return false;
   if (kind === "case") return m.strings === now.strings && now.depthFt < m.depthFt + 100 && now.openSandFt < m.openSandFt + 50;
-  // Told once to drill on, he raises money again only when it has fallen by a third, or the hole is 300 ft deeper.
+  // Told once to drill on, he raises money again only when the cash in hand has fallen by a third, or the hole is 300 ft deeper.
   if (kind === "quit") return now.depthFt < m.depthFt + 300 && (now.capitalCents ?? 0) > (m.capitalCents ?? 0) * (2 / 3);
   return m.stuckCount === now.stuckCount && m.strings === now.strings;
 }
