@@ -99,7 +99,7 @@ export function v3ToV4(input: Record<string, unknown>): Record<string, unknown> 
     if (!w) continue;
     if (!("strings" in w)) {
       const cased = typeof w.casedFt === "number" ? w.casedFt : 0;
-      w.strings = cased > 0 ? [{ size: 0, seatFt: cased, costCents: 0, setAt: world.time, seatCall: null, observed: "dry", pulled: false }] : [];
+      w.strings = cased > 0 ? [{ size: 0, seatFt: Math.round(cased), costCents: 0, setAt: world.time, seatCall: null, observed: "dry", pulled: false }] : [];
     }
     if (!("leakFt" in w)) w.leakFt = 0;
     if (!("waterFt" in w)) w.waterFt = [];

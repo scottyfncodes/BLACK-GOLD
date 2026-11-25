@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { gzipSync } from "node:zlib";
 import { SURVEYS, centroid } from "../../src/content/geography/surveys";
 
 /**
@@ -171,4 +173,25 @@ test("pulling casing from a dead hole gets part of its cost back", async ({ page
   for (let i = 0; i < 4 && !(await snap(page)).ops.well!.strings.every((s) => s.pulled); i++) await runUntilPaused(page);
   expect((await snap(page)).ops.well!.strings.every((s) => s.pulled)).toBe(true);
   expect((await snap(page)).ops.cash).toBeGreaterThan(cash - 1);
+});
+
+test("a save made by the production build (schema 3) imports, keeps its well and casing, and plays on", async ({ page }) => {
+  test.setTimeout(60_000);
+  await start(page);
+  const text = readFileSync(new URL("../fixtures/save-v3.json", import.meta.url), "utf8");
+  await page.getByRole("button", { name: "Campaign", exact: true }).click();
+  await page.locator('input[type="file"]').setInputFiles({ name: "production.blackgold", mimeType: "application/gzip", buffer: gzipSync(Buffer.from(text)) });
+  await expect(page.getByTestId("status")).toContainText("Imported");
+  const s = await snap(page);
+  expect(s.ops.well!.depthFt).toBeGreaterThan(580);
+  expect(s.ops.well!.strings).toHaveLength(1);
+  await page.getByTestId("to-rig").click();
+  const rig = page.getByRole("dialog", { name: /The rig/ });
+  await expect(rig.getByTestId("casing-open")).toContainText("Casing 1/3");
+  await rig.getByTestId("casing-open").click();
+  await expect(page.getByTestId("casing-sheet")).toContainText("10-inch to 486 ft");
+  await expect(page.getByTestId("casing-sheet")).toContainText("paid before");
+  await page.getByTestId("casing-sheet").getByRole("button", { name: "Close" }).click();
+  await runUntilPaused(page);
+  expect((await snap(page)).ops.well!.depthFt).toBeGreaterThan(s.ops.well!.depthFt);
 });
