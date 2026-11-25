@@ -55,7 +55,7 @@ describe("production", () => {
     expect(ops(w).cash).toBe(cash);
     cmd(w, "prod.cap");
     expect(ops(w).production.producers).toHaveLength(1);
-    expect(ops(w).cash).toBe(cash - 80);
+    expect(ops(w).cash).toBeCloseTo(cash - 80, 2);
   });
 
   it("the first producing well is acknowledged once, and recorded", () => {

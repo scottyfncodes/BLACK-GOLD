@@ -29,8 +29,9 @@ export interface Driller {
 /** What the company has seen a driller do: outcomes only, never his ability. */
 export interface DrillerRecord {
   wells: number;
+  /** Feet he made with the tools in his hands, and the five-minute spells he had them. */
   feet: number;
-  days: number;
+  ticks: number;
   stuck: number;
   fishing: number;
   strings: number;
@@ -42,7 +43,7 @@ export interface DrillerRecord {
   dry: number;
 }
 
-export const emptyRecord = (): DrillerRecord => ({ wells: 0, feet: 0, days: 0, stuck: 0, fishing: 0, strings: 0, dryStrings: 0, leakyStrings: 0, oil: 0, wet: 0, dry: 0 });
+export const emptyRecord = (): DrillerRecord => ({ wells: 0, feet: 0, ticks: 0, stuck: 0, fishing: 0, strings: 0, dryStrings: 0, leakyStrings: 0, oil: 0, wet: 0, dry: 0 });
 
 /** Standing orders: ask before spending, or act on his own judgement within a monthly budget. */
 export interface Orders {

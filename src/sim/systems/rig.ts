@@ -24,7 +24,8 @@ import { printedMap } from "../surface/print";
 import { CAP_COST, dayBarrels, emptyProductionBook, HAULING_CENTS, OIL_PRICE_CENTS } from "../company/production";
 import { ACCRUAL_UNITS, RATE_PERCENT, BORROW_STEP_CENTS, creditLimitCents, dayAccrual, emptyBank, STRIKES_TO_FORECLOSE, USED_RIG_PRICE } from "../company/bank";
 import { CONTRACT_DAYS, CONTRACT_PAY, CONTRACT_WAGES, contractOffered, recoveryPaths, type Position } from "../company/recovery";
-import { dayRateCents, emptyCrew } from "../company/crew";
+import { candidatesFor, dayRateCents, emptyCrew, emptyRecord, type Driller, type DrillerRecord } from "../company/crew";
+import { abilityOf } from "../hidden/drillers";
 import { MAX_STRINGS, MIN_STRING_FT, PIPE, pullDays, SALVAGE, stringCostCents, waterCut } from "../company/casing";
 import { seatSeals } from "../hidden/casing";
 import { SURVEYS as ALL_SURVEYS } from "../../content/geography/surveys";
@@ -112,6 +113,36 @@ function bail(ctx: Ctx, w: Well): void {
   report(ctx, "bailed", `Bailed at ${Math.round(w.depthFt)} ft: ${sample.call}.`, false);
 }
 
+/**
+ * How the company's driller works the line: from his hidden ability and his temperament.
+ * Temperament is a tendency (how far he leads the line, how soon he bails), not a skill.
+ */
+function habits(ctx: Ctx): { lead: number; spread: number; lapse: number; bailAt: number; dressAt: number } {
+  const d = S(ctx).crew.driller, a = abilityOf(ctx.seed, d.id);
+  const t = d.temperament;
+  return {
+    lead: 1.2 + (t === "aggressive" ? 0.5 : t === "cautious" ? -0.3 : 0),
+    spread: 0.8 + 3.0 * (1 - a.feel),
+    lapse: (1 - a.reliability) * 0.002,
+    bailAt: 7.5 - 4 * a.judgement + (t === "methodical" ? -1.2 : t === "aggressive" ? 1 : 0),
+    dressAt: 0.15 + 0.4 * a.judgement + (t === "cautious" ? 0.05 : t === "economical" ? -0.05 : 0),
+  };
+}
+
+/** Men looking for work in Beaumont: a fresh handful each month. */
+function refreshCandidates(ctx: Ctx): void {
+  const st = S(ctx);
+  const c = toCalendar(ctx.now), month = c.year * 12 + (c.month - 1);
+  if (st.crew.candidatesMonth === month) return;
+  st.crew.candidatesMonth = month;
+  st.crew.candidates = candidatesFor(ctx.seed, month).filter((d: Driller) => d.id !== st.crew.driller.id);
+}
+
+/** The record of the driller in charge of a well. */
+function recordOf(st: OperationsState, w: Well): DrillerRecord {
+  return (st.crew.records[w.driller] ??= emptyRecord());
+}
+
 /** The rock at a depth as this well's bailer described it, or null if that depth was never bailed. */
 function seatCallAt(st: OperationsState, w: Well, ft: number): string | null {
   for (let i = st.samples.length - 1; i >= 0; i--) {
@@ -128,6 +159,9 @@ function observeStrings(ctx: Ctx, w: Well): void {
     const sealed = seatSeals(ctx.seed, w.x, w.y, s.seatFt);
     const waterAbove = w.waterFt.some(([top]) => top < s.seatFt);
     s.observed = sealed ? "dry" : waterAbove ? "water" : "sand";
+    const rec = recordOf(S(ctx), w);
+    if (sealed) rec.dryStrings++;
+    else rec.leakyStrings++;
     report(ctx, "casing", sealed
       ? `The hole bails dry above the ${PIPE[s.size]!.name} shoe at ${s.seatFt} ft: the water behind it is shut off.`
       : waterAbove
@@ -154,6 +188,9 @@ function pullReckoning(st: OperationsState): { wellId: string; costCents: number
 }
 
 function finish(ctx: Ctx, w: Well, status: "gusher" | "dry", outcome: string): void {
+  const rec = recordOf(S(ctx), w);
+  if (status === "gusher" && outcome.startsWith("OIL")) rec.oil++;
+  else rec.dry++;
   w.status = status;
   w.outcome = outcome;
   w.busy = null;
@@ -164,21 +201,26 @@ function finish(ctx: Ctx, w: Well, status: "gusher" | "dry", outcome: string): v
 
 function drill(ctx: Ctx, w: Well): void {
   const here = rock(ctx, w, w.depthFt + 0.5);
-  // The driller (if delegated) works the temper screw by feel, with a skilled hand's error.
+  // The driller (if delegated) works the temper screw by his own feel and habits.
   if (w.auto) {
-    const want = w.depthFt + 1.2 + (ctx.random("rig:auto") - 0.5) * 2.4;
+    const h = habits(ctx);
+    let want = w.depthFt + h.lead + (ctx.random("rig:auto") - 0.5) * h.spread;
+    // Now and then even a good man lets the line run slack for a spell.
+    if (ctx.random("rig:lapse") < h.lapse) want += 4;
     w.reachFt = Math.min(w.reachFt + FEED_RATE * H, Math.max(w.reachFt, want));
-    if (w.fillFt > 5.5) return startOp(ctx, w, "bail");
-    if (w.sharp < 0.35) return startOp(ctx, w, "dress");
+    if (w.fillFt > h.bailAt) return startOp(ctx, w, "bail");
+    if (w.sharp < h.dressAt) return startOp(ctx, w, "dress");
   } else if (w.feeding) w.reachFt += FEED_RATE * H;
 
   const slack = w.reachFt - w.depthFt;
   w.contact = contactFor(slack);
+  if (w.auto) recordOf(S(ctx), w).ticks++;
   const rop = (ROP[here.lithology] * (0.25 + 0.75 * w.sharp) * w.contact) / (1 + w.fillFt / 5);
   // The bit cannot cut below where the line lets it fall.
   const cut = Math.max(0, Math.min(rop * H, w.reachFt + 0.6 - w.depthFt));
   w.rop = cut / H;
   w.depthFt += cut;
+  if (w.auto) recordOf(S(ctx), w).feet += cut;
   w.fillFt += cut * 0.12;
   w.sharp = Math.max(0, w.sharp - cut * WEAR[here.lithology]);
   if ((here.lithology === "sand" || here.lithology === "gravel") && w.depthFt > w.casedFt) w.openSandFt += cut;
@@ -197,6 +239,7 @@ function drill(ctx: Ctx, w: Well): void {
   if (ctx.random("rig:stuck") < hazard * H) {
     w.status = "stuck";
     w.feeding = false;
+    recordOf(S(ctx), w).stuck++;
     report(ctx, "stuck", `The tools are stuck at ${Math.round(w.depthFt)} ft${slack > SWEET_FT + 1 ? ": too much slack in the line" : loose > 40 ? ": the sand has caved in on them" : ""}.`, true);
     return;
   }
@@ -235,6 +278,7 @@ function complete(ctx: Ctx, w: Well, op: Operation): void {
       const seatCall = seatCallAt(st, w, seatFt);
       pay(st.ledger, ctx.now, "drilling", `Ran the ${PIPE[size]!.name} casing to ${seatFt} ft in the ${w.name}${seatCall ? `, landed in ${seatCall.split(",")[0]}` : ""}`, "drilling", cost, { wellId: w.id, surveyId: w.surveyId });
       w.strings.push({ size, seatFt, costCents: cost, setAt: ctx.now, seatCall, observed: "pending", pulled: false });
+      recordOf(st, w).strings++;
       // Mechanical: the pipe holds up every wall above its shoe. Hydraulic: only a seal stops the leak beneath.
       w.casedFt = w.depthFt;
       w.openSandFt = 0;
@@ -465,6 +509,7 @@ export const rig: System<Json> = {
   init(ctx) {
     const st = S(ctx);
     st.crew = emptyCrew(ctx.seed);
+    refreshCandidates(ctx);
     post(st.ledger, ctx.now, "opening", "Capital paid in", [{ account: "cash", cents: dollarsToCents(STARTING_CASH) }, { account: "equity", cents: -dollarsToCents(STARTING_CASH) }]);
     post(st.ledger, ctx.now, "opening", "Cable-tool rig and tools, owned", [{ account: "equipment", cents: dollarsToCents(RIG_VALUE) }, { account: "equity", cents: -dollarsToCents(RIG_VALUE) }]);
     ctx.schedule(nextMidnight(ctx.now), "company.day");
@@ -480,6 +525,7 @@ export const rig: System<Json> = {
       S(ctx).bank.accrued += dayAccrual(debtCents(S(ctx).ledger));
       contractDue(ctx);
       if (toCalendar(ctx.now).day === 1) settleMonth(ctx, ctx.now - 1);
+      refreshCandidates(ctx);
       review(ctx);
       ctx.schedule(nextMidnight(ctx.now), "company.day");
     },
@@ -563,8 +609,9 @@ export const rig: System<Json> = {
       st.well = {
         id: `ours-${n}`, name: `${survey.name} No. ${n}`, x: p.x, y: p.y, surveyId: survey.id, spudAt: ctx.now,
         status: "rigging", depthFt: 0, reachFt: 1, fillFt: 0, sharp: 1, casedFt: 0, openSandFt: 0,
-        feeding: false, auto: false, busy: null, lastBailFt: 0, rop: 0, contact: 0, idleTicks: 0, lowFundsWarned: false, strings: [], leakFt: 0, waterFt: [],
+        feeding: false, auto: false, busy: null, lastBailFt: 0, rop: 0, contact: 0, idleTicks: 0, lowFundsWarned: false, strings: [], leakFt: 0, waterFt: [], driller: st.crew.driller.id,
       };
+      (st.crew.records[st.crew.driller.id] ??= emptyRecord()).wells++;
       startOp(ctx, st.well, "rigup");
       ctx.schedule(ctx.now + TICK_MINUTES, "rig.tick");
     },
@@ -650,6 +697,7 @@ export const rig: System<Json> = {
       pay(st.ledger, ctx.now, "production", `Capping the ${w.name}`, "drilling", dollarsToCents(CAP_COST), { wellId: w.id, surveyId: w.surveyId });
       const cut = waterCut(openWaterSands(ctx, w, w.depthFt));
       st.production.producers.push({ wellId: w.id, name: w.name, surveyId: w.surveyId, x: w.x, y: w.y, since: ctx.now, trap, initialBbl, reserveBbl, cumBbl: 0, monthBbl: 0, lastDayBbl: 0, waterCut: cut });
+      if (cut > 0) recordOf(st, w).wet++;
       if (cut > 0) report(ctx, "wet", `Water comes up with the oil: about ${cut > 0.5 ? "half" : "a third"} of what flows from the ${w.name} is water from sands above the pay that no casing shuts off.`, false);
       notice(ctx, `The ${w.name} is capped. Teamsters will haul up to 150 barrels a day to the railhead.`);
       if (st.outcome.firstOilAt === null) {
@@ -697,6 +745,33 @@ export const rig: System<Json> = {
       if (available(S(ctx)) < cost) throw new CommandRejected(`The ${PIPE[w.strings.length]!.name} to ${Math.round(w.depthFt)} ft costs $${Math.ceil(cost / 100)}.`);
       startOp(ctx, w, "case");
     },
+    "crew.hire"(ctx, c: Command) {
+      const st = S(ctx);
+      const id = (c.payload as { id?: string })?.id;
+      const man = st.crew.candidates.find((d) => d.id === id);
+      if (!man) throw new CommandRejected("That man is not looking for work.");
+      const w = st.well;
+      if (w && (w.status === "rigging" || w.status === "drilling" || w.status === "stuck" || w.pullingUntil)) throw new CommandRejected("A driller is not changed in the middle of a job. Hire him between wells.");
+      // Today's rig time is paid at the old man's rate before the new one starts.
+      flushRigTime(ctx, ctx.now);
+      const old = st.crew.driller;
+      st.crew.driller = man;
+      st.crew.candidates = st.crew.candidates.filter((d) => d.id !== man.id);
+      st.crew.records[man.id] ??= emptyRecord();
+      st.crew.pending = null;
+      st.crew.declined = {};
+      notice(ctx, `${man.name} is the company's driller now, at $${(man.wageCents / 100).toFixed(2)} a day. ${old.name} has gone.`);
+    },
+    "crew.orders"(ctx, c: Command) {
+      const st = S(ctx);
+      const p = c.payload as { authority?: unknown; budgetCents?: unknown };
+      if (p?.authority !== "ask" && p?.authority !== "judgement") throw new CommandRejected("Ask first, or use his judgement.");
+      const budget = p.budgetCents ?? st.crew.orders.budgetCents;
+      if (typeof budget !== "number" || !Number.isSafeInteger(budget) || budget < 0 || budget > 100_000) throw new CommandRejected("A monthly budget in whole cents, up to $1,000.");
+      st.crew.orders.authority = p.authority;
+      st.crew.orders.budgetCents = budget;
+      notice(ctx, p.authority === "ask" ? `${st.crew.driller.name} will ask before spending the company's money.` : `${st.crew.driller.name} may spend up to $${budget / 100} a month on his own judgement.`);
+    },
     "rig.pull"(ctx) {
       const st = S(ctx);
       const r = pullReckoning(st);
@@ -716,6 +791,7 @@ export const rig: System<Json> = {
       const st = S(ctx);
       if (available(st) < dollarsToCents(COSTS.fishing)) throw new CommandRejected(`A fishing job costs $${COSTS.fishing}.`);
       pay(st.ledger, ctx.now, "drilling", `Fishing job on the ${w.name}`, "drilling", dollarsToCents(COSTS.fishing), { wellId: w.id, surveyId: w.surveyId });
+      recordOf(st, w).fishing++;
       startOp(ctx, w, "fish");
     },
     "rig.abandon"(ctx) {

@@ -84,5 +84,5 @@ describe("performance", () => {
   });
 });
 
-// Re-pinned on purpose: M1 (geology, knowledge), the rig, the company's books (ledger), its leases, production, the bank, and the idle-rig guard and recovery review, the crew.
-const GOLDEN_TEN_YEAR_HASH = "1d8a49af90d8fe";
+// Re-pinned on purpose: M1 (geology, knowledge), the rig, the company's books (ledger), its leases, production, the bank, and the idle-rig guard and recovery review, the crew and his habits.
+const GOLDEN_TEN_YEAR_HASH = "0a9afe8578b8b9";
