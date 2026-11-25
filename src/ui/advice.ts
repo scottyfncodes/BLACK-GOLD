@@ -3,7 +3,7 @@
  * recovery paths (sim/company/recovery.ts), so the game never advises something the company
  * cannot actually do: no "borrow" without credit, no "drill again" without the money.
  */
-import { CONTRACT_DAYS, CONTRACT_PAY, CONTRACT_WAGES, COSTS, USED_RIG_PRICE, CAP_COST, type KnowledgeView, type OperationsView, type RecoveryPath } from "../sim";
+import { CONTRACT_DAYS, CONTRACT_PAY, CONTRACT_WAGES, USED_RIG_PRICE, CAP_COST, type KnowledgeView, type OperationsView, type RecoveryPath } from "../sim";
 
 export interface AdviceInput {
   ops: OperationsView;
@@ -23,7 +23,7 @@ export function nextStep({ ops, paths, knowledge, formatDate, surveyName }: Advi
 
   if (w && w.status === "rigging") return w.auto ? "The derrick is going up. The driller will start making hole when it is." : "The derrick is going up. Let the driller take over, or go to the rig and drill by hand.";
   if (w && w.status === "stuck") return "The tools are stuck. Go to the rig: fish for them, or abandon the hole.";
-  if (w && w.status === "drilling") return w.auto ? `The driller is making hole. Each day costs $${COSTS.perDay}; watch the money.` : "Go to the rig and make hole, or let the driller work.";
+  if (w && w.status === "drilling") return w.auto ? `The driller is making hole. Each day costs $${ops.dayRate % 1 ? ops.dayRate.toFixed(2) : ops.dayRate}; watch the money.` : "Go to the rig and make hole, or let the driller work.";
   const contracted = find("contracted");
   if (contracted) return `The rig is out on contract until ${formatDate(contracted.until)}. The operator pays $${CONTRACT_PAY} when it comes back.`;
 

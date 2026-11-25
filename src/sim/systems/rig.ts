@@ -24,12 +24,15 @@ import { printedMap } from "../surface/print";
 import { CAP_COST, dayBarrels, emptyProductionBook, HAULING_CENTS, OIL_PRICE_CENTS } from "../company/production";
 import { ACCRUAL_UNITS, RATE_PERCENT, BORROW_STEP_CENTS, creditLimitCents, dayAccrual, emptyBank, STRIKES_TO_FORECLOSE, USED_RIG_PRICE } from "../company/bank";
 import { CONTRACT_DAYS, CONTRACT_PAY, CONTRACT_WAGES, contractOffered, recoveryPaths, type Position } from "../company/recovery";
+import { dayRateCents, emptyCrew } from "../company/crew";
 import { SURVEYS as ALL_SURVEYS } from "../../content/geography/surveys";
 
 type Ctx = SystemContext<Json>;
 const S = (ctx: Ctx) => ctx.state as unknown as OperationsState;
 
 export const TICK_MINUTES = 5;
+/** Dollars and cents, as the books write them ("$12" or "$12.50"). */
+const usd = (cents: number) => "$" + (cents % 100 ? (cents / 100).toFixed(2) : String(cents / 100));
 const H = TICK_MINUTES / 60;
 
 /** Penetration (ft/hour) with a sharp bit, square blows and a clean hole. */
@@ -225,7 +228,7 @@ export function positionOf(st: OperationsState, seed: string, now: number): Posi
       return best;
     },
     derrickCents: dollarsToCents(COSTS.rigUp),
-    dayCents: dollarsToCents(COSTS.perDay),
+    dayCents: dayRateCents(st.crew),
   };
 }
 
@@ -298,10 +301,10 @@ function guard(ctx: Ctx, w: Well, before: number): void {
   if (idle && w.idleTicks % IDLE_WARN_TICKS === 0) {
     const hours = Math.round((w.idleTicks * TICK_MINUTES) / 60);
     report(ctx, "idle", status === "stuck"
-      ? `The tools are still stuck in the ${w.name} and the crew is waiting (${hours} h). Rig time runs on at $${COSTS.perDay} a day: fish for them or abandon the hole.`
-      : `Nobody is working the line on the ${w.name} (${hours} h). Rig time runs on at $${COSTS.perDay} a day: take the controls, or let the driller work.`, true);
+      ? `The tools are still stuck in the ${w.name} and the crew is waiting (${hours} h). Rig time runs on at ${usd(dayRateCents(st.crew))} a day: fish for them or abandon the hole.`
+      : `Nobody is working the line on the ${w.name} (${hours} h). Rig time runs on at ${usd(dayRateCents(st.crew))} a day: take the controls, or let the driller work.`, true);
   }
-  const days = (available(st) / 100) / COSTS.perDay;
+  const days = available(st) / dayRateCents(st.crew);
   if (!w.lowFundsWarned && status !== "rigging" && days < LOW_FUNDS_DAYS) {
     w.lowFundsWarned = true;
     const room = creditLimitCents(st.bank, st.production, dollarsToCents(RIG_VALUE)) - debtCents(st.ledger);
@@ -395,9 +398,10 @@ function well(ctx: Ctx): Well {
 
 export const rig: System<Json> = {
   id: "operations",
-  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), bank: emptyBank(), contract: null, outcome: emptyOutcome(), well: null, past: [], samples: [], next: 1 }) as unknown as Json,
+  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), bank: emptyBank(), contract: null, outcome: emptyOutcome(), crew: null, well: null, past: [], samples: [], next: 1 }) as unknown as Json,
   init(ctx) {
     const st = S(ctx);
+    st.crew = emptyCrew(ctx.seed);
     post(st.ledger, ctx.now, "opening", "Capital paid in", [{ account: "cash", cents: dollarsToCents(STARTING_CASH) }, { account: "equity", cents: -dollarsToCents(STARTING_CASH) }]);
     post(st.ledger, ctx.now, "opening", "Cable-tool rig and tools, owned", [{ account: "equipment", cents: dollarsToCents(RIG_VALUE) }, { account: "equity", cents: -dollarsToCents(RIG_VALUE) }]);
     ctx.schedule(nextMidnight(ctx.now), "company.day");
@@ -447,7 +451,7 @@ export const rig: System<Json> = {
       const w = st.well;
       if (!w || w.status === "gusher" || w.status === "dry") return;
       // The money is gone when today's rig time can no longer be paid.
-      const perTick = (COSTS.perDay * 100) / 288;
+      const perTick = dayRateCents(st.crew) / 288;
       if (cashCents(st.ledger) - accruedCents(st) - perTick < 0) {
         flushRigTime(ctx, ctx.now);
         finish(ctx, w, "dry", `The money is gone. The ${w.name} is abandoned at ${Math.round(w.depthFt)} ft.`);
@@ -481,7 +485,7 @@ export const rig: System<Json> = {
       st.well = {
         id: `ours-${n}`, name: `${survey.name} No. ${n}`, x: p.x, y: p.y, surveyId: survey.id, spudAt: ctx.now,
         status: "rigging", depthFt: 0, reachFt: 1, fillFt: 0, sharp: 1, casedFt: 0, openSandFt: 0,
-        feeding: false, auto: false, busy: null, lastBailFt: 0, rop: 0, contact: 0, idleTicks: 0, lowFundsWarned: false,
+        feeding: false, auto: false, busy: null, lastBailFt: 0, rop: 0, contact: 0, idleTicks: 0, lowFundsWarned: false, strings: [], leakFt: 0, waterFt: [],
       };
       startOp(ctx, st.well, "rigup");
       ctx.schedule(ctx.now + TICK_MINUTES, "rig.tick");

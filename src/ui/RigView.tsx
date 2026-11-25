@@ -142,7 +142,7 @@ export function RigView({ runtime, snap, onClose }: Props) {
         <button type="button" class="rig-back" onClick={onClose}>← Map</button>
         <div class="rig-title">
           <h2>{well.name}</h2>
-          <p data-testid="rig-status" class={idle ? "red" : ""}>{done ? well.outcome : busy ? `${busy}…${well.status === "rigging" && well.auto ? " The driller will start when it is up." : ""}` : well.status === "stuck" ? "The tools are stuck." : well.auto ? "The driller is running the tools." : idle ? `Nobody is working the line. Rig time runs on at $${COSTS.perDay} a day.` : "Hold Feed to let out line and keep the needle in the band, or let the driller work."}</p>
+          <p data-testid="rig-status" class={idle ? "red" : ""}>{done ? well.outcome : busy ? `${busy}…${well.status === "rigging" && well.auto ? " The driller will start when it is up." : ""}` : well.status === "stuck" ? "The tools are stuck." : well.auto ? "The driller is running the tools." : idle ? `Nobody is working the line. Rig time runs on at $${snap.ops.dayRate % 1 ? snap.ops.dayRate.toFixed(2) : snap.ops.dayRate} a day.` : "Hold Feed to let out line and keep the needle in the band, or let the driller work."}</p>
         </div>
         <button type="button" class="rig-back" aria-pressed={muted} onClick={() => { setMuted(!muted); audio.current.setMuted(!muted); }}>{muted ? "Sound off" : "Sound on"}</button>
       </header>

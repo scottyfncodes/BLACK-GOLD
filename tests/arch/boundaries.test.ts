@@ -23,6 +23,13 @@ describe("architecture boundaries", () => {
     expect(errors.join("\n")).toMatch(/never geological truth/);
   });
 
+  it("seals what the player must learn rather than be told: drillers' ability, what a seat seals", async () => {
+    for (const path of ["src/ui/Hire.tsx", "src/render/rig/scene.ts", "src/app/runtime.ts"]) {
+      const errors = await lintAs(path, `import { abilityOf } from "../sim/hidden/drillers";\nexport const x = abilityOf;\n`);
+      expect(errors.join("\n"), path).toMatch(/never geological truth/);
+    }
+  });
+
   it("lets UI read the subsurface through knowledge", async () => {
     expect(await lintAs("src/ui/Prospect.tsx", `import { evidence } from "../sim/knowledge";\nexport const x = evidence;\n`)).toEqual([]);
   });

@@ -118,9 +118,10 @@ describe("bank", () => {
   });
 
   it("gives a version-1 save an empty account at the bank, idempotently", () => {
-    const world = MIGRATIONS[2]!(MIGRATIONS[1]!(structuredClone(v1.world) as never)) as unknown as WorldState;
+    const all = (w: unknown) => MIGRATIONS[3]!(MIGRATIONS[2]!(MIGRATIONS[1]!(w as never)));
+    const world = all(structuredClone(v1.world)) as unknown as WorldState;
     const once = canonicalJson(world as never);
-    expect(canonicalJson(MIGRATIONS[2]!(MIGRATIONS[1]!(world as never)) as never)).toBe(once);
+    expect(canonicalJson(all(world) as never)).toBe(once);
     expect(ops(world).bank).toEqual({ accrued: 0, strikes: 0, lien: false, rigOwned: true });
   });
 });

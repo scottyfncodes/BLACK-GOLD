@@ -3,7 +3,6 @@ import { formatClock, formatDate, type GameRuntime, type Snapshot, type Speed } 
 import type { Selection } from "../render/plate/map";
 import { Books } from "./Books";
 import { CampaignOver, FirstOil } from "./Outcome";
-import { COSTS } from "../sim";
 import { CampaignMenu } from "./CampaignMenu";
 import { FieldNotes } from "./FieldNotes";
 import { MapFigure, type Tool } from "./MapFigure";
@@ -43,7 +42,7 @@ function RigLine({ runtime, snap, onOpenRig }: { runtime: GameRuntime; snap: Sna
     : w.status === "stuck" ? "tools stuck"
     : w.auto ? "driller at work"
     : idle ? "nobody on the line" : "you have the line";
-  const days = Math.max(0, Math.floor(snap.ops.cash / COSTS.perDay));
+  const days = Math.max(0, Math.floor(snap.ops.cash / snap.ops.dayRate));
   const handOver = (w.status === "drilling" || w.status === "rigging") && !w.auto;
   return (
     <p class={`rigline ${idle ? "rigline-idle" : ""}`} data-testid="rigline">
@@ -63,6 +62,7 @@ function dateParts(t: number) {
   const i = long.indexOf(", ");
   return i < 0 ? long : <><span class="weekday">{long.slice(0, i + 2)}</span>{long.slice(i + 2)}</>;
 }
+const rate = (d: number) => (d % 1 ? d.toFixed(2) : String(d));
 const usd = (n: number) => "$" + Math.floor(n).toLocaleString("en-US");
 const cashWords = (snap: Snapshot) => `${usd(snap.ops.cash)} in hand${snap.ops.debt > 0 ? `, ${usd(Math.ceil(snap.ops.debt))} owed to the bank` : ""}`;
 
@@ -80,7 +80,7 @@ export function App({ runtime }: { runtime: GameRuntime }) {
   const closeRig = useCallback(() => {
     const w = runtime.snapshot().ops.well;
     if (w && (w.status === "drilling" || w.status === "rigging") && !w.auto) {
-      if (!runtime.command("rig.auto", { on: true })) runtime.notify(`The driller has the tools while you are away. Rig time runs at $${COSTS.perDay} a day.`);
+      if (!runtime.command("rig.auto", { on: true })) runtime.notify(`The driller has the tools while you are away. Rig time runs at $${rate(runtime.snapshot().ops.dayRate)} a day.`);
     }
     setRigOpen(false);
   }, [runtime]);
