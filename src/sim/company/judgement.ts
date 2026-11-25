@@ -36,10 +36,22 @@ export interface Observations {
   wellSpentCents: number;
   /** The deepest show the bailer has brought up in this hole, if any. */
   lastShow: { kind: "gas" | "oil" | "sulphur"; ft: number } | null;
+  /** Sand the bailer brought up beyond the cuttings, per hour since the bail before (ft/hour). */
+  inflowFtHr: number;
+  /** Drive pipe going down: where its shoe is, how far driven, feet made in the last two hours, and whether he has called refusal. */
+  driving: { pipe: string; shoeFt: number; drivenFt: number; lastTwoHoursFt: number; refused: boolean } | null;
+  /** A string collapsed in the hole: about where, and how many swaging jobs have been tried. */
+  collapse: { atFt: number; attempts: number } | null;
+  /** The company owns a drive head; what driving the next pipe through about 60 ft more would cost (cents, with the head if needed). */
+  driveHead: boolean;
+  nextDriveCents: number;
+  swageCents: number;
 }
 
 export type Advice =
   | { kind: "case"; reason: "seat" | "sand" | "cap"; text: string; costCents: number }
+  | { kind: "drive"; text: string; costCents: number }
+  | { kind: "setdrive"; text: string; costCents: 0 }
   | { kind: "fish"; text: string; costCents: number }
   | { kind: "abandon"; text: string; costCents: 0 }
   | { kind: "quit"; text: string; costCents: 0 };
@@ -93,6 +105,17 @@ export function moneyConcern(o: Observations, a: Ability, t: Temperament): strin
   return `This hole has cost ${usd(o.wellSpentCents)} to ${Math.round(o.depthFt)} ft, and ${shown}. The company has ${usd(cash)} in hand: about ${Math.floor(days)} days of rig time${credit > 0 ? `, and ${usd(credit)} more only if you borrow` : ""}. ${QUIT_WORDS[t]}`;
 }
 
+/** How many swaging jobs on a collapsed string before he would rather plug the hole. */
+const SWAGE_LIMIT: Record<Temperament, number> = { cautious: 1, economical: 1, methodical: 2, aggressive: 3 };
+
+/** How he puts refusal to you: a matter of temperament. */
+const REFUSAL_WORDS: Record<Temperament, string> = {
+  cautious: "I'd not pound on it: a parted joint or a crushed pipe would cost us the hole.",
+  economical: "More pounding is more rig time for inches, and a risk to the pipe.",
+  methodical: "By the log that's refusal.",
+  aggressive: "I'd as soon give her a few more licks, but that's refusal by any fair count.",
+};
+
 /** How many fishing jobs on one hole before he would rather plug it. */
 const FISH_LIMIT: Record<Temperament, number> = { cautious: 2, economical: 2, methodical: 3, aggressive: 5 };
 
@@ -101,13 +124,32 @@ const FISH_LIMIT: Record<Temperament, number> = { cautious: 2, economical: 2, me
  * reads the hole: a poor judge is blurred more.
  */
 export function assess(o: Observations, a: Ability, t: Temperament, noise: number, noise2: number): Advice | null {
+  // A crushed string: a swaging job is slow and dear, and he says plainly it may not work.
+  if (o.stuck && o.collapse) {
+    const at = Math.round(o.collapse.atFt);
+    if (o.cashCents < o.swageCents + 5 * o.dayCents) return { kind: "abandon", text: `The pipe is crushed at about ${at} ft, and there is not the money for a swaging job and the days it takes. I'd plug the hole.`, costCents: 0 };
+    if (o.collapse.attempts >= SWAGE_LIMIT[t]) return { kind: "abandon", text: `${o.collapse.attempts} swaging job${o.collapse.attempts > 1 ? "s" : ""} and the pipe at ${at} ft is still shut. I would not throw more money after it: I'd plug the hole.`, costCents: 0 };
+    return { kind: "fish", text: `The pipe has collapsed at about ${at} ft. A swage might open it out and let us on down inside, but it is days of work and no promise. ${o.collapse.attempts ? "The last one did not take." : "It is worth one try."}`, costCents: o.swageCents };
+  }
   if (o.stuck) {
     if (o.cashCents < o.fishingCents + 3 * o.dayCents) return { kind: "abandon", text: `The tools are fast at ${Math.round(o.depthFt)} ft, and there is too little in hand for a fishing job and the days after it. I'd plug the hole.`, costCents: 0 };
     if (o.fishCount >= FISH_LIMIT[t]) return { kind: "abandon", text: `Fast again at ${Math.round(o.depthFt)} ft, after ${o.fishCount} fishing job${o.fishCount > 1 ? "s" : ""} on this hole. I would not throw more money after it: I'd plug it.`, costCents: 0 };
     return { kind: "fish", text: `The tools are fast at ${Math.round(o.depthFt)} ft. A fishing job is a fair chance of freeing them.`, costCents: o.fishingCents };
   }
+  // Driving: he calls refusal (when, depends on his judgement and temper: see the rig), and says so.
+  if (o.driving) {
+    if (!o.driving.refused) return null;
+    const made = o.driving.lastTwoHoursFt < 1 ? `${Math.max(1, Math.round(o.driving.lastTwoHoursFt * 12))} inches` : `${o.driving.lastTwoHoursFt.toFixed(1)} ft`;
+    return { kind: "setdrive", text: `The ${o.driving.pipe} has about stopped: ${made} in the last two hours with the maul going steady, ${Math.round(o.driving.drivenFt)} ft driven. ${REFUSAL_WORDS[t]} Set it here at ${Math.round(o.driving.shoeFt)} ft.`, costCents: 0 };
+  }
   const quit = moneyConcern(o, a, t);
   if (quit) return { kind: "quit", text: quit, costCents: 0 };
+  // Sand that runs back in as fast as it is bailed: let-down pipe will hang in it. He knows it
+  // by the bailer; a poor judge mistakes it either way.
+  if (o.stringsLeft > 0 && o.nextPipe && o.openSandFt >= 10 && o.inflowFtHr > 3.6 + (noise2 - 0.5) * 4.4 * (1 - a.judgement)) {
+    const head = o.driveHead ? "" : ", and for that we need a drive head and clamps";
+    return { kind: "drive", text: `The sand comes back in as fast as we bail it: about ${Math.max(1, Math.round(o.inflowFtHr))} ft an hour, and it heaves when the tools move. It's running sand. Pipe let down won't go through it; it will hang. I'd drive the ${o.nextPipe} through it${head}.`, costCents: o.nextDriveCents };
+  }
   if (o.stringsLeft <= 0 || !o.nextPipe || o.depthFt - o.casedFt < 20) return null;
   // What he sees, blurred by how well he reads a hole.
   const sand = o.openSandFt * (1 + (noise - 0.5) * (1 - a.judgement) * 1.4);

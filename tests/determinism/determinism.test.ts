@@ -84,5 +84,5 @@ describe("performance", () => {
   });
 });
 
-// Re-pinned on purpose: M1 (geology, knowledge), the rig, the company's books (ledger), its leases, production, the bank, and the idle-rig guard and recovery review, the crew and his habits, and period economics (rig at $1,500, 10% interest, crude by the year).
-const GOLDEN_TEN_YEAR_HASH = "14ee33f720f10c";
+// Re-pinned on purpose: M1 (geology, knowledge), the rig, the company's books (ledger), its leases, production, the bank, and the idle-rig guard and recovery review, the crew and his habits, and period economics (rig at $1,500, 10% interest, crude by the year), and running sand with driven casing.
+const GOLDEN_TEN_YEAR_HASH = "1e3c8857be2e29";

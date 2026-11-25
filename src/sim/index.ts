@@ -23,7 +23,7 @@ export { GEOLOGY_VERSION } from "./geology/truth/model";
 export { MIGRATIONS, worldProblem, type Migration } from "./migrations";
 export { ACCRUAL_UNITS, creditLimitCents, collateralCents, netPerBarrelCents, OIL_ADVANCE, RIG_ADVANCE, RIG_BOOK, RIG_RESALE, RATE_PERCENT, BORROW_STEP_CENTS, USED_RIG_PRICE, STRIKES_TO_FORECLOSE, type BankState } from "./company/bank";
 export { attemptCents, contractOffered, CONTRACT_DAYS, CONTRACT_PAY, CONTRACT_WAGES, MIN_ATTEMPT_DAYS, recoveryPaths, type Position, type RecoveryPath } from "./company/recovery";
-export { MAX_STRINGS, MIN_STRING_FT, PIPE, pullDays, SALVAGE, stringCostCents, waterCut, type CasingString, type StringObserved } from "./company/casing";
+export { DRIVE, DRIVE_ALLOWANCE_FT, drivePipeCents, MAX_STRINGS, MIN_STRING_FT, PIPE, pullDays, SALVAGE, salvageFraction, stringCostCents, waterCut, type CasingString, type DriveJob, type StringObserved } from "./company/casing";
 export { CREW_DAY_CENTS, dayRateCents, TEMPERAMENTS, type Crew, type Driller, type DrillerNote, type DrillerRecord, type Orders, type Recommendation, type RecommendationKind, type Temperament } from "./company/crew";
 export { CAP_COST, HAUL_LIMIT_BBL, OIL_PRICES, oilPriceCents, HAULING_CENTS, type Producer, type ProductionBook } from "./company/production";
 export { activeLease, askingTerms, ROYALTY, TERM_DAYS, LOWER_OFFER, type Lease, type LeaseBook, type Terms, type PublicNews } from "./company/leases";

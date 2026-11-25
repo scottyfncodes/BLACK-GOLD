@@ -12,11 +12,11 @@ import type { LeaseBook } from "./company/leases";
 import type { ProductionBook } from "./company/production";
 import { RIG_BOOK, type BankState } from "./company/bank";
 import { oilPriceCents } from "./company/production";
-import type { CasingString } from "./company/casing";
+import type { CasingString, DriveJob } from "./company/casing";
 import { dayRateCents, type Crew } from "./company/crew";
 
 export type WellStatus = "rigging" | "drilling" | "stuck" | "gusher" | "dry";
-export type Operation = "rigup" | "bail" | "dress" | "case" | "fish";
+export type Operation = "rigup" | "bail" | "dress" | "case" | "fish" | "drive" | "swage";
 
 export interface Well {
   id: string;
@@ -48,6 +48,15 @@ export interface Well {
   driller: string;
   /** The rig is pulling this hole's casing until then. */
   pullingUntil?: number | null;
+  /** Drive pipe going down, if any. */
+  drive?: DriveJob | null;
+  /** A string has collapsed in the hole: about where, and how many swaging jobs have been tried. */
+  collapse?: { atFt: number; attempts: number } | null;
+  /** Sand the bailer brought up beyond the cuttings, per hour since the bail before (ft/hour): what the crew sees of sand running in. */
+  lastInflow?: number;
+  /** When the hole was last bailed, and the sand come in since (ft). */
+  lastBailAt?: number;
+  sandInFt?: number;
   /** Feet of uncased sand open to the hole. Sands heave in. */
   openSandFt: number;
   feeding: boolean;
@@ -96,6 +105,8 @@ export interface OperationsState {
   contract: Contract | null;
   /** The company's driller, the men it might hire, his standing orders and his advice. */
   crew: Crew;
+  /** Tools the company owns besides the rig: the drive head and clamps for driving pipe. */
+  tools: { driveHead: boolean };
   outcome: CampaignOutcome;
   well: Well | null;
   /** Earlier wells (finished). */
@@ -121,6 +132,7 @@ export interface OperationsView {
   contract: Contract | null;
   outcome: CampaignOutcome;
   crew: Crew;
+  tools: { driveHead: boolean };
   /** What a day of rig time costs now: the crew and the driller's wage (dollars). */
   dayRate: number;
   /** This year's price of a barrel of crude at the railhead (cents). */
@@ -136,7 +148,7 @@ export function accruedCents(o: OperationsState): number {
 
 export function operationsOf(world: Readonly<WorldState>): OperationsView {
   const o = world.systems.operations as unknown as OperationsState;
-  return { cash: (cashCents(o.ledger) - accruedCents(o)) / 100, debt: debtCents(o.ledger) / 100, ledger: o.ledger, leases: o.leases, production: o.production, bank: o.bank, contract: o.contract, outcome: o.outcome, crew: o.crew, dayRate: dayRateCents(o.crew) / 100, oilPriceCents: oilPriceCents(world.time), well: o.well, past: o.past };
+  return { cash: (cashCents(o.ledger) - accruedCents(o)) / 100, debt: debtCents(o.ledger) / 100, ledger: o.ledger, leases: o.leases, production: o.production, bank: o.bank, contract: o.contract, outcome: o.outcome, crew: o.crew, tools: o.tools, dayRate: dayRateCents(o.crew) / 100, oilPriceCents: oilPriceCents(world.time), well: o.well, past: o.past };
 }
 
 /** Samples are evidence like any other; they join the knowledge view. */

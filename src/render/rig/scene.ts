@@ -359,17 +359,36 @@ function drawCutaway(ctx: CanvasRenderingContext2D, inp: SceneInput, L: Layout, 
   ctx.lineWidth = 1;
   for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(X + side * 4, top); ctx.lineTo(X + side * 4, bottom); ctx.stroke(); }
   // Casing: each string from the surface to its shoe, the largest outermost. Ink; pulled pipe faint.
-  for (const s of well.strings) {
+  // Drive pipe going down: heavy, to its shoe.
+  const going = well.drive ? [{ size: well.drive.size, seatFt: well.drive.shoeFt, pulled: false, observed: "pending" as const, method: "driven" as const, damage: null }] : [];
+  for (const s of [...well.strings, ...going]) {
     const off = 9.5 - s.size * 1.8, shoe = L.Y(s.seatFt);
     ctx.strokeStyle = s.pulled ? "rgba(42, 33, 24, 0.25)" : INK.ink;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = s.method === "driven" ? 2.8 : 2;
     ctx.setLineDash(s.pulled ? [3, 3] : []);
     for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(X + side * off, top); ctx.lineTo(X + side * off, shoe); ctx.stroke(); }
     ctx.setLineDash([]);
     if (s.pulled) continue;
-    // The shoe.
+    // The shoe: a steel drive shoe is drawn as a wedge.
     ctx.lineWidth = 1.6;
-    for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(X + side * off, shoe); ctx.lineTo(X + side * (off + 3), shoe); ctx.stroke(); }
+    for (const side of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(X + side * off, shoe); ctx.lineTo(X + side * (off + 3), shoe);
+      if (s.method === "driven") { ctx.lineTo(X + side * off, shoe - 5); ctx.closePath(); ctx.fillStyle = INK.ink; ctx.fill(); }
+      ctx.stroke();
+    }
+    // Harm the crew knows of: a parted joint (a carmine break), a crushed pipe (pinched in).
+    if (s.damage === "parted") {
+      ctx.strokeStyle = INK.carmine; ctx.lineWidth = 1.4;
+      const y = (top + shoe) / 2;
+      for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(X + side * (off - 2), y - 3); ctx.lineTo(X + side * (off + 2), y + 3); ctx.stroke(); }
+      ctx.strokeStyle = INK.ink;
+    }
+    if (s.damage === "collapsed" && well.collapse) {
+      ctx.strokeStyle = INK.carmine; ctx.lineWidth = 1.8;
+      const y = L.Y(well.collapse.atFt);
+      for (const side of [-1, 1]) { ctx.beginPath(); ctx.moveTo(X + side * off, y - 6); ctx.lineTo(X + side * 1.5, y); ctx.lineTo(X + side * off, y + 6); ctx.stroke(); }
+      ctx.strokeStyle = INK.ink;
+    }
     // What the crew has seen: a shoe that leaks is marked below in carmine.
     if (s.observed === "water" || s.observed === "sand") {
       ctx.fillStyle = INK.carmine;

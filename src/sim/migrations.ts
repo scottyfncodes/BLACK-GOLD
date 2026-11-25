@@ -144,7 +144,31 @@ export function v4ToV5(input: Record<string, unknown>): Record<string, unknown> 
   return world;
 }
 
-export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5 };
+/**
+ * v5 → v6: driven casing.
+ * - The company owns no drive head yet. Wells gain no drive in progress, no collapse, and the
+ *   bailer's sand measure starts afresh. Strings already set were let down ("run"), the
+ *   default; nothing about them changes.
+ * - Running sand is the ground's (sim/hidden/quicksand.ts), a pure function of the seed: an
+ *   old save's ground now has it, as it always did; the crew learns it as it drills on.
+ */
+export function v5ToV6(input: Record<string, unknown>): Record<string, unknown> {
+  const world = structuredClone(input) as unknown as WorldState & Record<string, unknown>;
+  const ops = world.systems.operations as Record<string, unknown> | undefined;
+  if (!ops) return world;
+  if (!("tools" in ops) || ops.tools === null) ops.tools = { driveHead: false };
+  for (const w of [ops.well, ...((ops.past as unknown[]) ?? [])] as (Record<string, unknown> | null)[]) {
+    if (!w) continue;
+    if (!("drive" in w)) w.drive = null;
+    if (!("collapse" in w)) w.collapse = null;
+    if (!("lastInflow" in w)) w.lastInflow = 0;
+    if (!("lastBailAt" in w)) w.lastBailAt = world.time;
+    if (!("sandInFt" in w)) w.sandInFt = 0;
+  }
+  return world;
+}
+
+export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5, 5: v5ToV6 };
 
 /** Invariants a loaded world must hold beyond its shape. Returns a reason, or null. */
 export function worldProblem(world: WorldState): string | null {

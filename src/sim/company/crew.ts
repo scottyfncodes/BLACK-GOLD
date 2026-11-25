@@ -56,7 +56,7 @@ export interface Orders {
 }
 
 /** "abandon": plug a hole with the tools fast in it. "quit": plug a hole that is costing more than it promises. */
-export type RecommendationKind = "case" | "fish" | "abandon" | "quit";
+export type RecommendationKind = "case" | "fish" | "abandon" | "quit" | "drive" | "setdrive";
 
 export interface Recommendation {
   id: number;
@@ -76,6 +76,8 @@ export interface DeclineMemo {
   stuckCount: number;
   /** Cash in hand when it was declined (for "quit"; credit counts only once borrowed). */
   capitalCents?: number;
+  /** Feet of pipe driven when "set it here" was declined. */
+  drivenFt?: number;
 }
 
 export interface DrillerNote {

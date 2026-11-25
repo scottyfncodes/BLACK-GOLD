@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { noRunningSand } from "../helpers/ground";
 import { CAMPAIGN_START, fromCalendar, gameEngine, MINUTES_PER_DAY, operationsOf, type Driller, type WorldState } from "../../src/sim";
 import { candidatesFor } from "../../src/sim/company/crew";
 import { post } from "../../src/sim/company/ledger";
@@ -116,7 +117,8 @@ describe("ability shows in the work", () => {
       const w = gameEngine.createWorld(seed, CAMPAIGN_START);
       fund(w);
       install(w, { ...base, temperament: t });
-      const s = SURVEYS[4]!;
+      // Ground without running sand (test only): there, sand in the hole and not habit would set the bailing.
+      const s = SURVEYS.find((q) => { const [cx, cy] = centroid(q.poly); return noRunningSand(seed, cx, cy, 800); })!;
       cmd(w, "lease.take", { surveyId: s.id, offer: "asking" });
       const [x, y] = centroid(s.poly);
       cmd(w, "rig.spud", { x, y });

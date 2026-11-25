@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { noRunningSand } from "../helpers/ground";
 import { ADVICE_LAPSE_MINUTES, CAMPAIGN_START, fromCalendar, gameEngine, MINUTES_PER_DAY, operationsOf, type Driller, type WorldState } from "../../src/sim";
 import { candidatesFor } from "../../src/sim/company/crew";
 import { assess, type Observations } from "../../src/sim/company/judgement";
@@ -18,7 +19,7 @@ const cmd = (w: WorldState, type: string, payload: unknown = null) =>
 const rejected = (r: ReturnType<typeof cmd>) => r.events.find((e) => e.type === "command.rejected");
 const ops = (w: WorldState) => operationsOf(w);
 
-const OBS: Observations = { depthFt: 400, casedFt: 0, stringsLeft: 3, nextPipe: "10-inch", nextCostCents: 20_000, openSandFt: 0, bottom: null, waterSeen: false, waterShutOff: false, stuck: false, fishCount: 0, cashCents: 100_000, dayCents: 1_200, fishingCents: 6_000, creditRoomCents: 0, wellSpentCents: 0, lastShow: null };
+const OBS: Observations = { depthFt: 400, casedFt: 0, stringsLeft: 3, nextPipe: "10-inch", nextCostCents: 20_000, openSandFt: 0, bottom: null, waterSeen: false, waterShutOff: false, stuck: false, fishCount: 0, cashCents: 100_000, dayCents: 1_200, fishingCents: 6_000, creditRoomCents: 0, wellSpentCents: 0, lastShow: null, inflowFtHr: 0, driving: null, collapse: null, driveHead: false, nextDriveCents: 0, swageCents: 15_000 };
 const GOOD: Ability = { feel: 0.8, judgement: 0.9, reliability: 0.8, prudence: 0.5 };
 const POOR: Ability = { feel: 0.3, judgement: 0.1, reliability: 0.3, prudence: 0.5 };
 
@@ -114,7 +115,7 @@ function site(): { seed: string; x: number; y: number } {
       if (!insidePoly(s.poly, x, y)) continue;
       const col = columnAt(t, x, y, 300).map((iv) => ({ ...iv, topFt: iv.top * 3.28, baseFt: iv.base * 3.28 }));
       const sand = col.find((iv) => iv.lithology === "sand" && iv.fluid === "water" && iv.baseFt - iv.topFt > 80 && iv.baseFt < 700);
-      if (sand && col.some((iv) => iv.lithology === "clay" && iv.topFt >= sand.baseFt - 1 && iv.baseFt - iv.topFt > 40)) return { seed, x, y };
+      if (sand && col.some((iv) => iv.lithology === "clay" && iv.topFt >= sand.baseFt - 1 && iv.baseFt - iv.topFt > 40) && noRunningSand(seed, x, y, 1500)) return { seed, x, y };
     }
   }
   throw new Error("no site");
@@ -259,7 +260,10 @@ describe("his own judgement, within limits", () => {
     const spare = Math.round(ops(w).cash * 100) - 20_000;
     post(o.ledger, w.time, "operating", "Test: spent elsewhere", [{ account: "operating", cents: spare }, { account: "cash", cents: -spare }]);
     const ev = untilAdvice(w)!;
-    if ((ev.data as { kind: string }).kind !== "abandon") expect((ev.data as { message: string }).message).toMatch(/too little in hand|past this month's allowance/);
+    const kind = (ev.data as { kind: string }).kind;
+    // He either asks before spending, or counsels plugging the hole: he never spends below the reserve himself.
+    if (kind !== "abandon" && kind !== "quit") expect((ev.data as { message: string }).message).toMatch(/too little in hand|past this month's allowance/);
+    expect(ops(w).crew.orders.spentCents).toBe(0);
   });
 });
 

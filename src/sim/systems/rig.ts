@@ -28,8 +28,9 @@ import { candidatesFor, dayRateCents, emptyCrew, emptyRecord, type Driller, type
 import { abilityOf } from "../hidden/drillers";
 import { assess, type Advice, type Observations } from "../company/judgement";
 import { MAX_NOTES, type DeclineMemo, type DrillerNote, type Recommendation } from "../company/crew";
-import { MAX_STRINGS, MIN_STRING_FT, PIPE, pullDays, SALVAGE, stringCostCents, waterCut } from "../company/casing";
+import { DRIVE, DRIVE_ALLOWANCE_FT, drivePipeCents, MAX_STRINGS, MIN_STRING_FT, PIPE, pullDays, SALVAGE, salvageFraction, stringCostCents, waterCut, type DriveJob } from "../company/casing";
 import { seatSeals } from "../hidden/casing";
+import { collapseSeverity, openRunning, runningAt } from "../hidden/quicksand";
 import { SURVEYS as ALL_SURVEYS } from "../../content/geography/surveys";
 
 type Ctx = SystemContext<Json>;
@@ -51,6 +52,23 @@ export const MAX_DEPTH_FT = 2500;
 const RIGUP_DAYS = 3;
 /** Sand working in under a shoe seated in sand counts as this much open sand (provisional). */
 export const LEAK_FT = 18;
+/**
+ * Driving pipe (provisional rates; the practice is documented, docs/research §0). Feet an hour
+ * the shoe goes down under the maul with no friction yet, by the ground at the shoe; running
+ * sand gives way faster. Friction builds with the length driven: past a practical length of
+ * about 80–100 ft (Isler 1902) the pipe goes down ever harder, a range, not a wall, set by the
+ * pipe's size, the driller's hand and the ground.
+ */
+const DRIVE_RATE: Record<Lithology, number> = { sand: 3.2, gravel: 1.3, clay: 1.1, caprock: 0.12, salt: 0.25 };
+const DRIVE_REACH_FT = 90;
+/** Bigger pipe grips more ground. */
+const DRIVE_DIAMETER = [0.85, 1.0, 1.15];
+/** When he calls refusal (feet made in two hours, times this): a habit of temperament. */
+const REFUSAL_CALL: Record<string, number> = { cautious: 1.5, economical: 1.15, methodical: 1.0, aggressive: 0.5 };
+/** Running sand: how fast it flows into open hole (ft/hour at full strength), and how far it heaves up as the bailer comes out (ft). Provisional. */
+const RUN_INFLOW = 14;
+const RUN_HEAVE = 45;
+
 /** An idle rig (nobody on the line, or stuck tools left waiting) stops the clock every three hours. */
 export const IDLE_WARN_TICKS = 36;
 /** Warn once a well when cash covers only this many more days of rig time. */
@@ -72,6 +90,8 @@ function opMinutes(op: Operation, depthFt: number): number {
     case "dress": return 90 + trip * 10;
     case "case": return 240 + trip * 25;
     case "fish": return 8 * 60;
+    case "drive": return 240 + trip * 25;
+    case "swage": return DRIVE.swageDays * MINUTES_PER_DAY;
     case "rigup": return RIGUP_DAYS * MINUTES_PER_DAY;
   }
 }
@@ -109,10 +129,20 @@ function bail(ctx: Ctx, w: Well): void {
   };
   if (sample.baseFt > sample.topFt) st.samples.push(sample);
   observeStrings(ctx, w);
-  w.fillFt = 0;
+  // How much sand came in beyond the cuttings since the last bail: the crew sees it in the bailer.
+  const hours = Math.max(0.5, (ctx.now - (w.lastBailAt ?? w.spudAt)) / 60);
+  w.lastInflow = Math.round(((w.sandInFt ?? 0) / hours) * 10) / 10;
+  w.lastBailAt = ctx.now;
+  // Running sand heaves up the hole as the bailer comes out (Isler: 30–40 ft at a touch of the tools).
+  const run = openRunning(ctx.seed, w.x, w.y, w.casedFt, w.depthFt);
+  const heave = run.peak > 0.2 ? Math.min(35, RUN_HEAVE * run.peak * run.peak * Math.min(1, run.ft / 30)) : 0;
+  w.fillFt = heave;
+  w.sandInFt = heave;
   w.lastBailFt = w.depthFt;
   w.reachFt = w.depthFt + 1;
-  report(ctx, "bailed", `Bailed at ${Math.round(w.depthFt)} ft: ${sample.call}.`, false);
+  const tell = w.lastInflow >= 4 ? " The sand comes back in as fast as it is bailed." : w.lastInflow >= 1.5 ? " Sand keeps coming back into the hole." : "";
+  const heaved = heave >= 6 ? ` It heaved up about ${Math.max(5, Math.round(heave / 5) * 5)} ft as the bailer came out.` : "";
+  report(ctx, "bailed", `Bailed at ${Math.round(w.depthFt)} ft: ${sample.call}.${tell}${heaved}`, false);
 }
 
 /**
@@ -136,7 +166,7 @@ export const ADVICE_LAPSE_MINUTES = 60;
 
 /** Run the next string now (the player's order, his accepted advice, or his own judgement). */
 function caseNow(ctx: Ctx, w: Well): void {
-  if (w.busy || w.status !== "drilling") throw new CommandRejected("Not now.");
+  if (w.busy || w.status !== "drilling" || w.drive) throw new CommandRejected("Not now.");
   if (w.strings.length >= MAX_STRINGS) throw new CommandRejected(`No smaller pipe will go inside the ${PIPE[MAX_STRINGS - 1]!.name}. The rest of this hole is open.`);
   if (w.depthFt - w.casedFt < MIN_STRING_FT) throw new CommandRejected("The hole is cased almost to bottom already.");
   const cost = stringCostCents(w.strings.length, Math.round(w.depthFt));
@@ -148,11 +178,174 @@ function caseNow(ctx: Ctx, w: Well): void {
 function fishNow(ctx: Ctx, w: Well, memo = ""): void {
   if (w.status !== "stuck" || w.busy) throw new CommandRejected("The tools are not stuck.");
   const st = S(ctx);
+  if (w.collapse) {
+    // Swaging the crushed pipe: dear, slow, and never a sure thing; after a few tries there is nothing to hold.
+    if (w.collapse.attempts >= DRIVE.swageAttempts) throw new CommandRejected("There is nothing left in the hole to take hold of. The hole is lost.");
+    if (available(st) < DRIVE.swageCents) throw new CommandRejected(`A swaging job costs $${DRIVE.swageCents / 100}.`);
+    pay(st.ledger, ctx.now, "drilling", `Swaging job on the collapsed pipe in the ${w.name}${memo}`, "drilling", DRIVE.swageCents, { wellId: w.id, surveyId: w.surveyId });
+    recordOf(st, w).fishing++;
+    w.fishCount++;
+    startOp(ctx, w, "swage");
+    return;
+  }
   if (available(st) < dollarsToCents(COSTS.fishing)) throw new CommandRejected(`A fishing job costs $${COSTS.fishing}.`);
   pay(st.ledger, ctx.now, "drilling", `Fishing job on the ${w.name}${memo}`, "drilling", dollarsToCents(COSTS.fishing), { wellId: w.id, surveyId: w.surveyId });
   recordOf(st, w).fishing++;
   w.fishCount++;
   startOp(ctx, w, "fish");
+}
+
+/** The drive head and clamps: reusable, bought once. */
+function buyDriveHead(ctx: Ctx): void {
+  const st = S(ctx);
+  if (st.tools.driveHead) return;
+  if (available(st) < DRIVE.headCents) throw new CommandRejected(`A drive head and clamps cost $${DRIVE.headCents / 100}.`);
+  pay(st.ledger, ctx.now, "equipment", "Drive head and clamps, bought", "equipment", DRIVE.headCents);
+  st.tools.driveHead = true;
+}
+
+/** What the pipe for driving the next string about 100 ft below the present bottom costs (cents). */
+function driveEstimateCents(st: OperationsState, w: Well): number {
+  return w.strings.length < MAX_STRINGS ? drivePipeCents(w.strings.length, Math.round(w.depthFt) + DRIVE_ALLOWANCE_FT) : 0;
+}
+
+/** Start driving the next string (the player's order, his accepted advice, or his own judgement). */
+function driveNow(ctx: Ctx, w: Well): void {
+  if (w.busy || w.status !== "drilling" || w.drive) throw new CommandRejected("Not now.");
+  if (w.strings.length >= MAX_STRINGS) throw new CommandRejected(`No smaller pipe will go inside the ${PIPE[MAX_STRINGS - 1]!.name}. The rest of this hole is open.`);
+  const st = S(ctx);
+  if (!st.tools.driveHead) throw new CommandRejected(`Driving pipe needs a drive head and clamps ($${DRIVE.headCents / 100}).`);
+  const est = driveEstimateCents(st, w);
+  if (available(st) < est) throw new CommandRejected(`Drive pipe for about ${DRIVE_ALLOWANCE_FT} ft of driving, with its shoe, costs about $${Math.ceil(est / 100)}.`);
+  startOp(ctx, w, "drive");
+}
+
+/** Feet the shoe has made in about the last two hours of driving. */
+function madeLately(d: DriveJob): number {
+  const back = d.log[Math.max(0, d.log.length - 3)];
+  return back ? Math.max(0, d.shoeFt - back.ft) : 0;
+}
+
+/** The crew sees water rise wherever new hole is made through a water sand. */
+function noteWater(w: Well, here: RockAt, cut: number): void {
+  if (cut <= 0 || (here.lithology !== "sand" && here.lithology !== "gravel") || (here.fluid !== "water" && here.fluid !== "sulphurWater")) return;
+  const last = w.waterFt[w.waterFt.length - 1];
+  if (last && w.depthFt - cut - last[1] < 5) last[1] = w.depthFt;
+  else w.waterFt.push([w.depthFt - cut, w.depthFt]);
+}
+
+/** One rig tick of driving: the shoe goes down, harder as the pipe takes hold; the joints and the pipe take the strain. */
+function driveTick(ctx: Ctx, w: Well): void {
+  const st = S(ctx);
+  const d = w.drive!;
+  if (d.refused && !d.pounding) return; // waiting on the call: rig time runs on
+  const man = st.crew.driller, a = abilityOf(ctx.seed, man.id);
+  const here = rock(ctx, w, d.shoeFt + 0.5);
+  const s = runningAt(ctx.seed, w.x, w.y, d.shoeFt);
+  const reach = DRIVE_REACH_FT * DRIVE_DIAMETER[d.size]! * (0.6 + 0.8 * a.feel) * (0.85 + 0.3 * rngUnit(ctx.seed, "drive", w.id, d.size));
+  const fric = d.drivenFt / reach;
+  const rate = (DRIVE_RATE[here.lithology] * (1 + 1.2 * s) * (0.8 + 0.3 * a.reliability)) / (1 + fric ** 4);
+  const cut = rate * H;
+  d.shoeFt += cut;
+  d.drivenFt += cut;
+  if (d.shoeFt > w.depthFt) {
+    const made = d.shoeFt - w.depthFt;
+    w.depthFt = d.shoeFt;
+    noteWater(w, here, made);
+    if (w.auto) recordOf(st, w).feet += made;
+  }
+  if (w.auto) recordOf(st, w).ticks++;
+  w.rop = rate;
+  w.fillFt = 0;
+  const last = d.log[d.log.length - 1];
+  if (!last || ctx.now - last.t >= 60) { d.log.push({ t: ctx.now, ft: Math.round(d.shoeFt * 10) / 10 }); if (d.log.length > 12) d.log.shift(); }
+  const pipe = PIPE[d.size]!.name;
+  // Every blow strains the joints a little; pounding past refusal strains them far more, and may crush the pipe.
+  const excess = Math.max(0, fric - 1);
+  const joint = (0.0015 * fric + (d.pounding ? 0.08 : 0.02) * excess) * (1.3 - a.reliability);
+  const crush = (d.pounding ? 0.015 : 0.002) * excess * (0.4 + s + d.shoeFt / 1000) * (1.2 - 0.4 * a.reliability);
+  if (ctx.random("rig:joint") < joint * H) {
+    report(ctx, "parted", `The maul came down dead on the ${pipe}: a joint has parted somewhere above the shoe. It will drive no further.`, true);
+    setDrive(ctx, w, true);
+    return;
+  }
+  if (ctx.random("rig:crush") < crush * H) return collapseNow(ctx, w);
+  const atShoe = rock(ctx, w, d.shoeFt);
+  if (atShoe.fluid === "oil" || atShoe.fluid === "gas") {
+    setDrive(ctx, w, false);
+    finish(ctx, w, "gusher", atShoe.fluid === "oil" ? `OIL. The ${w.name} came in at ${Math.round(w.depthFt)} ft as the pipe went down, and is flowing over the crown block.` : `GAS. The ${w.name} blew in a gas sand at ${Math.round(w.depthFt)} ft as the pipe went down.`);
+    return;
+  }
+  const lately = madeLately(d);
+  if (d.log.length >= 3) d.peak = Math.max(d.peak ?? 0, lately);
+  // Past refusal the pipe can stop altogether: then it is set where it stands.
+  if (d.pounding && d.log.length >= 3 && lately < 0.1) {
+    report(ctx, "refused", `The ${pipe} will not go another inch at ${Math.round(d.shoeFt)} ft. It is set there.`, true);
+    setDrive(ctx, w, false);
+    return;
+  }
+  // He calls refusal when the pipe has all but stopped: when, depends on his judgement and temper.
+  if (!d.refused && d.drivenFt >= 10 && d.log.length >= 3) {
+    // By the feel of the maul: the pipe going down a quarter as fast as it did, or barely at all.
+    const callAt = Math.max(0.35, 0.25 * (d.peak ?? 0)) * (REFUSAL_CALL[man.temperament] ?? 1) * (1 + (rngUnit(ctx.seed, "refusal", w.id, d.size) - 0.5) * (1 - a.judgement) * 1.2);
+    if (lately < callAt) {
+      d.refused = true;
+      report(ctx, "refusal", `The ${pipe} is going down hard: ${lately < 1 ? `${Math.max(1, Math.round(lately * 12))} inches` : `${lately.toFixed(1)} ft`} in two hours, ${Math.round(d.drivenFt)} ft driven. ${man.name} calls it refusal.`, !w.auto);
+    }
+  }
+  if (w.depthFt >= MAX_DEPTH_FT) setDrive(ctx, w, false);
+}
+
+/** Settle the drive pipe against what was bought: unused joints go back; pipe driven past the allowance is paid for. */
+function settleDrivePipe(ctx: Ctx, w: Well, shoe: number): number {
+  const st = S(ctx), d = w.drive!;
+  const cost = drivePipeCents(d.size, shoe);
+  const diff = cost - d.paidCents, ref = { wellId: w.id, surveyId: w.surveyId };
+  const pipe = PIPE[d.size]!.name;
+  if (diff > 0) pay(st.ledger, ctx.now, "drilling", `${pipe} drive pipe driven past the joints brought out, to ${shoe} ft`, "drilling", diff, ref);
+  else if (diff < 0) receive(st.ledger, ctx.now, "drilling", `Unused ${pipe} drive pipe returned to the supply house`, "drilling", -diff, ref);
+  return cost;
+}
+
+/** The driven pipe is set where its shoe stands: paid for, and tested at the next bail. */
+function setDrive(ctx: Ctx, w: Well, parted: boolean, quiet = false): void {
+  const st = S(ctx);
+  const d = w.drive!;
+  const shoe = Math.round(d.shoeFt);
+  const cost = settleDrivePipe(ctx, w, shoe);
+  const pipe = PIPE[d.size]!.name;
+  const seatCall = seatCallAt(st, w, shoe);
+  w.strings.push({ size: d.size, seatFt: shoe, costCents: cost, setAt: ctx.now, seatCall, observed: "pending", pulled: false, method: "driven", drivenFt: Math.round(d.drivenFt), damage: parted ? "parted" : null });
+  recordOf(st, w).strings++;
+  w.drive = null;
+  w.casedFt = shoe;
+  w.depthFt = Math.max(w.depthFt, shoe);
+  w.openSandFt = Math.max(0, w.depthFt - shoe);
+  w.leakFt = parted ? LEAK_FT * 1.5 : seatSeals(ctx.seed, w.x, w.y, shoe) ? 0 : LEAK_FT;
+  w.reachFt = w.depthFt + 1;
+  w.fillFt = 0;
+  w.sandInFt = 0;
+  w.lastInflow = 0;
+  w.lastBailAt = ctx.now;
+  if (!parted && !quiet) report(ctx, "cased", `The ${pipe} drive pipe is set at ${shoe} ft, ${Math.round(d.drivenFt)} ft of it driven. The next bail will show whether it shuts off the water.`, false);
+}
+
+/** The pipe is crushed in the hole: the tools stop above the collapse. */
+function collapseNow(ctx: Ctx, w: Well): void {
+  const st = S(ctx);
+  const d = w.drive!;
+  const shoe = Math.round(d.shoeFt);
+  const at = Math.max(Math.round(w.casedFt) + 1, Math.round(d.shoeFt - (0.2 + 0.6 * ctx.random("rig:crushAt")) * d.drivenFt));
+  const cost = settleDrivePipe(ctx, w, shoe);
+  const pipe = PIPE[d.size]!.name;
+  w.strings.push({ size: d.size, seatFt: shoe, costCents: cost, setAt: ctx.now, seatCall: seatCallAt(st, w, shoe), observed: "sand", pulled: false, method: "driven", drivenFt: Math.round(d.drivenFt), damage: "collapsed" });
+  recordOf(st, w).strings++;
+  recordOf(st, w).stuck++;
+  w.drive = null;
+  w.status = "stuck";
+  w.feeding = false;
+  w.collapse = { atFt: at, attempts: 0 };
+  report(ctx, "collapsed", `The ${pipe} has collapsed in the hole. The tools stop at about ${at} ft and will not pass. A swaging job might open it out; it might not.`, true);
 }
 
 function note(ctx: Ctx, wellId: string, kind: DrillerNote["kind"], text: string): void {
@@ -185,6 +378,12 @@ function observe(st: OperationsState, w: Well, now: number): Observations {
     creditRoomCents: Math.max(0, creditLimitCents(st.bank, st.production, oilPriceCents(now)) - debtCents(st.ledger)),
     wellSpentCents: wellSpent(st, w),
     lastShow: lastShow(own),
+    inflowFtHr: w.lastInflow ?? 0,
+    driving: w.drive ? { pipe: PIPE[w.drive.size]!.name, shoeFt: w.drive.shoeFt, drivenFt: w.drive.drivenFt, lastTwoHoursFt: madeLately(w.drive), refused: w.drive.refused && !w.drive.pounding } : null,
+    collapse: w.collapse ?? null,
+    driveHead: st.tools.driveHead,
+    nextDriveCents: driveEstimateCents(st, w) + (st.tools.driveHead ? 0 : DRIVE.headCents),
+    swageCents: DRIVE.swageCents,
   };
 }
 
@@ -211,13 +410,15 @@ function lastShow(own: readonly SampleEvidence[]): Observations["lastShow"] {
 function circumstances(st: OperationsState, w: Well): DeclineMemo {
   // Cash in hand, as he judges it: credit counts only once it is borrowed.
   const capital = available(st);
-  return { depthFt: w.depthFt, openSandFt: w.openSandFt, strings: w.strings.length, stuckCount: w.fishCount + (w.status === "stuck" ? 1 : 0), capitalCents: capital };
+  return { depthFt: w.depthFt, openSandFt: w.openSandFt, strings: w.strings.length, stuckCount: w.fishCount + (w.status === "stuck" ? 1 : 0), capitalCents: capital, drivenFt: w.drive?.drivenFt ?? 0 };
 }
 
 /** A declined recommendation stays declined until the hole has changed enough to matter. */
 function stillDeclined(m: DeclineMemo | undefined, now: DeclineMemo, kind: Advice["kind"]): boolean {
   if (!m) return false;
-  if (kind === "case") return m.strings === now.strings && now.depthFt < m.depthFt + 100 && now.openSandFt < m.openSandFt + 50;
+  if (kind === "case" || kind === "drive") return m.strings === now.strings && now.depthFt < m.depthFt + 100 && now.openSandFt < m.openSandFt + 50;
+  // Told to drive on past refusal, he lets the pipe go another 15 ft before he calls it again.
+  if (kind === "setdrive") return (now.drivenFt ?? 0) < (m.drivenFt ?? 0) + 15;
   // Told once to drill on, he raises money again only when the cash in hand has fallen by a third, or the hole is 300 ft deeper.
   if (kind === "quit") return now.depthFt < m.depthFt + 300 && (now.capitalCents ?? 0) > (m.capitalCents ?? 0) * (2 / 3);
   return m.stuckCount === now.stuckCount && m.strings === now.strings;
@@ -228,7 +429,8 @@ function decline(ctx: Ctx, r: Recommendation): void {
   const w = st.well;
   st.crew.pending = null;
   if (w) st.crew.declined[r.kind] = circumstances(st, w);
-  note(ctx, r.wellId, "advice", r.kind === "case" ? "No pipe, then. I'll drill on." : r.kind === "fish" ? "No fishing job, then." : "We'll keep at it, then.");
+  if (r.kind === "setdrive" && w?.drive) w.drive.pounding = true;
+  note(ctx, r.wellId, "advice", r.kind === "case" ? "No pipe, then. I'll drill on." : r.kind === "drive" ? "No drive pipe, then. I'll drill on." : r.kind === "setdrive" ? "Drive on, then. I'll keep the maul going." : r.kind === "fish" ? "No fishing job, then." : "We'll keep at it, then.");
 }
 
 /** The recovery reserve: his own spending never leaves less than this in hand. */
@@ -258,14 +460,22 @@ function consult(ctx: Ctx, w: Well): void {
   if (crew.orders.month !== month) { crew.orders.month = month; crew.orders.spentCents = 0; }
   const within = crew.orders.spentCents + advice.costCents <= crew.orders.budgetCents;
   const reserve = available(st) - advice.costCents >= reserveCents(st);
-  const spends = advice.kind === "case" || advice.kind === "fish";
+  const spends = advice.kind === "case" || advice.kind === "fish" || advice.kind === "drive";
+  // Setting driven pipe at refusal costs nothing more: trusted, he makes that call himself.
+  if (crew.orders.authority === "judgement" && advice.kind === "setdrive") {
+    setDrive(ctx, w, false);
+    note(ctx, w.id, "acted", `${advice.text} Done, on my own judgement.`);
+    return;
+  }
   if (crew.orders.authority === "judgement" && spends && within && reserve) {
     try {
+      const pipe = PIPE[w.strings.length]?.name ?? "pipe";
       if (advice.kind === "case") caseNow(ctx, w);
+      else if (advice.kind === "drive") { buyDriveHead(ctx); driveNow(ctx, w); }
       else fishNow(ctx, w, " (on the driller's judgement)");
       crew.orders.spentCents += advice.costCents;
       note(ctx, w.id, "acted", `${advice.text} Done, on my own judgement.`);
-      notice(ctx, `${crew.driller.name}: ${advice.kind === "case" ? `ran the ${PIPE[w.strings.length]?.name ?? "pipe"}` : "a fishing job"} on his own judgement, $${Math.ceil(advice.costCents / 100)}.`);
+      notice(ctx, `${crew.driller.name}: ${advice.kind === "case" ? `ran the ${pipe}` : advice.kind === "drive" ? `began driving the ${pipe}` : "a fishing job"} on his own judgement, about $${Math.ceil(advice.costCents / 100)}.`);
       return;
     } catch (err) {
       if (!(err instanceof CommandRejected)) throw err;
@@ -304,7 +514,7 @@ function seatCallAt(st: OperationsState, w: Well, ft: number): string | null {
 function observeStrings(ctx: Ctx, w: Well): void {
   for (const s of w.strings) {
     if (s.observed !== "pending" || s.pulled) continue;
-    const sealed = seatSeals(ctx.seed, w.x, w.y, s.seatFt);
+    const sealed = !s.damage && seatSeals(ctx.seed, w.x, w.y, s.seatFt);
     const waterAbove = w.waterFt.some(([top]) => top < s.seatFt);
     s.observed = sealed ? "dry" : waterAbove ? "water" : "sand";
     const rec = recordOf(S(ctx), w);
@@ -320,7 +530,7 @@ function observeStrings(ctx: Ctx, w: Well): void {
 
 /** Water sands the hole made water in above `payFt` that no sealed string shuts off. */
 function openWaterSands(ctx: Ctx, w: Well, payFt: number): number {
-  const sealed = w.strings.filter((s) => !s.pulled && seatSeals(ctx.seed, w.x, w.y, s.seatFt));
+  const sealed = w.strings.filter((s) => !s.pulled && !s.damage && seatSeals(ctx.seed, w.x, w.y, s.seatFt));
   return w.waterFt.filter(([, base]) => base <= payFt && !sealed.some((s) => s.seatFt >= base)).length;
 }
 
@@ -331,7 +541,7 @@ function pullReckoning(st: OperationsState): { wellId: string; costCents: number
   if (st.production.producers.some((p) => p.wellId === w.id)) return null;
   const left = w.strings.filter((s) => !s.pulled);
   if (!left.length) return null;
-  const valueCents = left.reduce((a, s) => a + Math.round(s.costCents * (s.observed === "dry" ? SALVAGE.sealedFraction : SALVAGE.sandFraction)), 0);
+  const valueCents = left.reduce((a, s) => a + Math.round(s.costCents * salvageFraction(s)), 0);
   return { wellId: w.id, costCents: pullDays(left) * dayRateCents(st.crew), valueCents };
 }
 
@@ -343,6 +553,11 @@ function finish(ctx: Ctx, w: Well, status: "gusher" | "dry", outcome: string): v
   w.outcome = outcome;
   w.busy = null;
   w.feeding = false;
+  // Pipe being driven when the hole ends stays where it stands, settled against what was bought.
+  if (w.drive) setDrive(ctx, w, false, true);
+  // Advice about a hole that has ended is moot: it is withdrawn, not left waiting.
+  const crew = S(ctx).crew;
+  if (crew.pending?.wellId === w.id) crew.pending = null;
   report(ctx, status, outcome, true);
   review(ctx);
 }
@@ -373,17 +588,17 @@ function drill(ctx: Ctx, w: Well): void {
   w.sharp = Math.max(0, w.sharp - cut * WEAR[here.lithology]);
   if ((here.lithology === "sand" || here.lithology === "gravel") && w.depthFt > w.casedFt) w.openSandFt += cut;
   // The crew sees water rise in the hole wherever it is drilled through a water sand.
-  if (cut > 0 && (here.lithology === "sand" || here.lithology === "gravel") && (here.fluid === "water" || here.fluid === "sulphurWater")) {
-    const last = w.waterFt[w.waterFt.length - 1];
-    if (last && w.depthFt - cut - last[1] < 5) last[1] = w.depthFt;
-    else w.waterFt.push([w.depthFt - cut, w.depthFt]);
-  }
+  noteWater(w, here, cut);
   // Uncased sand heaves into the hole, and so does sand working in under a shoe seated in sand.
+  // Running sand flows in besides, as fast as it is bailed where it is strong.
   const loose = w.openSandFt + w.leakFt;
-  w.fillFt += (loose / 60) * 0.7 * H;
+  const run = openRunning(ctx.seed, w.x, w.y, w.casedFt, w.depthFt);
+  const inflow = run.peak > 0.2 ? RUN_INFLOW * run.peak * Math.min(1.5, run.ft / 60) : 0;
+  w.fillFt += ((loose / 60) * 0.7 + inflow) * H;
+  w.sandInFt = (w.sandInFt ?? 0) + ((loose / 60) * 0.7 + inflow) * H;
 
-  // Stuck tools: slack line, heaving sand, a hole full of cuttings.
-  const hazard = 0.0004 + 0.05 * Math.max(0, slack - SWEET_FT - 1) + 0.004 * (loose / 40) + (w.fillFt > 10 ? 0.04 : 0);
+  // Stuck tools: slack line, heaving sand, a hole full of cuttings; running sand buries them.
+  const hazard = 0.0004 + 0.05 * Math.max(0, slack - SWEET_FT - 1) + 0.004 * (loose / 40) + (w.fillFt > 10 ? 0.04 : 0) + (inflow > 0 ? 0.008 * inflow + 0.004 * Math.max(0, w.fillFt - 10) : 0);
   if (ctx.random("rig:stuck") < hazard * H) {
     w.status = "stuck";
     w.feeding = false;
@@ -419,20 +634,65 @@ function complete(ctx: Ctx, w: Well, op: Operation): void {
       return;
     case "case": {
       const st = S(ctx);
-      const size = w.strings.length, seatFt = Math.round(w.depthFt);
-      const cost = stringCostCents(size, seatFt);
+      const size = w.strings.length;
       // The hole is bailed clean before pipe goes in, so the crew always sees what the shoe sits on.
       if (w.depthFt - w.lastBailFt >= 1) bail(ctx, w);
+      // Let-down pipe hangs where running sand has closed the hole: it goes no further.
+      const run = openRunning(ctx.seed, w.x, w.y, w.casedFt, w.depthFt);
+      const hung = run.top !== null && run.top < w.depthFt - 5;
+      const seatFt = hung ? Math.min(Math.round(w.depthFt), Math.round(run.top! + 2 + ctx.random("rig:hang") * 8)) : Math.round(w.depthFt);
+      const cost = stringCostCents(size, seatFt);
       const seatCall = seatCallAt(st, w, seatFt);
-      pay(st.ledger, ctx.now, "drilling", `Ran the ${PIPE[size]!.name} casing to ${seatFt} ft in the ${w.name}${seatCall ? `, landed in ${seatCall.split(",")[0]}` : ""}`, "drilling", cost, { wellId: w.id, surveyId: w.surveyId });
-      w.strings.push({ size, seatFt, costCents: cost, setAt: ctx.now, seatCall, observed: "pending", pulled: false });
+      pay(st.ledger, ctx.now, "drilling", `Ran the ${PIPE[size]!.name} casing to ${seatFt} ft in the ${w.name}${hung ? ", where it hung up" : seatCall ? `, landed in ${seatCall.split(",")[0]}` : ""}`, "drilling", cost, { wellId: w.id, surveyId: w.surveyId });
+      w.strings.push({ size, seatFt, costCents: cost, setAt: ctx.now, seatCall, observed: "pending", pulled: false, ...(hung ? { hung: true } : {}) });
       recordOf(st, w).strings++;
       // Mechanical: the pipe holds up every wall above its shoe. Hydraulic: only a seal stops the leak beneath.
-      w.casedFt = w.depthFt;
-      w.openSandFt = 0;
+      w.casedFt = seatFt;
+      w.openSandFt = hung ? Math.max(0, w.depthFt - seatFt) : 0;
       w.leakFt = seatSeals(ctx.seed, w.x, w.y, seatFt) ? 0 : LEAK_FT;
       w.reachFt = w.depthFt + 1;
-      report(ctx, "cased", `The ${PIPE[size]!.name} is set to ${seatFt} ft. The next bail will show whether it shuts off the water.`, false);
+      // What the bailer showed before the pipe went in no longer describes the hole.
+      if (!hung) w.lastInflow = 0;
+      report(ctx, "cased", hung
+        ? `The ${PIPE[size]!.name} hung up at ${seatFt} ft and would go no further: the sand has closed in on the hole below. It is set there.`
+        : `The ${PIPE[size]!.name} is set to ${seatFt} ft. The next bail will show whether it shuts off the water.`, hung);
+      return;
+    }
+    case "drive": {
+      // The drive pipe is let down to where it stands (bottom, or where running sand has closed the hole), and the maul goes on it.
+      const run = openRunning(ctx.seed, w.x, w.y, w.casedFt, w.depthFt);
+      const stand = run.top !== null && run.top < w.depthFt - 5 ? Math.min(Math.round(w.depthFt), Math.round(run.top + 2 + ctx.random("rig:hang") * 8)) : Math.round(w.depthFt);
+      // The pipe is bought for about 100 ft of driving below where it stands; what is not used goes back.
+      const st = S(ctx), size = w.strings.length;
+      const paid = drivePipeCents(size, stand + DRIVE_ALLOWANCE_FT);
+      pay(st.ledger, ctx.now, "drilling", `Drive pipe and shoe for the ${PIPE[size]!.name} in the ${w.name}, to ${stand + DRIVE_ALLOWANCE_FT} ft`, "drilling", paid, { wellId: w.id, surveyId: w.surveyId });
+      w.drive = { size, startFt: stand, shoeFt: stand, drivenFt: 0, log: [{ t: ctx.now, ft: stand }], refused: false, pounding: false, paidCents: paid };
+      w.fillFt = 0;
+      report(ctx, "driving", `The ${PIPE[w.drive.size]!.name} drive pipe is down to ${stand} ft${stand < w.depthFt - 5 ? ", where it hangs in the sand" : ""}, with the shoe on. The maul is on it.`, false);
+      return;
+    }
+    case "swage": {
+      const st = S(ctx);
+      const c = w.collapse!;
+      const a = abilityOf(ctx.seed, st.crew.driller.id);
+      // How badly it is crushed is the ground's and the blow's doing (hidden); past a point nothing opens it.
+      const sev = collapseSeverity(ctx.seed, w.id, c.atFt, runningAt(ctx.seed, w.x, w.y, c.atFt));
+      const chance = sev >= 0.75 ? 0 : (1 - sev / 0.75) ** 0.6 * (0.45 + 0.5 * a.feel) * (1 - c.atFt / 3000) * (st.tools.driveHead ? 1 : 0.75) * 0.6 ** c.attempts;
+      c.attempts++;
+      if (rngUnit(ctx.seed, "swage", w.id, c.attempts) < chance) {
+        w.status = "drilling";
+        w.collapse = null;
+        w.depthFt = c.atFt;
+        w.lastBailFt = c.atFt;
+        w.reachFt = c.atFt + 1;
+        w.casedFt = c.atFt;
+        w.openSandFt = 0;
+        w.leakFt = LEAK_FT * 1.5;
+        w.fillFt = 0;
+        report(ctx, "swaged", `The swage has opened the crushed pipe at about ${c.atFt} ft. The hole below it is lost, but drilling can go on down inside the old pipe${w.strings.length < MAX_STRINGS ? `, with the ${PIPE[w.strings.length]!.name} next` : ", in open hole"}.`, true);
+      } else {
+        report(ctx, "swagefail", c.attempts >= DRIVE.swageAttempts ? "The swage would not open it, and there is nothing left in the hole to take hold of. The hole is lost." : "The swage would not open the crushed pipe. It is still shut.", true);
+      }
       return;
     }
     case "fish":
@@ -668,7 +928,7 @@ function well(ctx: Ctx): Well {
 
 export const rig: System<Json> = {
   id: "operations",
-  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), bank: emptyBank(), contract: null, outcome: emptyOutcome(), crew: null, well: null, past: [], samples: [], next: 1 }) as unknown as Json,
+  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), bank: emptyBank(), contract: null, outcome: emptyOutcome(), crew: null, tools: { driveHead: false }, well: null, past: [], samples: [], next: 1 }) as unknown as Json,
   init(ctx) {
     const st = S(ctx);
     st.crew = emptyCrew(ctx.seed);
@@ -699,7 +959,7 @@ export const rig: System<Json> = {
       let cents = 0;
       for (const s of w.strings) {
         if (s.pulled) continue;
-        cents += Math.round(s.costCents * (seatSeals(ctx.seed, w.x, w.y, s.seatFt) ? SALVAGE.sealedFraction : SALVAGE.sandFraction));
+        cents += Math.round(s.costCents * (s.damage ? 0 : s.method === "driven" ? SALVAGE.drivenFraction : seatSeals(ctx.seed, w.x, w.y, s.seatFt) ? SALVAGE.sealedFraction : SALVAGE.sandFraction));
         s.pulled = true;
       }
       w.pullingUntil = null;
@@ -747,7 +1007,7 @@ export const rig: System<Json> = {
       st.accrued.ticks++;
       const before = w.depthFt;
       if (w.busy && ctx.now >= w.busy.until) complete(ctx, w, w.busy.op);
-      else if (!w.busy && w.status === "drilling") drill(ctx, w);
+      else if (!w.busy && w.status === "drilling") (w.drive ? driveTick : drill)(ctx, w);
       guard(ctx, w, before);
       consult(ctx, w);
       // complete() and drill() may have ended the well; re-read its status.
@@ -774,7 +1034,7 @@ export const rig: System<Json> = {
       st.well = {
         id: `ours-${n}`, name: `${survey.name} No. ${n}`, x: p.x, y: p.y, surveyId: survey.id, spudAt: ctx.now,
         status: "rigging", depthFt: 0, reachFt: 1, fillFt: 0, sharp: 1, casedFt: 0, openSandFt: 0,
-        feeding: false, auto: false, busy: null, lastBailFt: 0, rop: 0, contact: 0, idleTicks: 0, lowFundsWarned: false, strings: [], leakFt: 0, waterFt: [], driller: st.crew.driller.id, fishCount: 0,
+        feeding: false, auto: false, busy: null, lastBailFt: 0, rop: 0, contact: 0, idleTicks: 0, lowFundsWarned: false, strings: [], leakFt: 0, waterFt: [], driller: st.crew.driller.id, fishCount: 0, drive: null, collapse: null, lastInflow: 0, lastBailAt: ctx.now, sandInFt: 0,
       };
       (st.crew.records[st.crew.driller.id] ??= emptyRecord()).wells++;
       startOp(ctx, st.well, "rigup");
@@ -908,16 +1168,35 @@ export const rig: System<Json> = {
     },
     "rig.bail"(ctx) {
       const w = well(ctx);
-      if (w.busy || w.status !== "drilling") throw new CommandRejected("Not now.");
+      if (w.busy || w.status !== "drilling" || w.drive) throw new CommandRejected("Not now.");
       startOp(ctx, w, "bail");
     },
     "rig.dress"(ctx) {
       const w = well(ctx);
-      if (w.busy || w.status !== "drilling") throw new CommandRejected("Not now.");
+      if (w.busy || w.status !== "drilling" || w.drive) throw new CommandRejected("Not now.");
       startOp(ctx, w, "dress");
     },
     "rig.case"(ctx) {
       caseNow(ctx, well(ctx));
+    },
+    "rig.drive"(ctx) {
+      driveNow(ctx, well(ctx));
+    },
+    "rig.setDrive"(ctx) {
+      const w = well(ctx);
+      if (!w.drive || w.busy || w.status !== "drilling") throw new CommandRejected("No pipe is being driven.");
+      setDrive(ctx, w, false);
+    },
+    "rig.driveOn"(ctx) {
+      const w = well(ctx);
+      if (!w.drive?.refused) throw new CommandRejected("The pipe is still going down.");
+      w.drive.pounding = true;
+      if (S(ctx).crew.pending?.kind === "setdrive") decline(ctx, S(ctx).crew.pending!);
+    },
+    "company.buyDriveHead"(ctx) {
+      if (S(ctx).tools.driveHead) throw new CommandRejected("The company has a drive head already.");
+      buyDriveHead(ctx);
+      notice(ctx, `The company owns a drive head and clamps, for driving pipe ($${DRIVE.headCents / 100}).`);
     },
     "crew.accept"(ctx, c: Command) {
       const st = S(ctx);
@@ -926,9 +1205,11 @@ export const rig: System<Json> = {
       st.crew.pending = null;
       const w = well(ctx);
       if (r.kind === "case") caseNow(ctx, w);
+      else if (r.kind === "drive") { buyDriveHead(ctx); driveNow(ctx, w); }
+      else if (r.kind === "setdrive") { if (!w.drive) throw new CommandRejected("No pipe is being driven."); setDrive(ctx, w, false); }
       else if (r.kind === "fish") fishNow(ctx, w);
       else finish(ctx, w, "dry", r.kind === "quit" ? `The ${w.name} is plugged at ${Math.round(w.depthFt)} ft to save the company's money.` : `The ${w.name} is plugged and abandoned at ${Math.round(w.depthFt)} ft.`);
-      note(ctx, w.id, "acted", r.kind === "case" ? "Running the pipe, as agreed." : r.kind === "fish" ? "Rigging the jars, as agreed." : "Plugging the hole, as agreed.");
+      note(ctx, w.id, "acted", r.kind === "case" ? "Running the pipe, as agreed." : r.kind === "drive" ? "Putting the drive head on, as agreed." : r.kind === "setdrive" ? "Setting it here, as agreed." : r.kind === "fish" ? (w.collapse ? "Rigging the swage, as agreed." : "Rigging the jars, as agreed.") : "Plugging the hole, as agreed.");
     },
     "crew.decline"(ctx, c: Command) {
       const st = S(ctx);
