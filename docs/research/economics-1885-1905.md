@@ -8,6 +8,34 @@ Research notes behind docs/DESIGN.md §8, "Historical economics" (November 2026)
 
 ---
 
+## 0. Verified in primary sources (second pass, November 2026)
+
+The research environment was given access to USGS, NBER, EIA, the *Handbook of Texas*, HathiTrust, Wikisource and the Internet Archive. The figures below were read in the source itself. They are labelled **VERIFIED** and supersede the search-summary figures in the sections that follow wherever the two differ.
+
+| Figure | Value | Where read | Label |
+|---|---|---|---|
+| US average crude oil first-purchase price, $/bbl | 1890 0.77 · 1891 0.56 · 1892 0.51 · 1893 0.60 · 1894 0.72 · 1895 1.09 · 1896 0.96 · 1897 0.68 · 1898 0.80 · 1899 1.13 · 1900 1.19 · 1901 0.96 · 1902 0.80 · 1903 0.94 · 1904 0.86 · 1905 0.62 | EIA, series F000000__3, annual (eia.gov) | VERIFIED |
+| Contract drilling, per foot | $1.00 (1877–78), $0.60 (1886–88), $0.45 (1897–98), "checked against actual transactions" | NBER, Williamson, Andreano & Menezes (1966), Table 9, n. 8 | VERIFIED |
+| A whole 1,000-ft Appalachian well | $3,021 (1877–78), $2,119 (1886–88). This includes the derrick and rig, engine and boiler "at the minimum prices", casing, tubing, rods, a contract driller with four hands, a 100-bbl tank and two torpedoes. | NBER (1966), Table 9 | VERIFIED |
+| The drillers' union scale, August 1888 | 50–60¢ a foot in the old Pennsylvania and New York districts; $1.15–$2 in the Washington county pools; "reaming down … to shut off salt-water, 40 cents per foot"; "use of machinery … 10 cents per foot" | USGS, *Mineral Resources of the U.S., 1888*, p. 467 | VERIFIED |
+| A cable-tool outfit, supply-house prices | Rig irons $50–275; a complete framed rig $600–750; boiler and engine $580–900; drilling tools, cable and sand line from $500 to "$4,000 to $5,000"; a rotary outfit about $3,000 | J. Whiteshot, *The Oil-Well Driller* (1905), supply-house list (archive.org: oilwelldrillerhi00whitrich) | VERIFIED (c. 1905 prices) |
+| Drive pipe | "Frequently it is necessary to drive the columns of pipe instead of inserting them … heavy pipe, called drive pipe, must be used. In drilling a well in a district where the geological formation is not well known it is much safer to use drive pipe. The ordinary sizes are 10, 8, 6 and 4¼ inches." | Whiteshot (1905), same list | VERIFIED |
+| Texas formations | "a formation nearly devoid of rock … strata of clay and quicksand". The Beaumont sands are "generally denominated quicksands by the drillers." | Whiteshot (1905); Hayes & Kennedy, USGS Bulletin 212 (1903), p. 86 | VERIFIED |
+| Driving casing on the Gulf Coast | "Where the gravel beds are heavy the driving of the casing has usually to be resorted to. This entails considerable risk, and often the loss of the well by damage to the casing." | Bulletin 212, p. 65 | VERIFIED |
+| Quicksand in the hole | "The sand was very fine and flowed easily. It filled the well casing in a few hours to a height of 300 feet." (Sour Lake district) | Bulletin 212, p. 113 | VERIFIED |
+| Gas | "its pressure was sufficient to lift the 12-inch casing in the well and destroy the derrick … the well was abandoned." (Bryan Heights) | Bulletin 212, p. 127 | VERIFIED |
+| Where casing is set | "Each driller decides when he has reached a bed sufficiently solid to set his casing, and this point probably varies rather widely." (Spindletop) | Bulletin 212, p. 72 | VERIFIED |
+| Gulf Coast casing program (rotary era) | 12-inch casing 500–800 ft, "depending largely upon the nature of the ground and the skill of the driller"; then 8 or 9-inch; then 6-inch; "occasionally … 4-inch or even 2-inch" | Bulletin 212, p. 169 | VERIFIED |
+| Beaumont contract price, 1902–03 | "$4 to $4.50 per foot", the contractor furnishing everything (rotary, after the boom). About two months a well. | Bulletin 212, pp. 169–170 | VERIFIED |
+| Driving limits | "If the thickness of soft stratum is very great, friction of the pipes … may be such that perhaps not more than 80 or 100 ft. can be driven without the pipes being injured." Then a larger pipe first and smaller pipe telescoped below. | W. Isler, *Well-Boring for Water, Brine and Oil* (1902), pp. 61–62 | VERIFIED |
+| Driving practice | "The tubing should be turned as long as it will move before resorting to driving." The bottom pipe carries "a steel shoe having a chisel-edge". Driving is done with a monkey (driving weight) on a driving-flange, worked from the rig "much in the same manner as piles are driven". | Isler (1902), pp. 62–64, 137 | VERIFIED |
+| Driving failures | Flush-jointed pipe "cannot stand any substantial strain such as these pipes have to bear during driving", and "too often" the joints strip or burst, "thereby causing utter failure". An inferior tube "means total collapse of the well". | Isler (1902), pp. 64–65 | VERIFIED |
+| Running sand | It is "the most serious difficulty met with in well-boring", and the bore must be "tubed from top to bottom". Wet running sand rose "30 to 40 ft. in the bore-hole" at a slight movement of the tools. | Isler (1902), pp. 102–103, 124 | VERIFIED |
+| A well lost to quicksand | "This well had to be abandoned at about 400 feet depth, since the tube collapsed after passing into quicksand." (salt well, Tully, N.Y.) | USGS, *Mineral Resources 1889–90*, p. 487 | VERIFIED |
+| Spindletop before Lucas | The Gladys City company, formed in August 1892, made "three shallow attempts, beginning in 1893 and using cable-tool drilling equipment", all unsuccessful. Land near Spindletop had been offered "for $150 for three years" before the boom. | *Handbook of Texas*, "Spindletop Oilfield" (TSHA) | VERIFIED |
+
+Still not found in a primary source: casing price per foot by size, drillers' and tool dressers' wages for 1890, a used-rig price in Texas, and Texas bank rates in 1890.
+
 ## 1. Well cost
 
 | Value | Unit | Year / place | Label | Source |

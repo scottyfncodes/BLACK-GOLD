@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatDate, randomSeed, type GameRuntime, type Snapshot } from "../app/runtime";
-import { CAMPAIGN_START, HAUL_LIMIT_BBL, HAULING_CENTS, MINUTES_PER_DAY, OIL_PRICE_CENTS, ROYALTY, type Category } from "../sim";
+import { CAMPAIGN_START, HAUL_LIMIT_BBL, MINUTES_PER_DAY, netPerBarrelCents, ROYALTY, type Category } from "../sim";
 
 /**
  * The campaign's two verdicts, said plainly: the first producing well (the goal met), and the
@@ -41,7 +41,8 @@ export function FirstOil({ runtime, snap }: { runtime: GameRuntime; snap: Snapsh
   const o = snap.ops.outcome;
   const wells = snap.ops.past.length + (snap.ops.well ? 1 : 0);
   const days = o.firstOilAt !== null ? Math.round((o.firstOilAt - CAMPAIGN_START) / MINUTES_PER_DAY) : 0;
-  const net = OIL_PRICE_CENTS - HAULING_CENTS - Math.round(OIL_PRICE_CENTS * ROYALTY);
+  const price = snap.ops.oilPriceCents;
+  const net = netPerBarrelCents(price, ROYALTY);
   const spent = spentBy(snap).reduce((a, s) => a + s.cents, 0);
   const close = () => runtime.dismissMilestone();
   return (
@@ -57,7 +58,7 @@ export function FirstOil({ runtime, snap }: { runtime: GameRuntime; snap: Snapsh
             <div><dt>Wells drilled</dt><dd>{wells}</dd></div>
             <div><dt>Spent to get here</dt><dd>{usd(spent)}</dd></div>
           </dl>
-          <p class="meta">Wagons carry up to {HAUL_LIMIT_BBL} barrels a day: about {usd(HAUL_LIMIT_BBL * 30 * net)} a month after hauling and the owner's royalty, while the well flows. What the company becomes now is up to you.</p>
+          <p class="meta">Crude fetches {price}¢ a barrel at the railhead this year, and the price moves from year to year. Wagons carry up to {HAUL_LIMIT_BBL} barrels a day: about {usd(HAUL_LIMIT_BBL * 30 * net)} a month after hauling and the owner's royalty at this year's price, while the well flows. What the company becomes now is up to you.</p>
           <div class="row"><button type="button" class="button button-primary" data-testid="carry-on" onClick={close}>Carry on</button></div>
         </div>
       )}

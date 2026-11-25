@@ -6,11 +6,15 @@
 import { insertScheduled, type WorldState } from "./core/engine";
 import { MINUTES_PER_DAY } from "./core/time";
 import { emptyLedger, post, recompute, dollarsToCents, type Ledger } from "./company/ledger";
-import { emptyOutcome, RIG_VALUE } from "./operations";
+import { emptyOutcome } from "./operations";
 import { emptyCrew } from "./company/crew";
 import { emptyLeaseBook, ROYALTY, termEnd, type LeaseBook } from "./company/leases";
 import { emptyProductionBook } from "./company/production";
-import { emptyBank } from "./company/bank";
+import { RIG_BOOK, USED_RIG_PRICE } from "./company/bank";
+
+/** The rules as they stood when the v1 → v2 migration was written: it must keep producing a v2 world. */
+const V2_RIG_VALUE = 400;
+const v2Bank = () => ({ accrued: 0, strikes: 0, lien: false, rigOwned: true });
 import { SURVEYS } from "../content/geography/surveys";
 
 export type Migration = (world: Record<string, unknown>) => Record<string, unknown>;
@@ -31,7 +35,7 @@ export function v1ToV2(input: Record<string, unknown>): Record<string, unknown> 
     const cash = typeof ops.cash === "number" && Number.isFinite(ops.cash) ? Math.max(0, ops.cash) : 0;
     const ledger: Ledger = emptyLedger();
     post(ledger, world.time, "opening", "Balance brought forward", [{ account: "cash", cents: dollarsToCents(cash) }, { account: "equity", cents: -dollarsToCents(cash) }]);
-    post(ledger, world.time, "opening", "Cable-tool rig and tools, owned", [{ account: "equipment", cents: dollarsToCents(RIG_VALUE) }, { account: "equity", cents: -dollarsToCents(RIG_VALUE) }]);
+    post(ledger, world.time, "opening", "Cable-tool rig and tools, owned", [{ account: "equipment", cents: dollarsToCents(V2_RIG_VALUE) }, { account: "equity", cents: -dollarsToCents(V2_RIG_VALUE) }]);
     ops.ledger = ledger as unknown as Record<string, unknown>;
     delete ops.cash;
   }
@@ -49,7 +53,7 @@ export function v1ToV2(input: Record<string, unknown>): Record<string, unknown> 
     ops.leases = book as unknown as Record<string, unknown>;
   }
   if (!("production" in ops)) ops.production = emptyProductionBook() as unknown as Record<string, unknown>;
-  if (!("bank" in ops)) ops.bank = emptyBank() as unknown as Record<string, unknown>;
+  if (!("bank" in ops)) ops.bank = v2Bank() as unknown as Record<string, unknown>;
   if (!world.queue.some((e) => e.type === "company.day")) insertScheduled(world, nextMidnight(world.time), "company.day");
   return world;
 }
@@ -111,7 +115,36 @@ export function v3ToV4(input: Record<string, unknown>): Record<string, unknown> 
   return world;
 }
 
-export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4 };
+/**
+ * v4 → v5: the rig at period prices.
+ * - The bank records the rig's value on the books. An owned rig is revalued, by an entry in
+ *   the books against the company's capital: the outfit the company started with from $400 to
+ *   $1,500; a used rig bought back from $300 to $900. The bank's advance on it falls from three
+ *   quarters to a fifth, so a company's credit is about what it was ($300 on the opening rig).
+ * - Interest, the oil price and the rig's resale value are rules, not saved state: they apply
+ *   from the moment the save is loaded.
+ */
+export function v4ToV5(input: Record<string, unknown>): Record<string, unknown> {
+  const world = structuredClone(input) as unknown as WorldState & Record<string, unknown>;
+  const ops = world.systems.operations as Record<string, unknown> | undefined;
+  if (!ops) return world;
+  const bank = ops.bank as Record<string, unknown> | undefined;
+  const ledger = ops.ledger as Ledger | undefined;
+  if (!bank || !ledger || "rigBookCents" in bank) return world;
+  if (!bank.rigOwned) { bank.rigBookCents = 0; return world; }
+  // Which rig: the last rig event in the books decides (bought used, or the opening outfit).
+  let used = false;
+  for (const e of ledger.entries) {
+    if (/^Used cable-tool rig and tools, bought/.test(e.memo)) used = true;
+    else if (/^Rig seized/.test(e.memo)) used = false;
+  }
+  const was = used ? 30_000 : 40_000, now = used ? USED_RIG_PRICE * 100 : RIG_BOOK * 100;
+  post(ledger, world.time, "opening", `Rig and tools revalued at period prices: $${was / 100} to $${now / 100}`, [{ account: "equipment", cents: now - was }, { account: "equity", cents: was - now }]);
+  bank.rigBookCents = now;
+  return world;
+}
+
+export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5 };
 
 /** Invariants a loaded world must hold beyond its shape. Returns a reason, or null. */
 export function worldProblem(world: WorldState): string | null {

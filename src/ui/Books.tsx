@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { formatDate, type GameRuntime, type Snapshot } from "../app/runtime";
 import {
   ACCRUAL_UNITS,
@@ -7,14 +7,49 @@ import {
   CONTRACT_DAYS,
   CONTRACT_PAY,
   CONTRACT_WAGES,
+  OIL_ADVANCE,
   RATE_PERCENT,
-  RIG_VALUE,
+  RIG_ADVANCE,
+  RIG_RESALE,
   STRIKES_TO_FORECLOSE,
   toCalendar,
   USED_RIG_PRICE,
   type Category,
   type Entry,
 } from "../sim";
+
+const pct = (f: number) => (f === 0.75 ? "three quarters" : f === 0.5 ? "half" : f === 0.2 ? "a fifth" : `${Math.round(f * 100)}%`);
+
+/** Selling the rig: a consequential decision, so it takes a second, informed tap. */
+function SellRig({ runtime, book, debt }: { runtime: GameRuntime; book: number; debt: number }) {
+  const [asking, setAsking] = useState(false);
+  const proceeds = RIG_RESALE * 100;
+  const toBank = Math.min(proceeds, debt);
+  return (
+    <div class="recover sell-rig" data-testid="sell-rig">
+      {!asking ? (
+        <div class="row">
+          <button type="button" class="button" data-testid="sell-rig-ask" onClick={() => setAsking(true)}>
+            Sell the rig and tools<small>{wholeDollars(proceeds)} in Beaumont</small>
+          </button>
+        </div>
+      ) : (
+        <>
+          <p>
+            A used outfit fetches <b>{wholeDollars(proceeds)}</b> in Beaumont; this one stands at {wholeDollars(book)} on the books, so the company loses {wholeDollars(Math.max(0, book - proceeds))}.
+            {toBank > 0 ? ` The bank is paid first: ${wholeDollars(toBank)} of the price goes against the loan.` : ""} Without a rig the company can neither drill nor take contract work, and a used rig costs {wholeDollars(USED_RIG_PRICE * 100)} to buy back.
+          </p>
+          <div class="row">
+            <button type="button" class="button button-danger" data-testid="sell-rig-confirm" onClick={() => { setAsking(false); runtime.command("company.sellRig", null); }}>
+              Sell it<small>{wholeDollars(proceeds)}</small>
+            </button>
+            <button type="button" class="button" onClick={() => setAsking(false)}>Keep the rig</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 interface Props {
   runtime: GameRuntime;
@@ -86,7 +121,7 @@ export function Books({ runtime, snap, open, onClose }: Props) {
   const debt = Math.round(snap.ops.debt * 100);
   const booked = months[0]?.close ?? 0;
   const unbooked = booked - cash; // today's rig time, entered at midnight
-  const limit = creditLimitCents(bank, production, RIG_VALUE * 100);
+  const limit = creditLimitCents(bank, production, snap.ops.oilPriceCents);
   const room = Math.max(0, limit - debt);
   const roomSteps = Math.floor(room / BORROW_STEP_CENTS) * BORROW_STEP_CENTS;
   const accruedCents = Math.floor(bank.accrued / ACCRUAL_UNITS);
@@ -107,7 +142,8 @@ export function Books({ runtime, snap, open, onClose }: Props) {
         <dl class="position" data-testid="position">
           <div><dt>Cash in hand</dt><dd data-testid="books-cash">{money(cash)}</dd></div>
           <div><dt>Owed to the bank</dt><dd data-testid="books-debt" class={debt > 0 ? "owed" : ""}>{debt > 0 ? money(debt) : "Nothing"}</dd></div>
-          <div><dt>Rig and tools</dt><dd>{!bank.rigOwned ? "None" : contract ? "Out on contract" : "Owned"}</dd></div>
+          <div><dt>Rig and tools</dt><dd>{!bank.rigOwned ? "None" : contract ? "Out on contract" : `Owned · ${wholeDollars(bank.rigBookCents)}`}</dd></div>
+          <div><dt>Crude this year</dt><dd data-testid="oil-price">{snap.ops.oilPriceCents}¢ a barrel</dd></div>
           <div><dt>Wells producing</dt><dd>{production.producers.length || "None"}</dd></div>
         </dl>
 
@@ -122,7 +158,7 @@ export function Books({ runtime, snap, open, onClose }: Props) {
             <p>The bank foreclosed and holds a lien: it takes the oil money first until the loan is clear. It lends nothing more until then.</p>
           ) : (
             <p>
-              The bank lends three quarters of the value of what the company owns: the rig{production.producers.length ? " and the oil its wells bring in" : ""}. It will lend up to <b>{wholeDollars(limit)}</b> in all, at {RATE_PERCENT}% a year. Interest is taken from cash at each month's end; repay whenever you like.
+              The bank lends {pct(RIG_ADVANCE)} of what the rig and tools stand at on the books{production.producers.length ? `, and ${pct(OIL_ADVANCE)} of the next half-year of oil money from the wells, at this year's price` : ""}. It will lend up to <b>{wholeDollars(limit)}</b> in all, at {RATE_PERCENT}% a year. Interest is taken from cash at each month's end; repay whenever you like.
             </p>
           )}
           {debt > 0 && accruedCents > 0 && <p class="meta">Interest so far this month: {money(accruedCents)}.</p>}
@@ -166,6 +202,9 @@ export function Books({ runtime, snap, open, onClose }: Props) {
                 )}
               </div>
             </div>
+          )}
+          {bank.rigOwned && !contract && !rigBusy && (
+            <SellRig runtime={runtime} book={bank.rigBookCents} debt={debt} />
           )}
           {!bank.rigOwned && (
             <div class="recover" data-testid="recover">
