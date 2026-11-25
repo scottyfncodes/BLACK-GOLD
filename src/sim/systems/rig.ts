@@ -18,7 +18,7 @@ import { generateGeology, rockAt, type Lithology, type RockAt } from "../geology
 import type { SampleEvidence } from "../knowledge/types";
 import { accruedCents, COSTS, emptyOutcome, RIG_VALUE, STARTING_CASH, type Operation, type OperationsState, type Well } from "../operations";
 import { cashCents, debtCents, dollarsToCents, emptyLedger, pay, post, receive } from "../company/ledger";
-import { rngKey } from "../core/rng";
+import { rngKey, rngUnit } from "../core/rng";
 import { activeLease, askingTerms, emptyLeaseBook, ownerAccepts, REFUSAL_DAYS, surveyById, termEnd, type PublicNews } from "../company/leases";
 import { printedMap } from "../surface/print";
 import { CAP_COST, dayBarrels, emptyProductionBook, HAULING_CENTS, OIL_PRICE_CENTS } from "../company/production";
@@ -26,6 +26,8 @@ import { ACCRUAL_UNITS, RATE_PERCENT, BORROW_STEP_CENTS, creditLimitCents, dayAc
 import { CONTRACT_DAYS, CONTRACT_PAY, CONTRACT_WAGES, contractOffered, recoveryPaths, type Position } from "../company/recovery";
 import { candidatesFor, dayRateCents, emptyCrew, emptyRecord, type Driller, type DrillerRecord } from "../company/crew";
 import { abilityOf } from "../hidden/drillers";
+import { assess, type Advice, type Observations } from "../company/judgement";
+import { MAX_NOTES, type DeclineMemo, type DrillerNote, type Recommendation } from "../company/crew";
 import { MAX_STRINGS, MIN_STRING_FT, PIPE, pullDays, SALVAGE, stringCostCents, waterCut } from "../company/casing";
 import { seatSeals } from "../hidden/casing";
 import { SURVEYS as ALL_SURVEYS } from "../../content/geography/surveys";
@@ -127,6 +129,125 @@ function habits(ctx: Ctx): { lead: number; spread: number; lapse: number; bailAt
     bailAt: 7.5 - 4 * a.judgement + (t === "methodical" ? -1.2 : t === "aggressive" ? 1 : 0),
     dressAt: 0.15 + 0.4 * a.judgement + (t === "cautious" ? 0.05 : t === "economical" ? -0.05 : 0),
   };
+}
+
+/** Unanswered advice lapses after this much play (minutes). */
+export const ADVICE_LAPSE_MINUTES = 60;
+
+/** Run the next string now (the player's order, his accepted advice, or his own judgement). */
+function caseNow(ctx: Ctx, w: Well): void {
+  if (w.busy || w.status !== "drilling") throw new CommandRejected("Not now.");
+  if (w.strings.length >= MAX_STRINGS) throw new CommandRejected(`No smaller pipe will go inside the ${PIPE[MAX_STRINGS - 1]!.name}. The rest of this hole is open.`);
+  if (w.depthFt - w.casedFt < MIN_STRING_FT) throw new CommandRejected("The hole is cased almost to bottom already.");
+  const cost = stringCostCents(w.strings.length, Math.round(w.depthFt));
+  if (available(S(ctx)) < cost) throw new CommandRejected(`The ${PIPE[w.strings.length]!.name} to ${Math.round(w.depthFt)} ft costs $${Math.ceil(cost / 100)}.`);
+  startOp(ctx, w, "case");
+}
+
+/** Run a fishing job now. */
+function fishNow(ctx: Ctx, w: Well, memo = ""): void {
+  if (w.status !== "stuck" || w.busy) throw new CommandRejected("The tools are not stuck.");
+  const st = S(ctx);
+  if (available(st) < dollarsToCents(COSTS.fishing)) throw new CommandRejected(`A fishing job costs $${COSTS.fishing}.`);
+  pay(st.ledger, ctx.now, "drilling", `Fishing job on the ${w.name}${memo}`, "drilling", dollarsToCents(COSTS.fishing), { wellId: w.id, surveyId: w.surveyId });
+  recordOf(st, w).fishing++;
+  w.fishCount++;
+  startOp(ctx, w, "fish");
+}
+
+function note(ctx: Ctx, wellId: string, kind: DrillerNote["kind"], text: string): void {
+  const notes = S(ctx).crew.notes;
+  notes.push({ t: ctx.now, wellId, kind, text });
+  if (notes.length > MAX_NOTES) notes.splice(0, notes.length - MAX_NOTES);
+}
+
+/** What the driller can see of this hole and the purse: never the ground below the bit. */
+function observe(st: OperationsState, w: Well): Observations {
+  const own = st.samples.filter((s) => s.wellId === w.id);
+  const last = own[own.length - 1];
+  const lastWater = w.waterFt[w.waterFt.length - 1];
+  const size = w.strings.length;
+  return {
+    depthFt: w.depthFt,
+    casedFt: w.casedFt,
+    stringsLeft: MAX_STRINGS - size,
+    nextPipe: size < MAX_STRINGS ? PIPE[size]!.name : null,
+    nextCostCents: size < MAX_STRINGS ? stringCostCents(size, Math.round(w.depthFt)) : 0,
+    openSandFt: w.openSandFt,
+    bottom: last ? { lith: last.lith, call: last.call, ft: last.baseFt } : null,
+    waterSeen: w.waterFt.length > 0,
+    waterShutOff: !!lastWater && w.strings.some((s) => !s.pulled && s.observed === "dry" && s.seatFt >= lastWater[1]),
+    stuck: w.status === "stuck",
+    fishCount: w.fishCount,
+    cashCents: available(st),
+    dayCents: dayRateCents(st.crew),
+    fishingCents: dollarsToCents(COSTS.fishing),
+  };
+}
+
+/** The circumstances a recommendation was made in, to tell when they have materially changed. */
+function circumstances(w: Well): DeclineMemo {
+  return { depthFt: w.depthFt, openSandFt: w.openSandFt, strings: w.strings.length, stuckCount: w.fishCount + (w.status === "stuck" ? 1 : 0) };
+}
+
+/** A declined recommendation stays declined until the hole has changed enough to matter. */
+function stillDeclined(m: DeclineMemo | undefined, now: DeclineMemo, kind: Advice["kind"]): boolean {
+  if (!m) return false;
+  if (kind === "case") return m.strings === now.strings && now.depthFt < m.depthFt + 100 && now.openSandFt < m.openSandFt + 50;
+  return m.stuckCount === now.stuckCount && m.strings === now.strings;
+}
+
+function decline(ctx: Ctx, r: Recommendation): void {
+  const st = S(ctx);
+  const w = st.well;
+  st.crew.pending = null;
+  if (w) st.crew.declined[r.kind] = circumstances(w);
+  note(ctx, r.wellId, "advice", r.kind === "case" ? "No pipe, then. I'll drill on." : r.kind === "fish" ? "No fishing job, then." : "We'll keep at it, then.");
+}
+
+/** The recovery reserve: his own spending never leaves less than this in hand. */
+function reserveCents(st: OperationsState): number {
+  return CONTRACT_WAGES * 100 + 3 * dayRateCents(st.crew);
+}
+
+/**
+ * The driller with the tools looks at the hole and, when he sees cause, recommends: asking
+ * first, or acting within the month's budget if trusted to. He does not repeat himself.
+ */
+function consult(ctx: Ctx, w: Well): void {
+  const st = S(ctx);
+  const crew = st.crew;
+  const status = w.status as Well["status"];
+  // Advice left unanswered while an hour of play ran on is taken as "drill on"; so is advice the hole has outrun.
+  if (crew.pending && (crew.pending.wellId !== w.id || ctx.now > crew.pending.t + ADVICE_LAPSE_MINUTES || status === "gusher" || status === "dry" || !w.auto)) decline(ctx, crew.pending);
+  if (crew.pending) return;
+  if (!w.auto || w.busy || (status !== "drilling" && status !== "stuck")) return;
+  const a = abilityOf(ctx.seed, crew.driller.id);
+  const bucket = Math.floor(w.depthFt / 25);
+  const advice = assess(observe(st, w), a, crew.driller.temperament, rngUnit(ctx.seed, "judge", w.id, bucket), rngUnit(ctx.seed, "judge2", w.id, bucket));
+  if (!advice) return;
+  if (stillDeclined(crew.declined[advice.kind], circumstances(w), advice.kind)) return;
+  // Trusted to judge: act within this month's budget, never below the recovery reserve.
+  const c = toCalendar(ctx.now), month = c.year * 12 + (c.month - 1);
+  if (crew.orders.month !== month) { crew.orders.month = month; crew.orders.spentCents = 0; }
+  const within = crew.orders.spentCents + advice.costCents <= crew.orders.budgetCents;
+  const reserve = available(st) - advice.costCents >= reserveCents(st);
+  if (crew.orders.authority === "judgement" && advice.kind !== "abandon" && within && reserve) {
+    try {
+      if (advice.kind === "case") caseNow(ctx, w);
+      else fishNow(ctx, w, " (on the driller's judgement)");
+      crew.orders.spentCents += advice.costCents;
+      note(ctx, w.id, "acted", `${advice.text} Done, on my own judgement.`);
+      notice(ctx, `${crew.driller.name}: ${advice.kind === "case" ? `ran the ${PIPE[w.strings.length]?.name ?? "pipe"}` : "a fishing job"} on his own judgement, $${Math.ceil(advice.costCents / 100)}.`);
+      return;
+    } catch (err) {
+      if (!(err instanceof CommandRejected)) throw err;
+    }
+  }
+  const why = crew.orders.authority === "judgement" && advice.kind !== "abandon" ? (!within ? " That is past this month's allowance, so I'm asking." : !reserve ? " That would leave too little in hand, so I'm asking." : "") : "";
+  crew.pending = { id: crew.nextId++, kind: advice.kind, t: ctx.now, wellId: w.id, text: advice.text + why, costCents: advice.costCents };
+  note(ctx, w.id, "advice", advice.text);
+  ctx.emit({ type: "driller.advice", severity: "notice", interrupt: true, data: { id: crew.pending.id, kind: advice.kind, message: `${crew.driller.name}: ${advice.text}${why}` } });
 }
 
 /** Men looking for work in Beaumont: a fresh handful each month. */
@@ -585,6 +706,7 @@ export const rig: System<Json> = {
       if (w.busy && ctx.now >= w.busy.until) complete(ctx, w, w.busy.op);
       else if (!w.busy && w.status === "drilling") drill(ctx, w);
       guard(ctx, w, before);
+      consult(ctx, w);
       // complete() and drill() may have ended the well; re-read its status.
       const status = w.status as Well["status"];
       if (status !== "gusher" && status !== "dry") ctx.schedule(ctx.now + TICK_MINUTES, "rig.tick");
@@ -609,7 +731,7 @@ export const rig: System<Json> = {
       st.well = {
         id: `ours-${n}`, name: `${survey.name} No. ${n}`, x: p.x, y: p.y, surveyId: survey.id, spudAt: ctx.now,
         status: "rigging", depthFt: 0, reachFt: 1, fillFt: 0, sharp: 1, casedFt: 0, openSandFt: 0,
-        feeding: false, auto: false, busy: null, lastBailFt: 0, rop: 0, contact: 0, idleTicks: 0, lowFundsWarned: false, strings: [], leakFt: 0, waterFt: [], driller: st.crew.driller.id,
+        feeding: false, auto: false, busy: null, lastBailFt: 0, rop: 0, contact: 0, idleTicks: 0, lowFundsWarned: false, strings: [], leakFt: 0, waterFt: [], driller: st.crew.driller.id, fishCount: 0,
       };
       (st.crew.records[st.crew.driller.id] ??= emptyRecord()).wells++;
       startOp(ctx, st.well, "rigup");
@@ -737,13 +859,24 @@ export const rig: System<Json> = {
       startOp(ctx, w, "dress");
     },
     "rig.case"(ctx) {
+      caseNow(ctx, well(ctx));
+    },
+    "crew.accept"(ctx, c: Command) {
+      const st = S(ctx);
+      const r = st.crew.pending;
+      if (!r || r.id !== (c.payload as { id?: number })?.id) throw new CommandRejected("He has nothing waiting on you.");
+      st.crew.pending = null;
       const w = well(ctx);
-      if (w.busy || w.status !== "drilling") throw new CommandRejected("Not now.");
-      if (w.strings.length >= MAX_STRINGS) throw new CommandRejected(`No smaller pipe will go inside the ${PIPE[MAX_STRINGS - 1]!.name}. The rest of this hole is open.`);
-      if (w.depthFt - w.casedFt < MIN_STRING_FT) throw new CommandRejected("The hole is cased almost to bottom already.");
-      const cost = stringCostCents(w.strings.length, Math.round(w.depthFt));
-      if (available(S(ctx)) < cost) throw new CommandRejected(`The ${PIPE[w.strings.length]!.name} to ${Math.round(w.depthFt)} ft costs $${Math.ceil(cost / 100)}.`);
-      startOp(ctx, w, "case");
+      if (r.kind === "case") caseNow(ctx, w);
+      else if (r.kind === "fish") fishNow(ctx, w);
+      else finish(ctx, w, "dry", `The ${w.name} is plugged and abandoned at ${Math.round(w.depthFt)} ft.`);
+      note(ctx, w.id, "acted", r.kind === "case" ? "Running the pipe, as agreed." : r.kind === "fish" ? "Rigging the jars, as agreed." : "Plugging the hole, as agreed.");
+    },
+    "crew.decline"(ctx, c: Command) {
+      const st = S(ctx);
+      const r = st.crew.pending;
+      if (!r || r.id !== (c.payload as { id?: number })?.id) throw new CommandRejected("He has nothing waiting on you.");
+      decline(ctx, r);
     },
     "crew.hire"(ctx, c: Command) {
       const st = S(ctx);
@@ -786,13 +919,7 @@ export const rig: System<Json> = {
       notice(ctx, `The crew is pulling the casing from the ${w.name}: ${days} day${days > 1 ? "s" : ""}.`);
     },
     "rig.fish"(ctx) {
-      const w = well(ctx);
-      if (w.status !== "stuck" || w.busy) throw new CommandRejected("The tools are not stuck.");
-      const st = S(ctx);
-      if (available(st) < dollarsToCents(COSTS.fishing)) throw new CommandRejected(`A fishing job costs $${COSTS.fishing}.`);
-      pay(st.ledger, ctx.now, "drilling", `Fishing job on the ${w.name}`, "drilling", dollarsToCents(COSTS.fishing), { wellId: w.id, surveyId: w.surveyId });
-      recordOf(st, w).fishing++;
-      startOp(ctx, w, "fish");
+      fishNow(ctx, well(ctx));
     },
     "rig.abandon"(ctx) {
       const w = well(ctx);

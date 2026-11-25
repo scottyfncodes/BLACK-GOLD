@@ -29,7 +29,7 @@ export { CAP_COST, HAUL_LIMIT_BBL, OIL_PRICE_CENTS, HAULING_CENTS, type Producer
 export { activeLease, askingTerms, ROYALTY, TERM_DAYS, LOWER_OFFER, type Lease, type LeaseBook, type Terms, type PublicNews } from "./company/leases";
 export { cashCents, debtCents, type Ledger, type Entry, type Category, type Account } from "./company/ledger";
 export { operationsOf, COSTS, RIG_VALUE, STARTING_CASH, type CampaignOutcome, type Contract, type OperationsView, type Well, type WellStatus, type Operation } from "./operations";
-export { FEED_RATE, SWEET_FT, MAX_DEPTH_FT, TICK_MINUTES, IDLE_WARN_TICKS, LOW_FUNDS_DAYS, contactFor, positionOf } from "./systems/rig";
+export { ADVICE_LAPSE_MINUTES, FEED_RATE, SWEET_FT, MAX_DEPTH_FT, TICK_MINUTES, IDLE_WARN_TICKS, LOW_FUNDS_DAYS, LEAK_FT, contactFor, positionOf } from "./systems/rig";
 
 /** Every system in the shipping game, in a fixed order (order is part of determinism). */
 export const GAME_SYSTEMS = [calendar, geology, fieldwork, rig] as const;

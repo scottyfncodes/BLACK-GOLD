@@ -41,6 +41,8 @@ export interface Well {
   leakFt: number;
   /** Where the hole made water as it was drilled (top, base in ft): what the crew saw, nothing deeper. */
   waterFt: [number, number][];
+  /** Fishing jobs run on this hole. */
+  fishCount: number;
   /** The company's driller in charge of this well (his record answers for it). */
   driller: string;
   /** The rig is pulling this hole's casing until then. */

@@ -104,6 +104,7 @@ export function v3ToV4(input: Record<string, unknown>): Record<string, unknown> 
     if (!("leakFt" in w)) w.leakFt = 0;
     if (!("waterFt" in w)) w.waterFt = [];
     if (!("driller" in w)) w.driller = "d0";
+    if (!("fishCount" in w)) w.fishCount = 0;
   }
   if (!("crew" in ops) || ops.crew === null) ops.crew = emptyCrew(world.seed) as unknown as Record<string, unknown>;
   for (const p of ((ops.production as { producers?: Record<string, unknown>[] } | undefined)?.producers ?? [])) if (!("waterCut" in p)) p.waterCut = 0;
