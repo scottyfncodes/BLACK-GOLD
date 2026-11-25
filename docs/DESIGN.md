@@ -603,3 +603,7 @@ Decisions taken so far are marked. Where a decision is still open, its default i
 3. **Visual direction:** *Decided: B · Geologist's Plate*, chosen from three rendered directions in review round 1. See [`docs/ART-DIRECTION.md`](ART-DIRECTION.md).
 4. **Units:** period oilfield units displayed by default with an SI toggle. *Default: yes.*
 5. **Historical naming:** real places, fictional people and companies. *Default: yes.*
+6. **Contract drilling:** *Decided:* a financial recovery mechanism for now. It is offered only while the company cannot afford a well of its own. Making it a legitimate, balanced business strategy is future work, and needs its own balance pass.
+7. **Bankruptcy:** *Decided:* a legitimate failure condition. The game shows the way back when one exists and ends the campaign plainly when none does; it never guarantees recovery.
+8. **First oil:** *Decided:* the first producing well marks the beginning of company growth, not final victory. It stays the current milestone; later phases build the company's growth on top of it.
+9. **Next priority:** *Decided:* casing mechanics and hired-driller intelligence, proposed for review before implementation.
