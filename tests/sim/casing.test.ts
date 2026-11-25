@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { noRunningSand } from "../helpers/ground";
 import { CAMPAIGN_START, gameEngine, MAX_STRINGS, MINUTES_PER_DAY, operationsOf, PIPE, positionOf, recoveryPaths, stringCostCents, type WorldState } from "../../src/sim";
 import { canonicalJson } from "../../src/sim/core/hash";
 import { post, recompute } from "../../src/sim/company/ledger";
@@ -32,7 +33,7 @@ function site(i0 = 0): { seed: string; x: number; y: number; col: (Interval & { 
           // A site with a water sand, then clay, above the pay: room for a test to seat pipe well or badly.
           const sand = oil && col.find((iv) => iv.lithology === "sand" && iv.fluid === "water" && iv.baseFt < oil.topFt - 100);
           const clay = sand && col.find((iv) => iv.lithology === "clay" && iv.topFt >= sand.baseFt - 1 && iv.baseFt < oil!.topFt && iv.baseFt - iv.topFt > 30);
-          if (oil && clay && oil.topFt < 1300 && !col.some((iv) => iv.fluid === "gas")) return { seed, x, y, col, oilFt: oil.topFt };
+          if (oil && clay && oil.topFt < 1300 && !col.some((iv) => iv.fluid === "gas") && noRunningSand(seed, x, y, oil.topFt)) return { seed, x, y, col, oilFt: oil.topFt };
         }
     }
   }

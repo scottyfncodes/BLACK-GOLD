@@ -34,6 +34,8 @@ The research environment was given access to USGS, NBER, EIA, the *Handbook of T
 | A well lost to quicksand | "This well had to be abandoned at about 400 feet depth, since the tube collapsed after passing into quicksand." (salt well, Tully, N.Y.) | USGS, *Mineral Resources 1889–90*, p. 487 | VERIFIED |
 | Spindletop before Lucas | The Gladys City company, formed in August 1892, made "three shallow attempts, beginning in 1893 and using cable-tool drilling equipment", all unsuccessful. Land near Spindletop had been offered "for $150 for three years" before the boom. | *Handbook of Texas*, "Spindletop Oilfield" (TSHA) | VERIFIED |
 
+These sources ground the driven-casing mechanics. `docs/DESIGN.md` §8, "Driven casing through quicksand (as built)", separates what they document from the provisional gameplay values built on them.
+
 Still not found in a primary source: casing price per foot by size, drillers' and tool dressers' wages for 1890, a used-rig price in Texas, and Texas bank rates in 1890.
 
 ## 1. Well cost

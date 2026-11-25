@@ -51,7 +51,61 @@ export interface CasingString {
   observed: StringObserved;
   /** Pulled from a dead hole and sold. */
   pulled: boolean;
+  /** How it went in: let down into the hole ("run", the default) or driven with the maul. */
+  method?: "run" | "driven";
+  /** Feet of it driven, for drive pipe. */
+  drivenFt?: number;
+  /** Let-down pipe that hung up in the hole short of bottom. */
+  hung?: boolean;
+  /** Harm done to it: a joint parted under the maul, or the pipe collapsed in the hole. */
+  damage?: "parted" | "collapsed" | null;
 }
+
+/**
+ * Driving pipe (docs/DESIGN.md §8, "Driven casing through quicksand"). Heavy drive pipe is
+ * driven down with the rig's maul on a drive head, a steel shoe on the bottom joint, the bit
+ * clearing the sand inside it. Documented practice (Isler 1902; Whiteshot 1905); the prices and
+ * rates below are PROVISIONAL gameplay values.
+ */
+export const DRIVE = {
+  /** Drive pipe costs this many times ordinary casing per foot (approved; provisional). */
+  priceFactor: 1.6,
+  /** The drive head and clamps: reusable equipment, bought once (cents; provisional). */
+  headCents: 4_000,
+  /** A steel drive shoe for each driven string, by size (cents; provisional): consumed with the string. */
+  shoeCents: [600, 500, 400] as readonly number[],
+  /** A collapsed string: a swaging and fishing job (cents and days; provisional). */
+  swageCents: 15_000,
+  swageDays: 4,
+  /** After this many failed attempts there is nothing left to take hold of. */
+  swageAttempts: 3,
+} as const;
+
+/** Drive pipe from the surface to `shoeFt`, with its shoe (cents). */
+export const drivePipeCents = (size: number, shoeFt: number) =>
+  Math.round(Math.max(0, shoeFt) * PIPE[size]!.centsPerFt * DRIVE.priceFactor) + DRIVE.shoeCents[size]!;
+
+/** Pipe being driven: where its shoe is, how far it has gone, and how it has been going. */
+export interface DriveJob {
+  size: number;
+  /** Where the shoe started from (ft): where the pipe stood when driving began. */
+  startFt: number;
+  shoeFt: number;
+  drivenFt: number;
+  /** The shoe's depth each hour of driving, latest last (a short log, as the driller keeps it). */
+  log: { t: number; ft: number }[];
+  /** The driller has called refusal: the pipe has all but stopped. */
+  refused: boolean;
+  /** Told to drive on past refusal. */
+  pounding: boolean;
+  /** The best two hours of going the pipe has made: the driller judges refusal against it. */
+  peak?: number;
+  /** What was paid for the pipe brought out (cents): pipe for about 100 ft of driving, and the shoe. */
+  paidCents: number;
+}
+
+/** Drive pipe is bought for this much driving below where it stands; unused joints go back to the supply house. */
+export const DRIVE_ALLOWANCE_FT = 100;
 
 export const stringCostCents = (size: number, seatFt: number) => Math.round(Math.max(0, seatFt) * PIPE[size]!.centsPerFt);
 
@@ -63,7 +117,13 @@ export const SALVAGE = {
   /** Pipe from a sealed seat comes out clean; pipe seated in sand is gripped and battered. */
   sealedFraction: 0.5,
   sandFraction: 0.3,
+  /** Driven pipe is held fast by the sand it was driven through; damaged pipe is junk. */
+  drivenFraction: 0.1,
 } as const;
+
+/** What pulling a string can be expected to fetch, from what the crew has seen of it. */
+export const salvageFraction = (s: CasingString) =>
+  s.damage ? 0 : s.method === "driven" ? SALVAGE.drivenFraction : s.observed === "dry" ? SALVAGE.sealedFraction : SALVAGE.sandFraction;
 
 /** Rig days to pull every string still in a hole. */
 export function pullDays(strings: readonly CasingString[]): number {

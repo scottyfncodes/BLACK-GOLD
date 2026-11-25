@@ -780,7 +780,7 @@ The full notes, with every figure's source and label, are in [`docs/research/eco
   - *Credit from oil* is now worth less in a low-price year, because it is valued at the year's price.
   - *Not yet modelled:* depreciation of the rig, a Gulf Coast price discount (none documented for these years), storage of oil to wait for a better year (no storage exists yet).
 
-**Driven casing through quicksand (engineering design, for review; not built)**
+**Driven casing through quicksand (engineering design; approved with the owner's decisions below, and built)**
 
 Evidence (verified; research notes §0): Isler (1902); Hayes & Kennedy, USGS Bulletin 212 (1903); Whiteshot (1905); *Mineral Resources 1889–90*; *Handbook of Texas*.
 - **What history allows.**
@@ -837,6 +837,78 @@ Evidence (verified; research notes §0): Isler (1902); Hayes & Kennedy, USGS Bul
   3. *Collapse:* should it always lose the hole, or allow a very costly fishing attempt?
   4. *Difficulty target:* thick quicksand (over about 100 ft) should usually cost two string sizes and sometimes the hole, as the Gladys City record suggests. Is that the difficulty you want?
 
+**Driven casing through quicksand (as built, schema 6)**
+
+- **Owner's decisions.**
+  - Drive pipe at 1.6 times ordinary casing per foot, provisional.
+  - The drive head is reusable equipment, bought once; the drive shoe is a consumable on each driven string.
+  - A collapsed string allows an expensive, slow swaging job with no promise. Severity, depth, equipment and the driller's hand decide whether it can work; some collapses never can; it is no cheap, repeatable escape.
+  - Thick running sand may cost two casing sizes or the hole. The 80–100 ft driving limit is a practical range, not a hard boundary.
+  - The player drills blind: no precise warnings, no percentages, no fixed thresholds. Good drillers reduce uncertainty; they do not remove it.
+- **What is sourced and what is a gameplay assumption.**
+
+  | | Sourced (research notes §0) | Provisional gameplay value |
+  |---|---|---|
+  | Running sand ("quicksand") in the Beaumont section | Bulletin 212: the drillers' word for the Beaumont sands; sand filling a casing 300 ft in hours. Isler: rising 30–40 ft at a touch; "the most serious difficulty". | Where it lies: lenses in the Lissie, Willis, Oakville and Frio beds, patchy across about 1.6 km and down about 45 ft (`hidden/quicksand.ts`). Strength 0–1. |
+  | Open hole and let-down pipe in it | Isler: the bore must be tubed through it. *Mineral Resources 1889–90*: a tube collapsed in quicksand and the well was abandoned. | Inflow up to 14 ft an hour, heave up to 35 ft, and pipe hanging at the first strong sand. |
+  | Driving | Isler and Whiteshot: a maul or monkey on a drive head, a steel shoe, heavy drive pipe, turning before driving, telescoping smaller pipe below. "Much safer" where the ground is unknown. | Rates (sand 3.2, gravel 1.3, clay 1.1 ft an hour before friction). Friction rising with length driven, around a practical 90 ft scaled by pipe size (±15%), the driller's feel (0.6–1.4×) and the ground. |
+  | Limits and failures | Isler: "perhaps not more than 80 or 100 ft" before injury; joints strip or burst under the blows. Bulletin 212: driving through gravel "often" loses the well by damage to the casing. | Joint and collapse hazards per hour, which rise steeply past refusal. Refusal judged against the pipe's own best rate. |
+  | Collapse | Collapse and the loss of wells are documented. | The swaging job: $150 and 4 days a try, at most 3 tries, odds falling 40% a try. Severity is hidden; at 0.75 or more nothing opens it. |
+  | Prices | Supply-house prices for rigs and tools (Whiteshot). | Drive pipe at 1.6×, the head at $40, shoes at $4–6, salvage of driven pipe at 10%. |
+- **How it plays.**
+  - The bailer tells the crew in words: "Sand keeps coming back into the hole", "The sand comes back in as fast as it is bailed", "It heaved up about 20 ft as the bailer came out". It never says how much sand lies below or how strong it is.
+  - The driller reads it. A good judge calls running sand at about the right point; a poor one mistakes ordinary caving for it, or misses it and lets pipe down, which hangs.
+  - He recommends driving. With the drive head (bought once) he drives the next size of pipe, bought for 100 ft and settled when set: unused joints go back, and pipe driven further is paid for.
+  - The driving panel shows the shoe, the feet driven, the hourly log as bars, and his word for it: "going down steadily", "harder", "hard". He calls refusal by the feel of the log, when depends on his judgement and temper. The player then sets the pipe or drives on.
+  - Driving on risks a parted joint (the pipe still stands but seals nothing) or a collapse (the tools stop above it).
+  - Under "use his judgement" he sets the pipe at refusal himself. Driving still counts against the month's budget and reserve, and he never abandons a hole on his own.
+  - Every driven string takes one of the three sizes. Thick sand can take two, leaving less for the water sands below. A hole lost in the sand is a hole lost.
+- **Measured** (driving harness: 20 seeded sites for each thickness of running sand within 900 ft of a hill, one well each; the driller drills, his advice is accepted, his counsel to quit declined):
+
+  | Ground (thickest lens, median) | Policy | Through the sand | Strings used | Parted joints / well | Collapses (swaged) | Days |
+  |---|---|---|---|---|---|---|
+  | Thin (35 ft) | best / starting / worst driller | 18 / 18 / 17 of 20 | 1.5 / 2.25 / 2.25 | 0 / 0 / 0.05 | 0 | 19.5 / 20.5 / 22.5 |
+  | | starting, let-down casing only | 9 | 0.85 | 0 | 0 | 42.0 |
+  | | starting, pounding past refusal | 16 | 2.05 | 0.95 | 2 (0) | 18.8 |
+  | Thick (75 ft) | best / starting / worst driller | 14 / 11 / 12 | 1.6 / 2.0 / 2.3 | 0.15 / 0.1 / 0 | 0 | 20.6 / 22.3 / 22.2 |
+  | | starting, let-down casing only | 3 | 0.8 | 0 | 0 | 45.0 |
+  | | starting, pounding past refusal | 11 | 1.85 | 0.95 | 2 (1) | 22.4 |
+  | Very thick (140 ft) | best / starting / worst driller | 8 / 8 / 6 | 1.55 / 2.1 / 2.2 | 0.05 / 0 / 0 | 0 / 1 / 1 | 24.3 / 25.1 / 26.5 |
+  | | starting, let-down casing only | 0 | 0.65 | 0 | 0 | 48.6 |
+  | | starting, pounding past refusal | 6 | 1.9 | 0.95 | 3 (0) | 22.2 |
+
+  - *Driving is what gets a hole through.* With let-down casing alone, thick sand is passed 3 times in 20 and very thick never. Those holes spend twice the rig days making nothing.
+  - *Skill reduces uncertainty, it does not remove it.* The best driller gets through more often in thick sand, and uses about a quarter fewer casing sizes. A poor one hangs let-down pipe in running sand in about a quarter of his holes. Very thick sand still beats most holes, whoever drills.
+  - *Pounding past refusal is a real gamble.* Nearly every string pounded on parts a joint; about one hole in nine collapses (7 in 60); one of those 7 collapses was swaged open.
+  - *Trusting his judgement* gave the same results as accepting every recommendation, without the interruptions.
+- **Campaigns against production** (three years, 44 seeded worlds, the game's own recovery paths; production = main at dfd43e9):
+
+  | Policy | Build | Survived | Struck oil | Wells a company | Plugged or abandoned a company | Money ran out a company | Median cash − debt, with oil | Debt peak median / max |
+  |---|---|---|---|---|---|---|---|---|
+  | Prudent, hill flank first | production | 4 | 4 | 3.1 | 2.95 | 0 | $39,394 | $300 / $300 |
+  | | new | 3 | 3 | 2.6 | 2.18 | 0.36 | $26,832 | $251 / $301 |
+  | Reckless | production | 4 | 4 | 1.7 | 1.27 | 0.18 | $39,306 | $300 / $300 |
+  | | new | 3 | 4 | 1.4 | 0.80 | 0.43 | $26,744 | $300 / $300 |
+  | Prudent, best site first | production | 22 | 19 | 2.9 | 2.32 | 0 | $30,333 | $251 / $302 |
+  | | new | 11 | 10 | 2.8 | 2.34 | 0.20 | $33,076 | $250 / $302 |
+
+  - *The largest change in the game since the bank.* 30 of the 44 best oil sites have running sand above the pay, and 20 have a lens thicker than 50 ft. Companies that went straight to the best site survive three years half as often (11 against 22). Before this feature their holes went through the sand as if it stood.
+  - That matches the record. The Gladys City company's cable-tool holes on Spindletop all failed from 1893, and the field came in only with the rotary in 1901.
+  - *Kept, not tuned away,* as instructed: plausible failure stays. The lever, should the owner want quicksand rarer, is its prevalence in `hidden/quicksand.ts` (the per-formation strengths and the patch threshold), not the driving rules.
+  - *Capital exposure is unchanged.* Debt peaks at the $300 the bank lends; no rig was lost to the bank. *Recovery after a failed first well is unchanged:* the PR #5 requirement test holds.
+  - Profitability for the companies that strike is within the noise: 3 or 4 hill-flank strikes and 10 or 19 best-site strikes decide the medians.
+- **Exploits and loopholes closed (tests in `tests/sim/driven.test.ts`).**
+  - *Drive pipe bought and returned:* unused joints come back at cost and no more, so nothing is gained by buying long.
+  - *Drive head:* bought once, never sold. It stays with the company when the rig is sold or seized.
+  - *Swaging:* each try $150 and 4 days, the odds falling with each try, at most 3, and some collapses beyond saving. Measured over 41 collapses, a hole recovered this way cost more on average than a fresh hole to the same depth.
+  - *Pulled driven pipe* fetches 10% of its cost; damaged pipe nothing.
+  - *Casing sizes:* driven, hung and run strings share the three sizes, in order; no fourth.
+  - *Advice after the hole ends* is withdrawn, so a pending recommendation can no longer survive the well it was about (fixed in this change).
+- **Not yet modelled.**
+  - Reaming ahead of drive pipe with an enlarging bit (Isler); turning pipe before driving as a separate step; heavier mauls.
+  - The rotary, which is what finally beat Spindletop's sand (1901). It belongs to a later era.
+  - Gas development stays deferred.
+
 ## 9. Open decisions
 
 Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.
@@ -851,4 +923,4 @@ Decisions taken so far are marked. Where a decision is still open, its default i
 8. **First oil:** *Decided:* the first producing well marks the beginning of company growth, not final victory. It stays the current milestone; later phases build the company's growth on top of it.
 9. **Next priority:** *Decided:* casing mechanics and hired-driller intelligence. Approved with the refinements recorded under "Casing and hired drillers (approved design)" in §8.
 10. **Historical economics:** *Decided:* rig at $1,500 (verified against period supply-house prices), a 20% advance on it, 10% interest, and the year's documented crude price. Book value, resale value and replacement price are kept apart so the rig is never a cheap source of cash. Casing, wages and other figures wait for better evidence.
-11. **Next engineering feature:** driven casing through quicksand, designed for review in §8. Gas development remains deferred.
+11. **Driven casing through quicksand:** *Decided and built* (§8): drive pipe at 1.6×, a reusable drive head and a shoe per string, costly swaging with no promise, and thick sand that may cost two sizes or the hole. Gas development remains deferred.

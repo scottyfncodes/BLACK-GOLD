@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CAMPAIGN_START, CONTRACT_DAYS, CONTRACT_PAY, CONTRACT_WAGES, gameEngine, IDLE_WARN_TICKS, MINUTES_PER_DAY, operationsOf, positionOf, printedMap, recoveryPaths, TICK_MINUTES, type WorldState } from "../../src/sim";
 import { canonicalJson } from "../../src/sim/core/hash";
 import { balance, post } from "../../src/sim/company/ledger";
+import { noRunningSand } from "../helpers/ground";
 import { SURVEYS, insidePoly } from "../../src/content/geography/surveys";
 import { MIGRATIONS, worldProblem } from "../../src/sim/migrations";
 
@@ -19,10 +20,12 @@ const reports = (r: { events: { type: string; data?: unknown }[] }, kind: string
 
 /** The world from the review: Big Hill straddles a line; the leased Delacroix survey takes the well. */
 const REVIEW_SEED = "e459b94df4abf2ce";
-function rigged(): WorldState {
+function rigged(quiet = false): WorldState {
   const w = gameEngine.createWorld(REVIEW_SEED, CAMPAIGN_START);
   const hill = printedMap(REVIEW_SEED).hills[0]!;
-  const at = { x: hill.x - 0.15, y: hill.y - 0.1 };
+  // `quiet`: ground without running sand (test only), where tools get stuck the ordinary way.
+  const spots = [[-0.15, -0.1], [0.3, 0.2], [-0.4, 0.3], [0.5, -0.3], [0.8, 0.6], [-0.8, -0.5]].map(([dx, dy]) => ({ x: hill.x + dx!, y: hill.y + dy! }));
+  const at = quiet ? spots.find((p) => SURVEYS.some((x) => insidePoly(x.poly, p.x, p.y)) && noRunningSand(REVIEW_SEED, p.x, p.y))! : spots[0]!;
   const s = SURVEYS.find((x) => insidePoly(x.poly, at.x, at.y))!;
   cmd(w, "lease.take", { surveyId: s.id, offer: "asking" });
   expect(rejected(cmd(w, "rig.spud", at))).toBeUndefined();
@@ -68,7 +71,7 @@ describe("the idle rig", () => {
   });
 
   it("stuck tools left waiting stop the clock too", () => {
-    const w = rigged();
+    const w = rigged(true);
     cmd(w, "rig.auto", { on: true });
     for (let i = 0; i < 40 && ops(w).well!.status !== "stuck"; i++) gameEngine.advance(w, w.time + 60 * MINUTES_PER_DAY, { stopOnInterrupt: true });
     expect(ops(w).well!.status).toBe("stuck");

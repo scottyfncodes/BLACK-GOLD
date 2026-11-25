@@ -4,6 +4,7 @@ import { candidatesFor } from "../../src/sim/company/crew";
 import { abilityOf } from "../../src/sim/hidden/drillers";
 import { SURVEYS, insidePoly } from "../../src/content/geography/surveys";
 import { columnAt, generateGeology } from "../../src/sim/geology/truth/model";
+import { noRunningSand } from "../helpers/ground";
 
 /**
  * A small seeded balance harness (docs/DESIGN.md R6), run in CI. Its full-size sibling is the
@@ -29,7 +30,8 @@ function bestOil(seed: string) {
       for (let y = Math.min(...ys); y <= Math.max(...ys); y += 0.25) {
         if (!insidePoly(s.poly, x, y)) continue;
         const hc = columnAt(t, x, y, 500).find((iv) => iv.fluid === "oil");
-        if (hc && (!best || hc.top * 3.2808 < best.ft)) best = { x, y, ft: hc.top * 3.2808 };
+        // Quiet ground: drilling skill is measured where running sand does not decide the hole (see the quicksand test).
+        if (hc && (!best || hc.top * 3.2808 < best.ft) && noRunningSand(seed, x, y, hc.top * 3.2808)) best = { x, y, ft: hc.top * 3.2808 };
       }
   }
   return best;
@@ -71,7 +73,7 @@ describe("balance (seeded)", () => {
   it("a capable driller costs less per foot and gets stuck less than a poor one, across grounds", () => {
     let goodCost = 0, poorCost = 0, goodFeet = 0, poorFeet = 0, goodStuck = 0, poorStuck = 0;
     let n = 0;
-    for (let i = 0; i < 20 && n < 6; i++) {
+    for (let i = 0; i < 30 && n < 10; i++) {
       const seed = seedN(i);
       const at = bestOil(seed);
       if (!at) continue;

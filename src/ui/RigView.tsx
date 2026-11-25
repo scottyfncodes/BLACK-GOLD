@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatClock, formatDate, type GameRuntime, type Snapshot, type Speed } from "../app/runtime";
-import { CAP_COST, COSTS, HAUL_LIMIT_BBL, MAX_STRINGS, MIN_STRING_FT, PIPE, stringCostCents, SWEET_FT, MINUTES_PER_DAY, type SampleEvidence } from "../sim";
+import { CAP_COST, COSTS, DRIVE, DRIVE_ALLOWANCE_FT, drivePipeCents, HAUL_LIMIT_BBL, MAX_STRINGS, MIN_STRING_FT, PIPE, stringCostCents, SWEET_FT, MINUTES_PER_DAY, type DriveJob, type SampleEvidence } from "../sim";
 import { drawScene, SceneState } from "../render/rig/scene";
 import { CasingSheet } from "./Casing";
 import { AdviceCard } from "./Crew";
@@ -13,7 +13,25 @@ interface Props {
 }
 
 const STROKES_PER_SECOND = 0.85;
-const OPS: Record<string, string> = { rigup: "Raising the derrick", bail: "Bailing the hole", dress: "Dressing the bit at the forge", case: "Running casing", fish: "Fishing for the tools" };
+const OPS: Record<string, string> = { rigup: "Raising the derrick", bail: "Bailing the hole", dress: "Dressing the bit at the forge", case: "Running casing", fish: "Fishing for the tools", drive: "Letting the drive pipe down", swage: "Swaging the crushed pipe" };
+
+/** Feet the shoe made in about the last two hours, and the best two hours it has made. */
+function going(d: DriveJob): { lately: number; peak: number } {
+  const back = d.log[Math.max(0, d.log.length - 3)];
+  return { lately: back ? Math.max(0, d.shoeFt - back.ft) : 0, peak: d.peak ?? 0 };
+}
+
+/** The driller's words for how the pipe is going: never a number he could not read off the log. */
+function goingWord(d: DriveJob): string {
+  if (d.refused && !d.pounding) return "He calls it refusal.";
+  const { lately, peak } = going(d);
+  if (d.log.length < 3) return "Just started.";
+  if (peak <= 0 || lately >= 0.6 * peak) return "Going down steadily.";
+  if (lately >= 0.3 * peak) return "Going down harder.";
+  return d.pounding ? "Pounding past refusal." : "Going down hard.";
+}
+
+const feet = (ft: number) => (ft < 1 ? `${Math.max(1, Math.round(ft * 12))} in` : `${ft.toFixed(1)} ft`);
 
 export function RigView({ runtime, snap, onClose }: Props) {
   const well = snap.ops.well;
@@ -137,6 +155,13 @@ export function RigView({ runtime, snap, onClose }: Props) {
   const capPath = snap.paths.find((p) => p.kind === "cap");
   const advice = snap.ops.crew.pending && snap.ops.crew.pending.wellId === well.id ? snap.ops.crew.pending : null;
   const pullPath = snap.paths.find((p) => p.kind === "pull" && p.wellId === well.id);
+  const drive = well.drive ?? null;
+  const collapse = well.collapse ?? null;
+  const head = snap.ops.tools.driveHead;
+  const driveCost = nextPipe ? Math.ceil((drivePipeCents(well.strings.length, Math.round(well.depthFt) + DRIVE_ALLOWANCE_FT) + (head ? 0 : DRIVE.headCents)) / 100) : 0;
+  // The bailer has shown sand coming back into the hole: the rig offers drive pipe alongside let-down casing.
+  const sandBack = (well.lastInflow ?? 0) >= 1.5 && well.depthFt > well.casedFt + 5;
+  const startDrive = () => { audio.current.start(); if (!head && runtime.command("company.buyDriveHead", null)) return; runtime.command("rig.drive", null); };
   const lastString = well.strings[well.strings.length - 1];
   const capBorrow = capPath && capPath.kind === "cap" ? capPath.borrowCents : 0;
 
@@ -150,7 +175,7 @@ export function RigView({ runtime, snap, onClose }: Props) {
         <button type="button" class="rig-back" onClick={onClose}>← Map</button>
         <div class="rig-title">
           <h2>{well.name}</h2>
-          <p data-testid="rig-status" class={idle ? "red" : ""}>{done ? well.outcome : advice ? `${snap.ops.crew.driller.name} has a recommendation.` : busy ? `${busy}…${well.status === "rigging" && well.auto ? " The driller will start when it is up." : ""}` : well.status === "stuck" ? "The tools are stuck." : well.auto ? "The driller is running the tools." : idle ? `Nobody is working the line. Rig time runs on at $${snap.ops.dayRate % 1 ? snap.ops.dayRate.toFixed(2) : snap.ops.dayRate} a day.` : "Hold Feed to let out line and keep the needle in the band, or let the driller work."}</p>
+          <p data-testid="rig-status" class={idle ? "red" : ""}>{done ? well.outcome : advice ? `${snap.ops.crew.driller.name} has a recommendation.` : collapse && !busy ? `The ${PIPE[well.strings[well.strings.length - 1]?.size ?? 0]!.name} has collapsed at about ${collapse.atFt} ft.` : drive && !busy ? (drive.refused && !drive.pounding ? "The pipe has about stopped. Set it here, or drive on." : `The maul is on the ${PIPE[drive.size]!.name} drive pipe.`) : busy ? `${busy}…${well.status === "rigging" && well.auto ? " The driller will start when it is up." : ""}` : well.status === "stuck" ? "The tools are stuck." : well.auto ? "The driller is running the tools." : idle ? `Nobody is working the line. Rig time runs on at $${snap.ops.dayRate % 1 ? snap.ops.dayRate.toFixed(2) : snap.ops.dayRate} a day.` : "Hold Feed to let out line and keep the needle in the band, or let the driller work."}</p>
         </div>
         <button type="button" class="rig-back" aria-pressed={muted} onClick={() => { setMuted(!muted); audio.current.setMuted(!muted); }}>{muted ? "Sound off" : "Sound on"}</button>
       </header>
@@ -175,11 +200,41 @@ export function RigView({ runtime, snap, onClose }: Props) {
 
       {!done && !advice && (
         <footer class="rig-controls">
-          {well.status === "stuck" && !well.busy ? (
+          {well.status === "stuck" && !well.busy && collapse ? (
+            <div class="rig-row rig-row-two" data-testid="collapse">
+              {collapse.attempts < DRIVE.swageAttempts ? (
+                <button type="button" class="button button-primary" data-testid="swage" onClick={act("rig.fish")}>Swaging job<small>{DRIVE.swageDays} days · ${DRIVE.swageCents / 100} · no promise</small></button>
+              ) : (
+                <p class="meta rig-lost">Nothing left in the hole to take hold of.</p>
+              )}
+              <button type="button" class="button" onClick={act("rig.abandon")}>Abandon the hole</button>
+            </div>
+          ) : well.status === "stuck" && !well.busy ? (
             <div class="rig-row">
               <button type="button" class="button button-primary" onClick={act("rig.fish")}>Fishing job<small>8 hours · ${COSTS.fishing}</small></button>
               <button type="button" class="button" onClick={act("rig.abandon")}>Abandon the hole</button>
             </div>
+          ) : drive && !busy ? (
+            <>
+              <div class="drive-panel" data-testid="drive-panel" aria-live="polite">
+                <p class="drive-head"><b>Driving the {PIPE[drive.size]!.name}</b><span>shoe at {Math.round(drive.shoeFt)} ft · {Math.round(drive.drivenFt)} ft driven</span></p>
+                <div class="drive-log" aria-hidden="true">
+                  {drive.log.slice(1).map((e, i) => { const made = Math.max(0, e.ft - drive.log[i]!.ft); const top = Math.max(1, ...drive.log.slice(1).map((x, j) => Math.max(0, x.ft - drive.log[j]!.ft))); return <i key={e.t} style={{ height: `${Math.max(6, (made / top) * 100)}%` }} />; })}
+                </div>
+                <p class={`drive-word${drive.refused && !drive.pounding ? " red" : ""}`}>{goingWord(drive)} <span class="meta">Last two hours: {feet(going(drive).lately)}.</span></p>
+              </div>
+              <div class="rig-row">
+                <button type="button" class="button button-primary" data-testid="set-drive" onClick={act("rig.setDrive")}>Set it here<small>{Math.round(drive.shoeFt)} ft</small></button>
+                <button type="button" class="button" data-testid="drive-on" disabled={!drive.refused || drive.pounding} onClick={act("rig.driveOn")}>Drive on<small>{drive.pounding ? "pounding" : "past refusal"}</small></button>
+                <button type="button" class="button" onClick={act("rig.abandon")}>Abandon<small>the hole</small></button>
+                <button type="button" class="button" data-testid="driller" aria-pressed={well.auto} onClick={act("rig.auto", { on: !well.auto })}>{well.auto ? "Take the controls" : "Let the driller"}<small>A</small></button>
+              </div>
+              <div class="rig-speeds" role="radiogroup" aria-label="Rig speed">
+                {speeds.map(([sp, label]) => (
+                  <button key={sp} type="button" role="radio" aria-checked={snap.speed === sp} onClick={() => runtime.setSpeed(sp)}>{label}</button>
+                ))}
+              </div>
+            </>
           ) : (
             <>
               <div class="feel" aria-live="polite">
@@ -208,6 +263,9 @@ export function RigView({ runtime, snap, onClose }: Props) {
                 <button type="button" class="button" disabled={!!busy || well.status !== "drilling"} onClick={act("rig.dress")}>Dress bit<small>D</small></button>
                 <button type="button" class="button" disabled={!!busy || well.status !== "drilling" || !canCase} onClick={act("rig.case")}>{nextPipe ? `Set ${nextPipe.name}` : "No pipe left"}<small>{nextPipe ? `$${caseCost}` : "open hole"}</small></button>
                 <button type="button" class={`button ${idle ? "button-primary" : ""}`} data-testid="driller" aria-pressed={well.auto} disabled={well.status !== "drilling" && well.status !== "rigging"} onClick={act("rig.auto", { on: !well.auto })}>{well.auto ? (well.status === "rigging" ? "Driller ready" : "Take the controls") : "Let the driller"}<small>{well.status === "rigging" && well.auto ? "when it's up" : "A"}</small></button>
+                {sandBack && nextPipe && well.status === "drilling" && (
+                  <button type="button" class="button rig-row-span" data-testid="drive-start" disabled={!!busy} onClick={startDrive}>Drive the {nextPipe.name} instead<small>about ${driveCost}{head ? "" : `, with a drive head ($${DRIVE.headCents / 100})`}</small></button>
+                )}
               </div>
               <div class="rig-speeds" role="radiogroup" aria-label="Rig speed">
                 {speeds.map(([sp, label]) => (
@@ -246,7 +304,8 @@ export function RigView({ runtime, snap, onClose }: Props) {
           <button type="button" class={`button ${capped || well.status !== "gusher" || !well.outcome?.startsWith("OIL") ? "button-primary" : ""}`} onClick={onClose}>Back to the map</button>
         </div>
       )}
-      <CasingSheet well={well} open={casingOpen} onClose={() => setCasingOpen(false)} />
+      <CasingSheet well={well} open={casingOpen} onClose={() => setCasingOpen(false)} driveHead={head}
+        drive={!done && well.status === "drilling" && !busy && !drive && !!nextPipe ? { pipe: nextPipe.name, cost: driveCost, start: () => { startDrive(); setCasingOpen(false); } } : null} />
     </div>
   );
 }

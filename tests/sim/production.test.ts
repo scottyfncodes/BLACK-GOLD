@@ -6,6 +6,7 @@ import { dayBarrels, HAUL_LIMIT_BBL, HAULING_CENTS, oilPriceCents, type Producer
 import { creditLimitCents } from "../../src/sim/company/bank";
 import { columnAt, generateGeology, isCharged } from "../../src/sim/geology/truth/model";
 import { SURVEYS, insidePoly } from "../../src/content/geography/surveys";
+import { noRunningSand } from "../helpers/ground";
 
 const cmd = (w: WorldState, type: string, payload: unknown = null) =>
   gameEngine.advance(w, w.time, { commands: [{ t: w.time, actor: "player", type, payload: payload as never }] });
@@ -22,7 +23,7 @@ function oilSite(fluid: "oil" | "gas"): { seed: string; x: number; y: number } {
           const x = d.x + Math.cos((a / 16) * Math.PI * 2) * r, y = d.y + Math.sin((a / 16) * Math.PI * 2) * r;
           if (!SURVEYS.some((s) => insidePoly(s.poly, x, y))) continue;
           const hc = columnAt(t, x, y, 180).find((iv) => iv.fluid === "oil" || iv.fluid === "gas");
-          if (hc?.fluid === fluid) return { seed, x, y };
+          if (hc?.fluid === fluid && noRunningSand(seed, x, y, hc.top * 3.2808)) return { seed, x, y };
         }
   }
   throw new Error("no site");

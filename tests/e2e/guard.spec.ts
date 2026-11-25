@@ -177,8 +177,8 @@ test("borrowing to the limit and losing it ends the campaign plainly, and a new 
 
 test("the first producing well is acknowledged as the goal met", async ({ page }) => {
   test.setTimeout(90_000);
-  // A world whose hill flank holds shallow oil (found in the review's campaign simulations).
-  await start(page, "00000000000e3aad");
+  // A world whose hill flank holds shallow oil, with no running sand above it (found with truth, test only).
+  await start(page, "00000000000e0895");
   const hill = (await snap(page)).print.hills[0]!;
   await tapKm(page, hill.x + 0.15, hill.y + 0.1);
   await page.getByTestId("lease-asking").click();

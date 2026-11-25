@@ -1372,6 +1372,88 @@ table.book tr.nocash td {
   background: var(--ink);
   color: var(--paper);
 }
+/* Driving pipe: where the shoe is, the hourly log as small bars, and the driller's word for it. */
+.drive-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "head log" "word word";
+  gap: 4px 12px;
+  align-items: end;
+  min-width: 0;
+}
+.drive-head {
+  grid-area: head;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
+}
+.drive-head span {
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+.drive-log {
+  grid-area: log;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 34px;
+  width: 104px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--ink);
+}
+.drive-log i {
+  flex: 1 1 0;
+  min-width: 4px;
+  max-width: 10px;
+  background: var(--ink);
+}
+.drive-word {
+  grid-area: word;
+  margin: 0;
+  font-size: 15px;
+}
+.drive-word.red {
+  color: var(--accent);
+}
+.drive-word .meta {
+  font-size: 14px;
+}
+.rig-row-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.rig-row .rig-row-span {
+  grid-column: 1 / -1;
+}
+.rig-lost {
+  margin: 0;
+  align-self: center;
+}
+.casing-drive {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--paper-edge);
+}
+.casing-drive p {
+  margin: 0 0 10px;
+}
+.casing-drive .button {
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+}
+.casing-drive .button small {
+  font-style: italic;
+  font-size: 12.5px;
+  opacity: 0.75;
+}
+
 .rig-speeds {
   grid-area: speeds;
   display: grid;
