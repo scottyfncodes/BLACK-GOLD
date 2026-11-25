@@ -637,11 +637,11 @@ Approved for implementation after the casing and driller proposal. The two syste
   - Asking stops the clock. A declined recommendation is remembered until the hole is 100 ft deeper, has 50 ft more open sand, a new string, or a new stuck. Unanswered advice lapses after an hour of play.
   - Under "Use his judgement" he acts within a calendar-month budget, counted cumulatively, never leaving less than the recovery reserve (contract wages plus three days of rig time), and never plugs a hole without asking.
   - **Counsel to quit** (`moneyConcern()`). He speaks in two situations, both read only from the books, the depth and the bailer:
-    - *Running short:* the money and credit left would buy only a few weeks of rig time, too little to start another hole. The cautious man speaks at about 30 days, the economical at 24, the methodical at 16, the aggressive at 5. Hidden prudence scales those (0.3 to 1.2 times).
+    - *Running short:* the cash in hand would buy only a few weeks of rig time, too little to start another hole. Unborrowed credit does not count, because the rig stops when cash runs out; his words name the credit separately ("and $300 more only if you borrow"). The cautious man speaks at about 30 days, the economical at 24, the methodical at 16, the aggressive at 5. Hidden prudence scales those (0.3 to 1.2 times).
     - *A long dry run:* 800 to 1,100 ft without a show (scaled by prudence; never for the aggressive man), once the hole has eaten most of the company's money.
     - A show of oil or gas within 150 ft of the bottom is reason to keep on, and he will not counsel quitting then. Sulphur water is not.
     - His words name what the hole has cost, the depth, the last show, and the money and days left. They never mention anything below the bit.
-    - Declined, he does not raise it again until the hole is 300 ft deeper or the money has fallen by a third.
+    - Declined, he does not raise it again until the hole is 300 ft deeper or the cash in hand has fallen by a third.
     - Accepting it plugs the hole at once, and the rig is free. Every value here is provisional.
 - **Interface.**
   - The rig's casing gauge opens the casing sheet. The cutaway draws each string at its own diameter, and a shoe seen to leak is marked in carmine.
@@ -663,27 +663,33 @@ Approved for implementation after the casing and driller proposal. The two syste
   - Trusting the driller's judgement with a $300 monthly budget reproduced accepting every recommendation exactly, without the interruptions.
   - **Recovery (PR #5's requirement):** all 38 first wells that ran out of money at the hill flank reached a second well (median one month, one contract).
   - Borrowing to the limit first, then failing: 12 of 44 companies went bankrupt. That is fewer than before this phase, because pipe left in a dead hole can be pulled and sold.
-- **Counsel to quit, measured** (the same harness; "followed" accepts every recommendation, "declined" refuses only the counsel to quit):
+- **Counsel to quit, measured** (the same harness; each world drills one first well; "followed" accepts every recommendation, "declined" refuses only the counsel to quit; after the cash-in-hand correction below):
 
-  | Hill flank (poor ground) | Plugged on his advice | Money ran out | Cash left after a dry hole | Oil |
+  | Hill flank (poor ground, 27 first wells) | Plugged on his advice | Money ran out | Cash left after a dry hole | Oil |
   |---|---|---|---|---|
-  | Best candidate, followed / declined | 8 / 0 | 10 / 16 | $99 / $51 | 2 / 2 |
-  | Starting driller, followed / declined | 3 / 0 | 5 / 7 | $137 / $118 | 2 / 2 |
-  | Worst candidate, followed / declined | 3 / 0 | 5 / 6 | $125 / $118 | 2 / 2 |
+  | Best candidate, followed / declined | 22 / 0 | 0 / 13 | $182 / $64 | 1 / 2 |
+  | Starting driller, followed / declined | 20 / 0 | 0 / 6 | $195 / $121 | 2 / 2 |
+  | Worst candidate, followed / declined | 19 / 0 | 0 / 6 | $189 / $126 | 2 / 2 |
 
-  | Best site (good ground) | Plugged on his advice | Oil | Cash left after a dry hole |
+  | Best site (good ground, 29 first wells) | Plugged on his advice | Oil | Cash left after a dry hole |
   |---|---|---|---|
-  | Best candidate, followed / declined | 4 / 0 | 45% / 52% | $309 / $330 |
-  | Starting driller, followed / declined | 2 / 0 | 38% / 38% | $290 / $298 |
-  | Worst candidate, followed / declined | 3 / 0 | 31% / 34% | $322 / $304 |
+  | Best candidate, followed / declined | 7 / 0 | 41% / 52% | $316 / $330 |
+  | Starting driller, followed / declined | 5 / 0 | 38% / 38% | $301 / $298 |
+  | Worst candidate, followed / declined | 6 / 0 | 28% / 34% | $315 / $304 |
 
-  - On poor ground his counsel keeps capital: fewer companies drill to the last dollar, and they leave a dry hole with more money.
-  - On good ground it has a price: the best candidate (who happens to be prudent in many worlds) plugged two holes that would have come in. Advice from observation alone cannot know which holes those are, and that is intended. Quitting is a real decision with a real cost, not a hint.
-  - The plug counts differ by driller, because prudence is independent of skill.
+  - On poor ground his counsel keeps capital: no first well is drilled to the last dollar, and a dry hole leaves 50% to 185% more cash.
+  - On good ground it has a price: up to three holes in 29 that would have come in are plugged. Advice from observation alone cannot know which holes those are, and that is intended. Quitting is a real decision with a real cost, not a hint. His words now say how much credit is left, so a player who believes in the hole can borrow and drill on.
+  - How much is left when he speaks differs by driller and temperament, because prudence is independent of skill: an aggressive, imprudent man speaks with two or three days of rig time in hand, a cautious, prudent one with a month.
   - An earlier tuning, triggered by the share of capital the hole had eaten, plugged 19 of 29 best sites and cut the best candidate's oil from 52% to 10%. It was rejected.
-  - **Recovery with the counsel followed:** 40 of 40 companies whose first well failed reached a second well (median one month, one contract). Borrowing to the limit first, then failing: 9 of 44 went bankrupt.
+  - **Recovery with the counsel followed:** 40 of 40 companies whose first well failed reached a second well (median one month, one contract), and 16 of them could start it at once (7 before the correction). Borrowing to the limit first, then failing: 9 of 44 went bankrupt.
+- **Investigation: "$99 vs $51 kept, but 10 vs 16 wells drilled"** (owner's question after PR #6).
+  - *The reading.* The 10 and 16 were not wells drilled. Each world drills one first well; they count how many of the 27 first wells ended because the money ran out. Following his counsel, fewer ran dry (10 against 16), and those that were plugged kept cash. On that reading the two figures agree.
+  - *The flaw the question exposed.* A per-world breakdown showed that in all 10 wells that still ran dry, he had never spoken. Several of those men were fairly prudent (a methodical driller at prudence 0.67, an economical one at 0.59).
+  - *Cause.* He measured the money left as cash plus unborrowed credit ($300 at the start). The rig stops when cash alone cannot pay the day: credit is drawn only when the owner borrows. The $300 always looked like 25 more days, so he never judged the company short, right up to the day the well was abandoned.
+  - *Correction.* He now judges by cash in hand, and names the credit separately. Neither his thresholds nor any personality changed. Pinned by a unit test (little cash and unused credit: a fairly prudent methodical man speaks).
+  - *Not changed.* Imprudent and aggressive men still speak late, with two or three days in hand. That is the intended consequence of financial recklessness, and it still costs those companies.
 - **Open findings from this phase.**
-  - Gas still ends a well, at 9 of 29 best sites. Gas development stays deferred, as do historical price research and driven casing through quicksand.
+  - Gas still ends a well, at 9 of 29 best sites. Gas development stays deferred. Driven casing through quicksand is the next engineering feature, after the economic foundation (§8, "Historical economics").
 
 ## 9. Open decisions
 

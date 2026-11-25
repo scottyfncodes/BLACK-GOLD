@@ -61,7 +61,16 @@ describe("assess: what he would recommend, from what he can see", () => {
     expect(a?.kind).toBe("quit");
     expect(a!.text).toMatch(/\$700 to 900 ft/);
     expect(a!.text).toMatch(/no show of oil or gas yet/);
-    expect(a!.text).toMatch(/\$250 left in hand and credit: about 20 days/);
+    expect(a!.text).toMatch(/\$250 in hand: about 20 days of rig time\./);
+  });
+
+  it("judges by cash in hand: unborrowed credit does not keep the rig running, so it does not hide a shortage", () => {
+    // The rig stops when cash runs out; credit is drawn only if the owner borrows. A methodical,
+    // fairly prudent man with $150 in hand and $300 of unused credit must still speak.
+    const o = { ...OBS, depthFt: 900, wellSpentCents: 70_000, cashCents: 15_000, creditRoomCents: 30_000 };
+    const a = assess(o, { ...GOOD, prudence: 0.67 }, "methodical", 0.5, 0.5);
+    expect(a?.kind).toBe("quit");
+    expect(a!.text).toMatch(/\$150 in hand: about 12 days of rig time, and \$300 more only if you borrow\./);
   });
 
   it("technical skill is not financial judgement: a fine hand may be reckless, an ordinary one prudent", () => {

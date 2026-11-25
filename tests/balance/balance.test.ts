@@ -93,7 +93,7 @@ describe("balance (seeded)", () => {
       if (!hill) continue;
       const at = { x: hill.x + 0.15, y: hill.y + 0.1 };
       if (!surveyAt(at.x, at.y)) continue;
-      const { w } = play(seed, at, null);
+      const { w } = play(seed, at, null, true); // the owner drills on past his counsel, to the last dollar
       if (!ops(w).well!.outcome?.startsWith("The money")) continue;
       failed++;
       expect(ops(w).outcome.endedAt).toBeNull();

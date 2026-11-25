@@ -75,21 +75,22 @@ const QUIT_WORDS: Record<Temperament, string> = {
  */
 export function moneyConcern(o: Observations, a: Ability, t: Temperament): string | null {
   if (o.depthFt < 150 || o.wellSpentCents <= 0) return null;
-  const capital = Math.max(0, o.cashCents) + Math.max(0, o.creditRoomCents);
-  const days = capital / o.dayCents;
-  const share = o.wellSpentCents / (o.wellSpentCents + capital);
+  // The rig runs on cash in hand: credit keeps it going only if the owner chooses to borrow.
+  const cash = Math.max(0, o.cashCents), credit = Math.max(0, o.creditRoomCents);
+  const days = cash / o.dayCents;
+  const share = o.wellSpentCents / (o.wellSpentCents + cash + credit);
   // A show of oil or gas near the bottom is reason to keep on: he will not counsel quitting then.
   if (o.lastShow && o.lastShow.kind !== "sulphur" && o.depthFt - o.lastShow.ft < 150) return null;
   const m = MONEY_SENSE[t];
   const p = a.prudence;
-  // Running short: what is left would barely start another hole. A prudent man says so sooner.
+  // Running short: the cash in hand would barely start another hole. A prudent man says so sooner.
   const short = days <= m.days * (0.3 + 0.9 * p);
   // A long run of dry hole that has eaten most of the money: he begins to doubt it.
   const sinceShow = o.depthFt - (o.lastShow?.ft ?? 0);
   const longDry = sinceShow >= m.dry * (1.5 - p) && share >= 0.65 - (p - 0.5) * 0.2;
   if (!short && !longDry) return null;
   const shown = o.lastShow ? `the last show was ${o.lastShow.kind === "sulphur" ? "sulphur water" : o.lastShow.kind} at ${Math.round(o.lastShow.ft)} ft` : "no show of oil or gas yet";
-  return `This hole has cost ${usd(o.wellSpentCents)} to ${Math.round(o.depthFt)} ft, and ${shown}. The company has ${usd(capital)} left in hand and credit: about ${Math.floor(days)} days of rig time. ${QUIT_WORDS[t]}`;
+  return `This hole has cost ${usd(o.wellSpentCents)} to ${Math.round(o.depthFt)} ft, and ${shown}. The company has ${usd(cash)} in hand: about ${Math.floor(days)} days of rig time${credit > 0 ? `, and ${usd(credit)} more only if you borrow` : ""}. ${QUIT_WORDS[t]}`;
 }
 
 /** How many fishing jobs on one hole before he would rather plug it. */
