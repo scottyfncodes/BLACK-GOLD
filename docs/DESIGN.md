@@ -691,6 +691,48 @@ Approved for implementation after the casing and driller proposal. The two syste
 - **Open findings from this phase.**
   - Gas still ends a well, at 9 of 29 best sites. Gas development stays deferred. Driven casing through quicksand is the next engineering feature, after the economic foundation (§8, "Historical economics").
 
+**Historical economics (research, November 2026)**
+
+The full notes, with every figure's source and label, are in [`docs/research/economics-1885-1905.md`](research/economics-1885-1905.md). Labels:
+- **Documented:** a source states it.
+- **Unverified:** recalled, not yet confirmed in a source.
+- **Estimate:** derived, with the method shown.
+
+*Limit of this research.* The primary volumes could not be read directly from the research environment. Those are USGS *Mineral Resources of the United States* 1890–1902, Hayes & Kennedy, USGS Bulletin 212 (1903), the NBER petroleum chapter (Williamson, Andreano & Menezes, 1966) and the *Handbook of Texas*. The "documented" figures come from those sources' text as quoted by search engines. Read the volumes before any figure becomes a hard number in the game.
+
+- **What the period says, against the game:**
+
+  | Item | Period evidence | Label | The game now | Verdict |
+  |---|---|---|---|---|
+  | Drilling by contract, per foot | $1.00 (1877–78), $0.60 (1886–88), $0.45 (1897–98), western Pennsylvania; $0.90–$1.00 "moderate depth", c. 1900–10 | Documented (NBER; *Britannica* 1911) | Own rig: derrick $350 plus about $160 of rig time for about 1,000 ft, so about $0.50/ft before casing | Consistent |
+  | A whole well, about 1,000 ft | About $1,500–$3,000 (a 1,600-ft Bradford well cost $3,434 in the early 1880s) | Estimate, from a documented anchor | About $850–$900 with casing, rig already owned | Low, but the rig is already paid for. Gulf Coast holes probably cost more per foot than Pennsylvania (quicksand, gas). |
+  | Driller and tool dresser | About $3–4 and $2.50–3 a 12-hour tour; Texas common labour about $1 a day | Unverified; Texas labour documented, undated | $12 a day: crew $9 plus driller $3 | Plausible for one tour with fuel and water; unconfirmed |
+  | A standard rig, new | About $1,500–$2,500 (engine and boiler, derrick, irons, tools, cable). A Drake-era engine cost $500 in 1858. | Estimate, low confidence | Rig valued at $400; used rig $300 | **Undervalued, perhaps four to six times** |
+  | Casing, per foot | 6⅝-inch about $0.40–0.60, 8¼-inch about $0.75–1.00, 10-inch about $1.00–1.40. Carload freight alone was 20¢ a foot in Kansas. | Estimate scaled by weight, low confidence. Freight documented, undated. | 22¢, 35¢, 50¢ | Possibly half the period price; no primary figure found |
+  | Pulled casing | Routine; recovered value unsourced | Practice documented; value an estimate | 50% sealed, 30% in sand | Keep |
+  | Royalty | One-eighth, the usual rate | Documented (Pa. 1894; Texas courts) | One-eighth | Matches |
+  | Land and leases near Beaumont | Land asked at $6 an acre at Spindletop in the early 1890s; $200 for 15 acres; $1 an acre for a large tract. Lease bonus or rental 10¢–$1 an acre. | Land documented (secondary); lease terms unverified | Bonus about 40¢ an acre ($110–$340 for 280–800 acres); rental about 7¢ an acre a year | Consistent |
+  | Crude, per barrel | US average: 77¢ (1890), 56¢ (1891), 51¢ (1892), 60¢ (1893), 72¢ (1894), $1.09 (1895). Corsicana 50¢ (1897–98), 98¢–$1.10 (1899–1900). Lima 15¢–72½¢. Spindletop's 1901 glut fell to a few cents. | Documented (EIA series; *Handbook of Texas*) | 60¢ at the railhead, flat | Within the range. The real price moved by a third or more from year to year. |
+  | Hauling and gathering | About 20¢ a barrel pipeline gathering; wooden barrels about $1–1.50 | Unverified; barrel an estimate | 20¢ hauling | Plausible |
+  | Contract income | Contractors earned $0.45–$0.60 a foot around 1890; a shallow Gulf Coast hole took 30–60 days | Documented rates; days an estimate | $400 for 30 days' work, $150 wages | Consistent, slightly generous |
+  | Interest | Texas usury ceiling about 10–12% in the 1890s; high-interest lending widespread | Ceiling unverified; practice documented | 8% a year | Somewhat low |
+  | Company capital | Gladys City Oil, Gas & Manufacturing Co. incorporated 1892, its capital not found. Lucas's first hole stopped at 575 ft when the money ran out. | Documented / not found | $1,500 cash and a rig | Consistent with small, fragile ventures |
+  | Production | Corsicana: 22 bbl a day from one well (1896); 544,620 bbl from 342 wells (1898) | Documented | Up to 150 bbl a day a well, limited by hauling | Generous for the 1890s Gulf Coast, before Spindletop |
+
+- **Conclusions.**
+  - The game's running economy (cost per foot, wages, royalty, leases, oil price, contract work) is within the period's range. It is credible as it stands.
+  - The rig is the clear outlier. It is the company's main asset, valued at $400 where the period suggests well over $1,000. That figure also sets the company's credit: 75% of the rig, $300.
+  - Casing may be priced at about half the period figure, but no primary source was found. It stays as it is until one is.
+  - A flat 60¢ oil price hides the period's real risk: the price swung by a third or more within a few years.
+
+- **Recommendations** (presented for approval; not yet built):
+  1. **Value the rig historically, without loosening credit.** Raise its book value to about $1,500, and lower the bank's advance against it to about 20%. Credit stays near $300; the balance sheet tells the truth; a used rig sells for about $1,000. A country bank lending a fifth of a used drilling outfit's value is plausible. Selling the rig becomes a real, painful recovery option, and buying one back a real hurdle. Needs a balance pass, because recovery margins depend on it.
+  2. **Let the oil price follow the year.** Use the documented US averages (77¢ in 1890, 56¢ in 1891, 51¢ in 1892, 60¢ in 1893, 72¢ in 1894, $1.09 in 1895), with the railhead discount to be decided. That gives timing, debt and storage decisions real weight, from history rather than invention. It changes the economics of first oil, so it needs its own balance pass.
+  3. **Interest at 10%.** Raise it from 8% to the period's usual ceiling. Small effect, more credible.
+  4. **Hold:** casing prices, wages, salvage fractions, leases, hauling and contract pay. They are consistent or unconfirmed. None changes until a primary source is read.
+  5. **Before any hard number:** read USGS *Mineral Resources* (1890–1895 petroleum chapters), Bulletin 212 and the NBER chapter. That needs the research environment allowed to reach pubs.usgs.gov, nber.org and tshaonline.org.
+  6. **Order of work.** Driven casing through quicksand is the next engineering feature, once 1–3 are decided. The Gladys City holes of 1893 stopped in quicksand at about 300–418 ft. Gas development stays deferred.
+
 ## 9. Open decisions
 
 Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.

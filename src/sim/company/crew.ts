@@ -74,7 +74,7 @@ export interface DeclineMemo {
   openSandFt: number;
   strings: number;
   stuckCount: number;
-  /** Money in hand and credit when it was declined (for "quit"). */
+  /** Cash in hand when it was declined (for "quit"; credit counts only once borrowed). */
   capitalCents?: number;
 }
 
