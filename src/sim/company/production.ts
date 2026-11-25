@@ -33,8 +33,10 @@ export interface Producer {
   /** Barrels produced in total, and since the last monthly sale. */
   cumBbl: number;
   monthBbl: number;
-  /** Most recent day's barrels (for the notes). */
+  /** Most recent day's barrels of oil sold (for the notes). */
   lastDayBbl: number;
+  /** The share of what flows that is water from sands above the pay never shut off (0 when sealed). */
+  waterCut: number;
 }
 
 export interface ProductionBook {

@@ -25,6 +25,8 @@ import { CAP_COST, dayBarrels, emptyProductionBook, HAULING_CENTS, OIL_PRICE_CEN
 import { ACCRUAL_UNITS, RATE_PERCENT, BORROW_STEP_CENTS, creditLimitCents, dayAccrual, emptyBank, STRIKES_TO_FORECLOSE, USED_RIG_PRICE } from "../company/bank";
 import { CONTRACT_DAYS, CONTRACT_PAY, CONTRACT_WAGES, contractOffered, recoveryPaths, type Position } from "../company/recovery";
 import { dayRateCents, emptyCrew } from "../company/crew";
+import { MAX_STRINGS, MIN_STRING_FT, PIPE, pullDays, SALVAGE, stringCostCents, waterCut } from "../company/casing";
+import { seatSeals } from "../hidden/casing";
 import { SURVEYS as ALL_SURVEYS } from "../../content/geography/surveys";
 
 type Ctx = SystemContext<Json>;
@@ -44,6 +46,8 @@ export const FEED_RATE = 12;
 export const SWEET_FT = 3;
 export const MAX_DEPTH_FT = 2500;
 const RIGUP_DAYS = 3;
+/** Sand working in under a shoe seated in sand counts as this much open sand (provisional). */
+export const LEAK_FT = 18;
 /** An idle rig (nobody on the line, or stuck tools left waiting) stops the clock every three hours. */
 export const IDLE_WARN_TICKS = 36;
 /** Warn once a well when cash covers only this many more days of rig time. */
@@ -101,10 +105,52 @@ function bail(ctx: Ctx, w: Well): void {
     topFt: Math.round(w.lastBailFt), baseFt: Math.round(w.depthFt), ...words(r, { gas: gasBelow(ctx, w) }),
   };
   if (sample.baseFt > sample.topFt) st.samples.push(sample);
+  observeStrings(ctx, w);
   w.fillFt = 0;
   w.lastBailFt = w.depthFt;
   w.reachFt = w.depthFt + 1;
   report(ctx, "bailed", `Bailed at ${Math.round(w.depthFt)} ft: ${sample.call}.`, false);
+}
+
+/** The rock at a depth as this well's bailer described it, or null if that depth was never bailed. */
+function seatCallAt(st: OperationsState, w: Well, ft: number): string | null {
+  for (let i = st.samples.length - 1; i >= 0; i--) {
+    const s = st.samples[i]!;
+    if (s.wellId === w.id && s.topFt - 2 <= ft && ft <= s.baseFt + 2) return s.call;
+  }
+  return null;
+}
+
+/** The first bail after a string is set shows what it does: the hole bails dry, or it does not. */
+function observeStrings(ctx: Ctx, w: Well): void {
+  for (const s of w.strings) {
+    if (s.observed !== "pending" || s.pulled) continue;
+    const sealed = seatSeals(ctx.seed, w.x, w.y, s.seatFt);
+    const waterAbove = w.waterFt.some(([top]) => top < s.seatFt);
+    s.observed = sealed ? "dry" : waterAbove ? "water" : "sand";
+    report(ctx, "casing", sealed
+      ? `The hole bails dry above the ${PIPE[s.size]!.name} shoe at ${s.seatFt} ft: the water behind it is shut off.`
+      : waterAbove
+        ? `Water still comes into the hole past the ${PIPE[s.size]!.name} at ${s.seatFt} ft. The pipe holds the walls up, but it is not shutting off the water.`
+        : `Sand is still working in beneath the ${PIPE[s.size]!.name} shoe at ${s.seatFt} ft.`, false);
+  }
+}
+
+/** Water sands the hole made water in above `payFt` that no sealed string shuts off. */
+function openWaterSands(ctx: Ctx, w: Well, payFt: number): number {
+  const sealed = w.strings.filter((s) => !s.pulled && seatSeals(ctx.seed, w.x, w.y, s.seatFt));
+  return w.waterFt.filter(([, base]) => base <= payFt && !sealed.some((s) => s.seatFt >= base)).length;
+}
+
+/** What the company can reckon pulling this hole's casing would cost and fetch: from what it has seen. */
+function pullReckoning(st: OperationsState): { wellId: string; costCents: number; valueCents: number } | null {
+  const w = st.well;
+  if (!w || (w.status !== "dry" && w.status !== "gusher") || w.pullingUntil) return null;
+  if (st.production.producers.some((p) => p.wellId === w.id)) return null;
+  const left = w.strings.filter((s) => !s.pulled);
+  if (!left.length) return null;
+  const valueCents = left.reduce((a, s) => a + Math.round(s.costCents * (s.observed === "dry" ? SALVAGE.sealedFraction : SALVAGE.sandFraction)), 0);
+  return { wellId: w.id, costCents: pullDays(left) * dayRateCents(st.crew), valueCents };
 }
 
 function finish(ctx: Ctx, w: Well, status: "gusher" | "dry", outcome: string): void {
@@ -136,15 +182,22 @@ function drill(ctx: Ctx, w: Well): void {
   w.fillFt += cut * 0.12;
   w.sharp = Math.max(0, w.sharp - cut * WEAR[here.lithology]);
   if ((here.lithology === "sand" || here.lithology === "gravel") && w.depthFt > w.casedFt) w.openSandFt += cut;
-  // Uncased sand heaves into the hole.
-  w.fillFt += (w.openSandFt / 60) * 0.7 * H;
+  // The crew sees water rise in the hole wherever it is drilled through a water sand.
+  if (cut > 0 && (here.lithology === "sand" || here.lithology === "gravel") && (here.fluid === "water" || here.fluid === "sulphurWater")) {
+    const last = w.waterFt[w.waterFt.length - 1];
+    if (last && w.depthFt - cut - last[1] < 5) last[1] = w.depthFt;
+    else w.waterFt.push([w.depthFt - cut, w.depthFt]);
+  }
+  // Uncased sand heaves into the hole, and so does sand working in under a shoe seated in sand.
+  const loose = w.openSandFt + w.leakFt;
+  w.fillFt += (loose / 60) * 0.7 * H;
 
   // Stuck tools: slack line, heaving sand, a hole full of cuttings.
-  const hazard = 0.0004 + 0.05 * Math.max(0, slack - SWEET_FT - 1) + 0.004 * (w.openSandFt / 40) + (w.fillFt > 10 ? 0.04 : 0);
+  const hazard = 0.0004 + 0.05 * Math.max(0, slack - SWEET_FT - 1) + 0.004 * (loose / 40) + (w.fillFt > 10 ? 0.04 : 0);
   if (ctx.random("rig:stuck") < hazard * H) {
     w.status = "stuck";
     w.feeding = false;
-    report(ctx, "stuck", `The tools are stuck at ${Math.round(w.depthFt)} ft${slack > SWEET_FT + 1 ? ": too much slack in the line" : w.openSandFt > 40 ? ": the sand has caved in on them" : ""}.`, true);
+    report(ctx, "stuck", `The tools are stuck at ${Math.round(w.depthFt)} ft${slack > SWEET_FT + 1 ? ": too much slack in the line" : loose > 40 ? ": the sand has caved in on them" : ""}.`, true);
     return;
   }
   const atBit = rock(ctx, w, w.depthFt);
@@ -175,12 +228,19 @@ function complete(ctx: Ctx, w: Well, op: Operation): void {
       return;
     case "case": {
       const st = S(ctx);
-      const ft = Math.max(0, w.depthFt - w.casedFt);
-      pay(st.ledger, ctx.now, "drilling", `Casing set from ${Math.round(w.casedFt)} to ${Math.round(w.depthFt)} ft in the ${w.name}`, "drilling", dollarsToCents(ft * COSTS.casingPerFt), { wellId: w.id, surveyId: w.surveyId });
+      const size = w.strings.length, seatFt = Math.round(w.depthFt);
+      const cost = stringCostCents(size, seatFt);
+      // The hole is bailed clean before pipe goes in, so the crew always sees what the shoe sits on.
+      if (w.depthFt - w.lastBailFt >= 1) bail(ctx, w);
+      const seatCall = seatCallAt(st, w, seatFt);
+      pay(st.ledger, ctx.now, "drilling", `Ran the ${PIPE[size]!.name} casing to ${seatFt} ft in the ${w.name}${seatCall ? `, landed in ${seatCall.split(",")[0]}` : ""}`, "drilling", cost, { wellId: w.id, surveyId: w.surveyId });
+      w.strings.push({ size, seatFt, costCents: cost, setAt: ctx.now, seatCall, observed: "pending", pulled: false });
+      // Mechanical: the pipe holds up every wall above its shoe. Hydraulic: only a seal stops the leak beneath.
       w.casedFt = w.depthFt;
       w.openSandFt = 0;
+      w.leakFt = seatSeals(ctx.seed, w.x, w.y, seatFt) ? 0 : LEAK_FT;
       w.reachFt = w.depthFt + 1;
-      report(ctx, "cased", `Casing set to ${Math.round(w.depthFt)} ft. The sands above are shut off.`, false);
+      report(ctx, "cased", `The ${PIPE[size]!.name} is set to ${seatFt} ft. The next bail will show whether it shuts off the water.`, false);
       return;
     }
     case "fish":
@@ -218,6 +278,7 @@ export function positionOf(st: OperationsState, seed: string, now: number): Posi
     uncappedOil: !!w && w.status === "gusher" && !!w.outcome?.startsWith("OIL") && !st.production.producers.some((p) => p.wellId === w.id),
     contractUntil: st.contract?.until ?? null,
     heldLeases: st.leases.leases.filter((l) => l.status === "active" && l.expiresAt > now).map((l) => l.surveyId),
+    pull: pullReckoning(st),
     cheapestLease: () => {
       const print = printedMap(seed), nw = news(st);
       let best: { surveyId: string; cents: number } | null = null;
@@ -318,11 +379,13 @@ function guard(ctx: Ctx, w: Well, before: number): void {
 function produceDay(ctx: Ctx): void {
   const pb = S(ctx).production;
   for (const p of pb.producers) {
-    const bbl = dayBarrels(p, pb.drawn[p.trap] ?? 0);
+    const flow = dayBarrels(p, pb.drawn[p.trap] ?? 0);
+    // Water from sands never shut off comes up with the oil and is let run to the pit.
+    const bbl = Math.floor(flow * (1 - p.waterCut));
     p.lastDayBbl = bbl;
     p.cumBbl += bbl;
     p.monthBbl += bbl;
-    pb.drawn[p.trap] = (pb.drawn[p.trap] ?? 0) + bbl;
+    pb.drawn[p.trap] = (pb.drawn[p.trap] ?? 0) + flow;
   }
 }
 
@@ -420,6 +483,20 @@ export const rig: System<Json> = {
       review(ctx);
       ctx.schedule(nextMidnight(ctx.now), "company.day");
     },
+    "rig.pulled"(ctx, payload) {
+      const st = S(ctx);
+      const w = st.well;
+      if (!w || w.id !== (payload as { wellId?: string })?.wellId || !w.pullingUntil) return;
+      let cents = 0;
+      for (const s of w.strings) {
+        if (s.pulled) continue;
+        cents += Math.round(s.costCents * (seatSeals(ctx.seed, w.x, w.y, s.seatFt) ? SALVAGE.sealedFraction : SALVAGE.sandFraction));
+        s.pulled = true;
+      }
+      w.pullingUntil = null;
+      if (cents > 0) receive(st.ledger, ctx.now, "equipment", `Casing pulled from the ${w.name}, sold`, "equipment", cents, { wellId: w.id, surveyId: w.surveyId });
+      ctx.emit({ type: "company.notice", severity: "notice", interrupt: true, data: { message: `The casing is out of the ${w.name} and sold for $${(cents / 100).toFixed(2)}. The rig is free.` } });
+    },
     "lease.term"(ctx, payload) {
       const st = S(ctx);
       const surveyId = (payload as { surveyId?: string })?.surveyId ?? "";
@@ -477,6 +554,7 @@ export const rig: System<Json> = {
       if (!survey) throw new CommandRejected("Drill on surveyed land.");
       if (!activeLease(st.leases, survey.id, ctx.now)) throw new CommandRejected(`You hold no lease on the ${survey.name} survey. Lease it first.`);
       if (!st.bank.rigOwned) throw new CommandRejected("The company owns no rig. Buy a used one first.");
+      if (st.well?.pullingUntil) throw new CommandRejected("The rig is pulling casing from the last hole.");
       if (st.contract) throw new CommandRejected(`The rig is out on contract until ${toCalendar(st.contract.until).day} ${MONTHS[toCalendar(st.contract.until).month - 1]}.`);
       if (available(st) < dollarsToCents(COSTS.rigUp)) throw new CommandRejected(`Raising a derrick costs $${COSTS.rigUp}. You have $${Math.floor(available(st) / 100)}.`);
       if (st.well) st.past.push(st.well);
@@ -546,6 +624,7 @@ export const rig: System<Json> = {
       if (st.contract) throw new CommandRejected("The rig is already out on contract.");
       const w = st.well;
       if (w && (w.status === "rigging" || w.status === "drilling" || w.status === "stuck")) throw new CommandRejected("The rig is busy on the company's own well.");
+      if (w?.pullingUntil) throw new CommandRejected("The rig is pulling casing from the last hole.");
       const p = positionOf(st, ctx.seed, ctx.now);
       if (!contractOffered(p)) throw new CommandRejected("Contract work is for lean times. With money for a well of your own, drill it.");
       if (available(st) < dollarsToCents(CONTRACT_WAGES)) throw new CommandRejected(`The crew's wages and fuel for the month come to $${CONTRACT_WAGES}, paid before the rig moves.`);
@@ -569,7 +648,9 @@ export const rig: System<Json> = {
       const reserveBbl = Math.round((t?.kind === "caprock" ? 160_000 : 90_000) * (0.4 + fill));
       const trap = rngKey(ctx.seed, "trap", t ? `${t.domeId}:${t.formation}` : w.id).toString(16);
       pay(st.ledger, ctx.now, "production", `Capping the ${w.name}`, "drilling", dollarsToCents(CAP_COST), { wellId: w.id, surveyId: w.surveyId });
-      st.production.producers.push({ wellId: w.id, name: w.name, surveyId: w.surveyId, x: w.x, y: w.y, since: ctx.now, trap, initialBbl, reserveBbl, cumBbl: 0, monthBbl: 0, lastDayBbl: 0 });
+      const cut = waterCut(openWaterSands(ctx, w, w.depthFt));
+      st.production.producers.push({ wellId: w.id, name: w.name, surveyId: w.surveyId, x: w.x, y: w.y, since: ctx.now, trap, initialBbl, reserveBbl, cumBbl: 0, monthBbl: 0, lastDayBbl: 0, waterCut: cut });
+      if (cut > 0) report(ctx, "wet", `Water comes up with the oil: about ${cut > 0.5 ? "half" : "a third"} of what flows from the ${w.name} is water from sands above the pay that no casing shuts off.`, false);
       notice(ctx, `The ${w.name} is capped. Teamsters will haul up to 150 barrels a day to the railhead.`);
       if (st.outcome.firstOilAt === null) {
         st.outcome.firstOilAt = ctx.now;
@@ -610,10 +691,24 @@ export const rig: System<Json> = {
     "rig.case"(ctx) {
       const w = well(ctx);
       if (w.busy || w.status !== "drilling") throw new CommandRejected("Not now.");
-      if (w.depthFt - w.casedFt < 20) throw new CommandRejected("The hole is already cased almost to bottom.");
-      const cost = (w.depthFt - w.casedFt) * COSTS.casingPerFt;
-      if (available(S(ctx)) < dollarsToCents(cost)) throw new CommandRejected(`Casing to bottom costs $${Math.ceil(cost)}.`);
+      if (w.strings.length >= MAX_STRINGS) throw new CommandRejected(`No smaller pipe will go inside the ${PIPE[MAX_STRINGS - 1]!.name}. The rest of this hole is open.`);
+      if (w.depthFt - w.casedFt < MIN_STRING_FT) throw new CommandRejected("The hole is cased almost to bottom already.");
+      const cost = stringCostCents(w.strings.length, Math.round(w.depthFt));
+      if (available(S(ctx)) < cost) throw new CommandRejected(`The ${PIPE[w.strings.length]!.name} to ${Math.round(w.depthFt)} ft costs $${Math.ceil(cost / 100)}.`);
       startOp(ctx, w, "case");
+    },
+    "rig.pull"(ctx) {
+      const st = S(ctx);
+      const r = pullReckoning(st);
+      if (!r) throw new CommandRejected("There is no casing to pull from a dead hole.");
+      if (!st.bank.rigOwned) throw new CommandRejected("Pulling casing needs a rig.");
+      if (available(st) < r.costCents) throw new CommandRejected(`Pulling the casing takes rig time worth $${Math.ceil(r.costCents / 100)}.`);
+      const w = st.well!;
+      const days = pullDays(w.strings);
+      pay(st.ledger, ctx.now, "operating", `Rig crew pulling casing from the ${w.name}, ${days} day${days > 1 ? "s" : ""}`, "operating", r.costCents, { wellId: w.id, surveyId: w.surveyId });
+      w.pullingUntil = ctx.now + days * MINUTES_PER_DAY;
+      ctx.schedule(w.pullingUntil, "rig.pulled", { wellId: w.id });
+      notice(ctx, `The crew is pulling the casing from the ${w.name}: ${days} day${days > 1 ? "s" : ""}.`);
     },
     "rig.fish"(ctx) {
       const w = well(ctx);

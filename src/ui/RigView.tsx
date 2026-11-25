@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatClock, formatDate, type GameRuntime, type Snapshot, type Speed } from "../app/runtime";
-import { CAP_COST, COSTS, HAUL_LIMIT_BBL, SWEET_FT, MINUTES_PER_DAY, type SampleEvidence } from "../sim";
+import { CAP_COST, COSTS, HAUL_LIMIT_BBL, MAX_STRINGS, MIN_STRING_FT, PIPE, stringCostCents, SWEET_FT, MINUTES_PER_DAY, type SampleEvidence } from "../sim";
 import { drawScene, SceneState } from "../render/rig/scene";
 import { RigAudio } from "./rigAudio";
 
@@ -124,7 +124,9 @@ export function RigView({ runtime, snap, onClose }: Props) {
   const lineWord = slack < 0 ? "Tools short of bottom" : slack <= SWEET_FT ? "Striking square" : "Slack in the line";
   const days = Math.floor((snap.time - well.spudAt) / MINUTES_PER_DAY);
   const done = well.status === "gusher" || well.status === "dry";
-  const caseCost = Math.ceil(Math.max(0, well.depthFt - well.casedFt) * COSTS.casingPerFt);
+  const nextPipe = well.strings.length < MAX_STRINGS ? PIPE[well.strings.length]! : null;
+  const caseCost = nextPipe ? Math.ceil(stringCostCents(well.strings.length, Math.round(well.depthFt)) / 100) : 0;
+  const canCase = !!nextPipe && well.depthFt - well.casedFt >= MIN_STRING_FT;
   const busy = well.busy ? OPS[well.busy.op] : null;
   const speeds: [Speed, string][] = [["paused", "Pause"], ["1x", "1×"], ["4x", "4×"], ["16x", "16×"]];
   // Nobody on the line for an hour or more: say so, plainly and in red.
@@ -188,7 +190,7 @@ export function RigView({ runtime, snap, onClose }: Props) {
               <div class="rig-row">
                 <button type="button" class="button" disabled={!!busy || well.status !== "drilling"} onClick={act("rig.bail")}>Bail<small>B · sample</small></button>
                 <button type="button" class="button" disabled={!!busy || well.status !== "drilling"} onClick={act("rig.dress")}>Dress bit<small>D</small></button>
-                <button type="button" class="button" disabled={!!busy || well.status !== "drilling" || caseCost < 22} onClick={act("rig.case")}>Set casing<small>${caseCost}</small></button>
+                <button type="button" class="button" disabled={!!busy || well.status !== "drilling" || !canCase} onClick={act("rig.case")}>{nextPipe ? `Set ${nextPipe.name}` : "No pipe left"}<small>{nextPipe ? `$${caseCost}` : "open hole"}</small></button>
                 <button type="button" class={`button ${idle ? "button-primary" : ""}`} data-testid="driller" aria-pressed={well.auto} disabled={well.status !== "drilling" && well.status !== "rigging"} onClick={act("rig.auto", { on: !well.auto })}>{well.auto ? (well.status === "rigging" ? "Driller ready" : "Take the controls") : "Let the driller"}<small>{well.status === "rigging" && well.auto ? "when it's up" : "A"}</small></button>
               </div>
               <div class="rig-speeds" role="radiogroup" aria-label="Rig speed">

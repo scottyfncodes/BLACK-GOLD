@@ -26,7 +26,8 @@ export type RecoveryPath =
   | { kind: "drill"; surveyId: string; borrowCents: number }
   | { kind: "leaseAndDrill"; surveyId: string; leaseCents: number; borrowCents: number }
   | { kind: "contract"; borrowCents: number }
-  | { kind: "buyRig"; borrowCents: number };
+  | { kind: "buyRig"; borrowCents: number }
+  | { kind: "pull"; wellId: string; costCents: number; valueCents: number; borrowCents: number };
 
 /** The company's position, in cents. Everything here is the company's own, public information. */
 export interface Position {
@@ -45,6 +46,8 @@ export interface Position {
   cheapestLease: (() => { surveyId: string; cents: number } | null) | null;
   derrickCents: number;
   dayCents: number;
+  /** Casing that could be pulled from the dead hole, as far as the company can judge it. */
+  pull: { wellId: string; costCents: number; valueCents: number } | null;
 }
 
 /** Whole borrowing steps needed to have `needCents` in hand. */
@@ -83,6 +86,11 @@ export function recoveryPaths(p: Position): RecoveryPath[] {
       const b = canHave(CONTRACT_WAGES * 100);
       if (b >= 0) out.push({ kind: "contract", borrowCents: b });
     }
+  }
+  // Pulling casing from a dead hole is worth doing only if the pipe fetches more than the rig days.
+  if (p.pull && p.rigOwned && !p.wellActive && p.contractUntil === null && p.pull.valueCents > p.pull.costCents) {
+    const b = canHave(p.pull.costCents);
+    if (b >= 0) out.push({ kind: "pull", ...p.pull, borrowCents: b });
   }
   if (!p.rigOwned) {
     // Buy a used rig, then take contract work (or drill) with it.

@@ -41,6 +41,8 @@ export interface Well {
   leakFt: number;
   /** Where the hole made water as it was drilled (top, base in ft): what the crew saw, nothing deeper. */
   waterFt: [number, number][];
+  /** The rig is pulling this hole's casing until then. */
+  pullingUntil?: number | null;
   /** Feet of uncased sand open to the hole. Sands heave in. */
   openSandFt: number;
   feeding: boolean;
@@ -100,7 +102,7 @@ export interface OperationsState {
 export const STARTING_CASH = 1500;
 /** The rig and tools the company starts with, carried in the books at this value. */
 export const RIG_VALUE = 400;
-export const COSTS = { rigUp: 350, casingPerFt: 1.1, fishing: 60 } as const;
+export const COSTS = { rigUp: 350, fishing: 60 } as const;
 
 export interface OperationsView {
   /** Cash in hand (dollars), from the books, less rig time not yet entered. */

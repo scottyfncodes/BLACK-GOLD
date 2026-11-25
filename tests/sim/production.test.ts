@@ -109,7 +109,7 @@ describe("production", () => {
     while (boundary <= now + 2 * MINUTES_PER_DAY) boundary = startOfNextMonth(boundary);
     gameEngine.advance(w, boundary - 1);
     const p = ops(w).production.producers[0]!;
-    const expected = p.monthBbl + dayBarrels(p, ops(w).production.drawn[p.trap]!);
+    const expected = p.monthBbl + Math.floor(dayBarrels(p, ops(w).production.drawn[p.trap]!) * (1 - p.waterCut));
     gameEngine.advance(w, boundary);
     const sale = ops(w).ledger.entries.filter((e) => e.memo.startsWith("Oil sold")).at(-1)!;
     expect(sale.t).toBe(boundary);
@@ -143,7 +143,7 @@ describe("production", () => {
 });
 
 describe("depletion", () => {
-  const p: Producer = { wellId: "w", name: "W", surveyId: "s", x: 0, y: 0, since: 0, trap: "t", initialBbl: 900, reserveBbl: 100_000, cumBbl: 0, monthBbl: 0, lastDayBbl: 0 };
+  const p: Producer = { wellId: "w", name: "W", surveyId: "s", x: 0, y: 0, since: 0, trap: "t", initialBbl: 900, reserveBbl: 100_000, cumBbl: 0, monthBbl: 0, lastDayBbl: 0, waterCut: 0 };
   it("is limited by hauling until the trap is drawn down, then falls", () => {
     expect(dayBarrels(p, 0)).toBe(HAUL_LIMIT_BBL);
     expect(dayBarrels(p, 90_000)).toBe(90);
