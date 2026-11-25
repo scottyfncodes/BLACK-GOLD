@@ -594,6 +594,26 @@ BLACK GOLD should reward geological knowledge, drilling competence, calculated r
   - on phones the goal sits below the fold;
   - hand drilling is long and shallow.
 
+**Casing and hired drillers (approved design)**
+
+Approved for implementation after the casing and driller proposal. The two systems are designed to meet: casing is where a driller's judgement shows.
+
+- **Casing strings.** Up to three telescoping strings per well: 10-inch, 8¼-inch and 6⅝-inch. Each runs from the surface to where it is set; the hole below continues at the smaller size. Three is a maximum, not a program: a well finished with fewer strings costs less, and that is its reward.
+- **Two jobs, kept apart.**
+  - *Mechanical stabilization:* any string holds up the walls above its shoe, so the sands behind it stop caving.
+  - *Hydraulic isolation:* only a string landed in an impermeable bed (clay or caprock) shuts off water. A string seated in sand still steadies the hole but does not shut off water, and sand keeps working in beneath the shoe.
+- **Water above the pay.** A water sand left open above the oil, behind no sealed string, makes the well come in cut with water, and it sells less.
+- **Pulling casing.** Pipe can be pulled from a dry hole and part of its value recovered, at the cost of rig days. Pipe seated in sand comes back worse.
+- **Driven casing through quicksand** is deferred.
+- **Drillers.** Seeded candidates in Beaumont, each with hidden ability (feel, judgement, reliability) and a public reputation. A lightweight temperament (cautious, aggressive, economical or methodical) is independent of competence: a tendency, not a ranking.
+  - True ability stays hidden. No numbers, stars or reveal meters: the player learns from what a driller says and does, and from his record across wells.
+  - His reports and recommendations come only from what he could observe: the bailer, the hole's behaviour, the line, the pipe in the hole, the money. Never from undiscovered geology or reservoir truth. Evidence and interpretation stay distinct.
+  - A declined recommendation is remembered and not raised again until circumstances change materially.
+  - **Standing orders.** "Ask before spending" by default. "Use your judgement" gives a budget per calendar month, counted cumulatively. Autonomous spending never draws the company below its recovery reserve; beyond the budget or the reserve, he asks.
+- **The casing in the cutaway** is inspectable: each string's size, depth, cost, the seat as the bailer described it, and how it has performed. Nothing below the bit is shown.
+- **Balance** is judged across cost, time, mechanical failures, water contamination, casing efficiency and successful wells, over an expanded seeded sample. PR #5's recovery margins and the 37-of-37 second-well regression must hold.
+- **Provisional abstractions.** Pipe sizes, prices per foot, drillers' and crews' day wages, salvage fractions and the time to run and pull pipe are gameplay values, not verified history. They are marked so in the code and here, to be corrected as sources are found. Partly verified: the Gladys City dry holes of 1893, 1895 and 1896 on this hill, the difficult sand below about 300 ft, and cable-tool wells running up to about three telescoping strings with a drive shoe.
+
 ## 9. Open decisions
 
 Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.
@@ -606,4 +626,4 @@ Decisions taken so far are marked. Where a decision is still open, its default i
 6. **Contract drilling:** *Decided:* a financial recovery mechanism for now. It is offered only while the company cannot afford a well of its own. Making it a legitimate, balanced business strategy is future work, and needs its own balance pass.
 7. **Bankruptcy:** *Decided:* a legitimate failure condition. The game shows the way back when one exists and ends the campaign plainly when none does; it never guarantees recovery.
 8. **First oil:** *Decided:* the first producing well marks the beginning of company growth, not final victory. It stays the current milestone; later phases build the company's growth on top of it.
-9. **Next priority:** *Decided:* casing mechanics and hired-driller intelligence, proposed for review before implementation.
+9. **Next priority:** *Decided:* casing mechanics and hired-driller intelligence. Approved with the refinements recorded under "Casing and hired drillers (approved design)" in §8.
