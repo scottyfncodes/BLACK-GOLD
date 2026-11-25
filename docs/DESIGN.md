@@ -614,6 +614,50 @@ Approved for implementation after the casing and driller proposal. The two syste
 - **Balance** is judged across cost, time, mechanical failures, water contamination, casing efficiency and successful wells, over an expanded seeded sample. PR #5's recovery margins and the 37-of-37 second-well regression must hold.
 - **Provisional abstractions.** Pipe sizes, prices per foot, drillers' and crews' day wages, salvage fractions and the time to run and pull pipe are gameplay values, not verified history. They are marked so in the code and here, to be corrected as sources are found. Partly verified: the Gladys City dry holes of 1893, 1895 and 1896 on this hill, the difficult sand below about 300 ft, and cable-tool wells running up to about three telescoping strings with a drive shoe.
 
+**Casing and hired drillers (as built)**
+
+- **Casing** (`company/casing.ts`, `hidden/casing.ts`).
+  - Up to three strings: 10-inch, 8¼-inch and 6⅝-inch.
+  - Each string is priced by its length to the surface (provisional: 50¢, 35¢ and 22¢ a foot).
+  - Setting pipe bails the hole first, so every seat is what the bailer saw.
+  - Any string resets the open sand above its shoe. A seat in clay, caprock or salt also stops the leak beneath it; a seat in sand leaves sand working in as if 18 ft of sand stood open (provisional).
+  - The first bail after a string is set shows the crew which it is: "bails dry", "water still comes in" or "sand under the shoe".
+  - The hole records where it made water. At capping, each water sand above the pay that no sealed string covers cuts the oil: a third for one, about half for two or more (provisional).
+  - Pulling pipe from a dead hole takes rig days and recovers 50% of a sealed string's cost or 30% of a string seated in sand (provisional). It is a recovery path when the pipe fetches more than the days.
+- **Drillers** (`company/crew.ts`, `hidden/drillers.ts`).
+  - Candidates are seeded per calendar month. Ability is a pure function of the seed and the driller's id: never saved, never shown, and sealed from the UI by lint.
+  - The day rate is the crew's $9 plus his wage. The starting driller costs $3, so the old $12 a day is unchanged.
+  - Ability shapes the feed (spread), lapses of slack line, and when he bails and dresses. Temperament shifts habits only: how far he leads the line, how soon he bails, how much open sand he stands, and how many fishing jobs he will run.
+  - His record keeps outcomes only, credited to the driller in charge of each well.
+- **Judgement** (`company/judgement.ts`).
+  - `assess()` takes an Observations record (the bailer's calls, open sand, pipe left, water seen and shut off, stuck tools, money) and cannot see below the bit.
+  - A capable judge waits for a seat that seals (patience grows with judgement) and takes a clay or rock seat sooner. A poor one runs pipe wherever he stands and says plainly that it "will hold the walls up, not the water".
+  - Asking stops the clock. A declined recommendation is remembered until the hole is 100 ft deeper, has 50 ft more open sand, a new string, or a new stuck. Unanswered advice lapses after an hour of play.
+  - Under "Use his judgement" he acts within a calendar-month budget, counted cumulatively, never leaving less than the recovery reserve (contract wages plus three days of rig time), and never plugs a hole without asking.
+- **Interface.**
+  - The rig's casing gauge opens the casing sheet. The cutaway draws each string at its own diameter, and a shoe seen to leak is marked in carmine.
+  - His advice is a card at the rig, and a sheet on the map with "Look at the rig first".
+  - The crew sheet holds his reputation, record, notes, standing orders and the men looking for work.
+- **Saves: schema 4.** The v3 → v4 migration turns old casing into one paid-for 10-inch string and adds the crew at the old day rate. It is tested against a real schema-3 save made by the production build, which also imports through the UI.
+- **Balance, measured** (stage-6 harness: 40 seeded worlds, 29 with oil at their best site and 27 with a printed hill; the driller drills and his advice is accepted):
+
+  | Best site | Oil | Wet | Stuck per 1,000 ft | Fishing per well | Strings per well | Sealed | Casing | Cost |
+  |---|---|---|---|---|---|---|---|---|
+  | Best candidate | 52% | 3 of 15 | 1.1 | 1.1 | 1.9 | 31% | $257 | $902 |
+  | Starting driller | 38% | 6 of 11 | 1.4 | 1.4 | 2.6 | 13% | $271 | $897 |
+  | Worst candidate | 34% | 7 of 10 | 2.0 | 1.9 | 2.8 | 7% | $245 | $912 |
+  | Starting driller, casing advice refused | 10% | 3 of 3 | 3.9 | 2.7 | 0 | — | $0 | $667 |
+  | Careful hand-driller reading the bailer | 55% | 2 of 16 | 1.3 | 1.3 | 2.0 | 36% | $306 | $939 |
+
+  - Before this phase, with the same kind of ground, the hired driller struck oil in 31% of best sites (he never cased), and a careful player cased 14 times a well for $477.
+  - At the hill flank every policy strikes about 7%: the ground decides there.
+  - Trusting the driller's judgement with a $300 monthly budget reproduced accepting every recommendation exactly, without the interruptions.
+  - **Recovery (PR #5's requirement):** all 38 first wells that ran out of money at the hill flank reached a second well (median one month, one contract).
+  - Borrowing to the limit first, then failing: 12 of 44 companies went bankrupt. That is fewer than before this phase, because pipe left in a dead hole can be pulled and sold.
+- **Open findings from this phase.**
+  - A capable driller drills a dry prospect to the last dollar more often than a poor one: he gets stuck less, so nothing stops him (16 of 27 at the hill flank). Knowing when to quit a prospect remains the player's call, helped by the low-money warning. Whether a driller should advise stopping on money grounds is a design question for later.
+  - Gas still ends a well, at 9 of 29 best sites.
+
 ## 9. Open decisions
 
 Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.
