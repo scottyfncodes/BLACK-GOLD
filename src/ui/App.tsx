@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import { formatClock, formatDate, type GameRuntime, type Snapshot, type Speed } from "../app/runtime";
 import type { Selection } from "../render/plate/map";
+import { wholeFeet } from "../sim";
 import { Books } from "./Books";
 import { CampaignOver, FirstOil } from "./Outcome";
 import { AdviceSheet, CrewSheet } from "./Crew";
@@ -47,7 +48,7 @@ function RigLine({ runtime, snap, onOpenRig }: { runtime: GameRuntime; snap: Sna
   const handOver = (w.status === "drilling" || w.status === "rigging") && !w.auto;
   return (
     <p class={`rigline ${idle ? "rigline-idle" : ""}`} data-testid="rigline">
-      <span class="rigline-text"><b class="rigline-name">{w.name} · </b>{Math.floor(w.depthFt)} ft · {who} · <span data-testid="days-left">{days} {days === 1 ? "day" : "days"} of money</span></span>
+      <span class="rigline-text"><b class="rigline-name">{w.name} · </b>{wholeFeet(w.depthFt)} ft · {who} · <span data-testid="days-left">{days} {days === 1 ? "day" : "days"} of money</span></span>
       {handOver ? (
         <button type="button" class="rigline-act" data-testid="rigline-driller" onClick={() => runtime.command("rig.auto", { on: true })}>Let the driller</button>
       ) : w.status === "stuck" ? (

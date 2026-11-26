@@ -5,7 +5,7 @@
  * Inputs are observable state only. Motion uses the real-time animation clock.
  */
 import { SURVEYS, centroid } from "../../content/geography/surveys";
-import { toCalendar, type KnowledgeView, type Well } from "../../sim";
+import { toCalendar, wholeFeet, type KnowledgeView, type Well } from "../../sim";
 import { lengthOf, pointAt, type Pt } from "./kit";
 import { geography } from "./geography";
 import { toPx, type MapView } from "./map";
@@ -86,7 +86,7 @@ export function drawLife(ctx: CanvasRenderingContext2D, v: MapView, inp: LifeInp
     ctx.font = `italic 12px ${FONT}`;
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    const label = inp.producing?.includes(w.id) ? `${w.name}: producing` : w.status === "gusher" ? `${w.name}: ${w.outcome?.startsWith("GAS") ? "gas" : "oil"} at ${Math.floor(w.depthFt)} ft` : w.status === "dry" ? `${w.name}: dry, ${Math.floor(w.depthFt)} ft` : `${w.name}: ${Math.floor(w.depthFt)} ft`;
+    const label = inp.producing?.includes(w.id) ? `${w.name}: producing` : w.status === "gusher" ? `${w.name}: ${w.outcome?.startsWith("GAS") ? "gas" : "oil"} at ${wholeFeet(w.depthFt)} ft` : w.status === "dry" ? `${w.name}: dry, ${wholeFeet(w.depthFt)} ft` : `${w.name}: ${wholeFeet(w.depthFt)} ft`;
     ctx.lineWidth = 3;
     ctx.strokeStyle = INK.paper;
     ctx.strokeText(label, x + 10, y - 6);

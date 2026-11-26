@@ -4,7 +4,7 @@
  * Inputs are the observable well state and knowledge; nothing here reads geological truth.
  * Drawn every frame; motion is driven by `anim` (real seconds), never by the sim clock.
  */
-import { toCalendar, type SampleEvidence, type Well } from "../../sim";
+import { toCalendar, wholeFeet, type SampleEvidence, type Well } from "../../sim";
 import { fbm, hash } from "../plate/kit";
 import { FONT, INK } from "../plate/palette";
 import { paper } from "../plate/paper";
@@ -426,7 +426,7 @@ function drawCutaway(ctx: CanvasRenderingContext2D, inp: SceneInput, L: Layout, 
   ctx.fillStyle = INK.ink;
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.fillText(`${Math.floor(well.depthFt)} ft`, X + 12, bottom);
+  ctx.fillText(`${wholeFeet(well.depthFt)} ft`, X + 12, bottom);
   void w;
 }
 

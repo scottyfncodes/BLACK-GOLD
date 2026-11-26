@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatDate, randomSeed, type GameRuntime, type Snapshot } from "../app/runtime";
-import { CAMPAIGN_START, HAUL_LIMIT_BBL, MINUTES_PER_DAY, netPerBarrelCents, ROYALTY, type Category } from "../sim";
+import { CAMPAIGN_START, HAUL_LIMIT_BBL, MINUTES_PER_DAY, netPerBarrelCents, ROYALTY, wholeFeet, type Category } from "../sim";
 
 /**
  * The campaign's two verdicts, said plainly: the first producing well (the goal met), and the
@@ -92,7 +92,7 @@ export function CampaignOver({ runtime, snap }: { runtime: GameRuntime; snap: Sn
           {wells.length ? (
             <ol class="outcome-wells">
               {wells.map((w) => (
-                <li key={w.id}><b>{w.name}</b> · {w.status === "gusher" ? (w.outcome?.startsWith("GAS") ? "gas" : "oil") : "dry"} at {Math.floor(w.depthFt).toLocaleString("en-US")} ft</li>
+                <li key={w.id}><b>{w.name}</b> · {w.status === "gusher" ? (w.outcome?.startsWith("GAS") ? "gas" : "oil") : "dry"} at {wholeFeet(w.depthFt).toLocaleString("en-US")} ft</li>
               ))}
             </ol>
           ) : <p class="meta">None drilled.</p>}

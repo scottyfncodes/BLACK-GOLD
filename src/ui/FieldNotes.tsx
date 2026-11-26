@@ -1,7 +1,7 @@
 import type { GameRuntime, Snapshot } from "../app/runtime";
 import { formatDate } from "../app/runtime";
 import { SURVEYS, insidePoly } from "../content/geography/surveys";
-import { activeLease, askingTerms, CONSULT_DAYS, COSTS, INQUIRE_DAYS, WALK_DAYS, type Evidence, type FieldTask, type Well } from "../sim";
+import { activeLease, askingTerms, CONSULT_DAYS, COSTS, INQUIRE_DAYS, WALK_DAYS, wholeFeet, type Evidence, type FieldTask, type Well } from "../sim";
 import type { Selection } from "../render/plate/map";
 import { nextStep } from "./advice";
 
@@ -91,9 +91,9 @@ const stakeNote = () => `${dollars(COSTS.rigUp)} to raise a derrick, then tap th
 
 function wellWords(w: Well): string {
   if (w.status === "rigging") return "· the derrick is going up";
-  if (w.status === "gusher") return `· came in at ${Math.floor(w.depthFt)} ft`;
-  if (w.status === "dry") return `· dry at ${Math.floor(w.depthFt)} ft`;
-  return `· ${Math.floor(w.depthFt)} ft${w.status === "stuck" ? ", tools stuck" : ""}`;
+  if (w.status === "gusher") return `· came in at ${wholeFeet(w.depthFt)} ft`;
+  if (w.status === "dry") return `· dry at ${wholeFeet(w.depthFt)} ft`;
+  return `· ${wholeFeet(w.depthFt)} ft${w.status === "stuck" ? ", tools stuck" : ""}`;
 }
 
 const memoryWord = (m: number) => (m > 0.85 ? "remembers well" : m > 0.7 ? "fair memory" : "hazy memory");

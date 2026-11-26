@@ -14,7 +14,7 @@ export * from "./core/engine";
 export * from "./core/time";
 export { hashState } from "./core/hash";
 export { isSeed, type Seed } from "./core/rng";
-export { ftToM, mToFt } from "./math/units";
+export { ftToM, mToFt, wholeFeet } from "./math/units";
 export { knowledgeOf, type KnowledgeView } from "./knowledge";
 export type * from "./knowledge/types";
 export { printedMap, PRINT_RELIEF_FT, type PrintedMap, type PrintedHill, type PrintedWell } from "./surface/print";
