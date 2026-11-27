@@ -79,6 +79,10 @@ test("sand coming back: drive the pipe, watch it go down, take the call of refus
   await expect(panel).not.toContainText(/%|chance/);
   await expect(rig.getByTestId("rig-status")).toContainText("Set it here, or drive on.");
   await expect(rig.getByTestId("drive-on")).toBeEnabled();
+  // One display convention: the depth gauge, the shoe in the panel and the set button agree to the foot.
+  const gauge = (await rig.getByTestId("rig-depth").textContent())!.trim();
+  await expect(panel).toContainText(`shoe at ${gauge} ft`);
+  await expect(rig.getByTestId("set-drive")).toContainText(`${gauge} ft`);
   await fits(page, ["set-drive", "drive-on", "driller"]);
   await rig.getByTestId("set-drive").click();
   await expect.poll(async () => (await snap(page)).ops.well!.strings[0]?.method).toBe("driven");

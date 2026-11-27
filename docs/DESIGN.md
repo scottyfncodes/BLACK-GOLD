@@ -909,6 +909,56 @@ Evidence (verified; research notes §0): Isler (1902); Hayes & Kennedy, USGS Bul
   - The rotary, which is what finally beat Spindletop's sand (1901). It belongs to a later era.
   - Gas development stays deferred.
 
+**Why companies fail: a diagnostic of the driven-casing build (analysis only; nothing rebalanced)**
+
+The owner accepted PR #9's difficulty and asked for the causes of failure, not changes. The method:
+- Three-year campaigns on the same seeded worlds as PR #9, with a scripted player.
+- Every well that did not strike oil is given one primary cause, read from its record and the truth below it. Truth is used to explain, never to play.
+- The companies that failed were replayed with one decision changed, to separate avoidable mistakes from geology no decision could beat.
+
+The scripted player:
+- leases the target and lets the driller drill, accepting his advice (including driving and refusal);
+- after a failure, follows the game's own recovery paths, drilling the next survey offered at its centre;
+- does no fieldwork, which is the main limit of this analysis (see below).
+
+- **Causes, best site first** (32 worlds with a printed hill and oil in the surveys; the first well at truth's shallowest oil; 7 companies survived three years):
+
+  | Primary cause | First wells of failed companies (25) | All wells of failed companies |
+  |---|---|---|
+  | Running sand: the hole stopped in or under it short of the pay, or let-down pipe hung | 9 | 21 |
+  | Plugged on the driller's counsel to quit, with oil below | 7 | 20 |
+  | Mechanical: a collapse, or abandoned after repeated fishing | 4 | 5 |
+  | Casing sizes exhausted: all three used, still in running sand above the pay | 4 | 4 |
+  | No oil within reach at the site (the recovery wells, drilled blind) | 0 | 29 |
+  | Struck oil, yet the company failed (see "Open questions") | 1 | 1 |
+
+  - The best sites are lost to the sand. Three in four of the first wells failed in or because of running sand: sand, sizes exhausted, collapses in it, and holes plugged while still fighting it. The later wells failed for want of oil, drilled where the recovery path pointed.
+  - Failure does not follow lens thickness alone. Of the 25 failed companies, 7 had very thick sand above their pay, 5 thick, 6 thin and 7 none. Of the 7 survivors, 3 had thick, 2 thin and 2 none. Capital and luck at the first hole matter as much as the thickness.
+- **Causes, hill flank first** (44 companies, the obvious guess on the printed hill; 3 survived):
+  - Site selection dominates. 101 of the 112 wells that did not strike had no oil within reach of the rig at all: 36 of the 41 failed companies' first wells, and nearly all the recovery wells.
+  - Running sand ended 7 wells and exhausted the casing in 2.
+- **What a player's decision could have changed** (each replayed on the failed companies, and on the survivors to show its cost):
+
+  | Decision, changed alone | Best site: failed companies saved (of 25) | Best site: survivors it would have sunk (of 7) | Hill flank: saved (of 41) / sunk (of 3) |
+  |---|---|---|---|
+  | Hire the dearest driller in Beaumont at the start (wage is public, ability is not) | 5 | 2 | 2 / 1 |
+  | Decline the counsel to quit and drill on | 2 | 1 | 0 / 0 |
+  | Borrow the bank's credit at the low-money warning | 0 | 0 | 0 / 0 |
+  | Move on at the first report of running sand (plug, re-spud 0.6 km along the lease) | 0 | 1 | 0 / 1 |
+  | *Bound, not a strategy:* start at the shallowest oil with no running lens over 50 ft above it (needs truth) | 1 | 1 | 0 / 0 |
+- **Avoidable or not.**
+  - *Mostly unavoidable by any single decision.* 18 of the 25 best-site failures were not saved by any change tested. Even perfect knowledge of the sand saved one, because the oil free of thick sand lies deeper and costs more to reach. The binding limit is the starting capital ($1,500 and $300 of credit) against the price of reaching the pay through running sand with cable tools. That is the Gladys City story, and it is by design.
+  - *Somewhat avoidable, at a risk.* A dearer driller saved 5 and sank 2: skill reduces uncertainty, but his wage is paid every day of a long hole. Declining the counsel to quit saved 2 and sank 1: his money sense is sometimes too careful, sometimes right. Both are real gambles. Neither is a dominant strategy.
+  - *Not avoidable by money or flight.* $300 more of credit buys about 25 days, which is not enough to finish a hole the sand is beating. Moving a short way along the lease meets the same sand, since lenses are wider than a lease, and throws away the hole already made.
+  - *Avoidable through better site selection, the decision this scripted player does not make.* On the hill flank, and in every recovery well, the scripted player drills blind. A player who walks the ground, consults and inquires (fieldwork) and reads the neighbours' wells chooses sites with oil beneath them. This analysis cannot measure how much of that 101-well loss fieldwork would avoid, because its value is the player's judgement. It is the largest avoidable cause, and it is the game's central skill.
+- **Limits of this analysis.**
+  - Single-decision counterfactuals only. Combined strategies are not tested: fieldwork first, contract drilling to build capital before the first hole, choosing a shallower target, or stopping a hole the sand is beating and holding capital for a better-evidenced site.
+  - The scripted player recovers by the game's paths and drills survey centres.
+  - Samples are small: 32 and 44 worlds, and 7 and 3 survivors.
+- **Open questions found, not acted on.**
+  - One best-site company struck oil and still failed. The scripted player caps the well without first borrowing, where the game's own cap path would offer to borrow, so this is probably the harness, not the game. Unverified.
+  - The driller's counsel to quit plugged 20 wells with oil below them in failed companies. Declining it saved only 2, so it is mostly right about the money. It is still the single most common end of a hole in the best-site campaigns, and worth watching in playtests.
+
 ## 9. Open decisions
 
 Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.

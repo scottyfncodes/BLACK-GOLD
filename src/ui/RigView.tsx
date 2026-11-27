@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatClock, formatDate, type GameRuntime, type Snapshot, type Speed } from "../app/runtime";
-import { CAP_COST, COSTS, DRIVE, DRIVE_ALLOWANCE_FT, drivePipeCents, HAUL_LIMIT_BBL, MAX_STRINGS, MIN_STRING_FT, PIPE, stringCostCents, SWEET_FT, MINUTES_PER_DAY, type DriveJob, type SampleEvidence } from "../sim";
+import { CAP_COST, COSTS, DRIVE, DRIVE_ALLOWANCE_FT, drivePipeCents, HAUL_LIMIT_BBL, MAX_STRINGS, MIN_STRING_FT, PIPE, stringCostCents, SWEET_FT, MINUTES_PER_DAY, wholeFeet, type DriveJob, type SampleEvidence } from "../sim";
 import { drawScene, SceneState } from "../render/rig/scene";
 import { CasingSheet } from "./Casing";
 import { AdviceCard } from "./Crew";
@@ -168,7 +168,7 @@ export function RigView({ runtime, snap, onClose }: Props) {
   return (
     <div class="rig" role="dialog" aria-label={`The rig: ${well.name}`}>
       <div class="rig-stage" ref={stage}>
-        <canvas ref={canvas} role="img" data-testid="rig-scene" aria-label={`${well.name}, ${Math.floor(well.depthFt)} feet. ${busy ?? (well.status === "drilling" ? lineWord : well.status)}.`} />
+        <canvas ref={canvas} role="img" data-testid="rig-scene" aria-label={`${well.name}, ${wholeFeet(well.depthFt)} feet. ${busy ?? (well.status === "drilling" ? lineWord : well.status)}.`} />
       </div>
 
       <header class="rig-top">
@@ -181,7 +181,7 @@ export function RigView({ runtime, snap, onClose }: Props) {
       </header>
 
       <aside class="rig-gauges" aria-label="Rig gauges">
-        <div class="gauge gauge-depth"><span>Depth</span><b data-testid="rig-depth">{Math.floor(well.depthFt)}</b><i>feet</i></div>
+        <div class="gauge gauge-depth"><span>Depth</span><b data-testid="rig-depth">{wholeFeet(well.depthFt)}</b><i>feet</i></div>
         <div class="gauge"><span>Cuttings</span><div class={`bar ${well.fillFt > 5.5 ? "warn" : ""}`}><div style={{ width: `${Math.min(100, (well.fillFt / 10) * 100)}%` }} /></div><i>{well.fillFt > 5.5 ? "bail the hole" : `${well.fillFt.toFixed(1)} ft in the hole`}</i></div>
         <div class="gauge"><span>Bit</span><div class={`bar ${well.sharp < 0.4 ? "warn" : ""}`}><div style={{ width: `${well.sharp * 100}%` }} /></div><i>{well.sharp < 0.4 ? "blunt: dress it" : "sharp enough"}</i></div>
         <button type="button" class="gauge gauge-btn" data-testid="casing-open" aria-label={`Casing: ${well.strings.length} of ${MAX_STRINGS} strings set, ${Math.round(well.openSandFt)} ft of open sand`} onClick={() => setCasingOpen(true)}>
@@ -217,14 +217,14 @@ export function RigView({ runtime, snap, onClose }: Props) {
           ) : drive && !busy ? (
             <>
               <div class="drive-panel" data-testid="drive-panel" aria-live="polite">
-                <p class="drive-head"><b>Driving the {PIPE[drive.size]!.name}</b><span>shoe at {Math.round(drive.shoeFt)} ft · {Math.round(drive.drivenFt)} ft driven</span></p>
+                <p class="drive-head"><b>Driving the {PIPE[drive.size]!.name}</b><span>shoe at {wholeFeet(drive.shoeFt)} ft · {wholeFeet(drive.drivenFt)} ft driven</span></p>
                 <div class="drive-log" aria-hidden="true">
                   {drive.log.slice(1).map((e, i) => { const made = Math.max(0, e.ft - drive.log[i]!.ft); const top = Math.max(1, ...drive.log.slice(1).map((x, j) => Math.max(0, x.ft - drive.log[j]!.ft))); return <i key={e.t} style={{ height: `${Math.max(6, (made / top) * 100)}%` }} />; })}
                 </div>
                 <p class={`drive-word${drive.refused && !drive.pounding ? " red" : ""}`}>{goingWord(drive)} <span class="meta">Last two hours: {feet(going(drive).lately)}.</span></p>
               </div>
               <div class="rig-row">
-                <button type="button" class="button button-primary" data-testid="set-drive" onClick={act("rig.setDrive")}>Set it here<small>{Math.round(drive.shoeFt)} ft</small></button>
+                <button type="button" class="button button-primary" data-testid="set-drive" onClick={act("rig.setDrive")}>Set it here<small>{wholeFeet(drive.shoeFt)} ft</small></button>
                 <button type="button" class="button" data-testid="drive-on" disabled={!drive.refused || drive.pounding} onClick={act("rig.driveOn")}>Drive on<small>{drive.pounding ? "pounding" : "past refusal"}</small></button>
                 <button type="button" class="button" onClick={act("rig.abandon")}>Abandon<small>the hole</small></button>
                 <button type="button" class="button" data-testid="driller" aria-pressed={well.auto} onClick={act("rig.auto", { on: !well.auto })}>{well.auto ? "Take the controls" : "Let the driller"}<small>A</small></button>
@@ -281,7 +281,7 @@ export function RigView({ runtime, snap, onClose }: Props) {
         <div class={`result ${well.status}`} role="status" data-testid="rig-result">
           <p class="result-word">{well.status === "gusher" ? (well.outcome?.startsWith("GAS") ? "Gas." : "Oil.") : "Dry hole."}</p>
           <p>{well.outcome}</p>
-          <p class="result-meta">{Math.floor(well.depthFt)} ft in {days} days · ${Math.floor(snap.ops.cash)} left</p>
+          <p class="result-meta">{wholeFeet(well.depthFt)} ft in {days} days · ${Math.floor(snap.ops.cash)} left</p>
           {well.status === "gusher" && well.outcome?.startsWith("OIL") && !capped && (
             capBorrow > 0 ? (
               <button type="button" class="button button-primary" data-testid="cap" onClick={() => { audio.current.start(); if (!runtime.command("bank.borrow", { cents: capBorrow })) runtime.command("prod.cap", {}); }}>
