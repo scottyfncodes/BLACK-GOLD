@@ -58,6 +58,8 @@ export interface Observations {
   inSalt: boolean;
   /** The deepest call of gypsum chips in this hole. */
   gypsumFt: number | null;
+  /** The deepest rainbow of oil on the bailer water in this hole. */
+  sheenFt: number | null;
   /** Feet a day this hole has made since the derrick was up. */
   paceFtDay: number;
 }
@@ -68,7 +70,8 @@ export type Advice =
   | { kind: "setdrive"; text: string; costCents: 0 }
   | { kind: "fish"; text: string; costCents: number }
   | { kind: "abandon"; text: string; costCents: 0 }
-  | { kind: "quit"; text: string; costCents: 0 };
+  | { kind: "quit"; text: string; costCents: 0 }
+  | { kind: "decide"; text: string; costCents: 0 };
 
 /** How much open sand he will stand before he wants pipe (ft): a habit of temperament. */
 const PATIENCE: Record<Temperament, number> = { cautious: 45, methodical: 60, economical: 85, aggressive: 110 };
@@ -85,6 +88,17 @@ const MONEY_SENSE: Record<Temperament, { days: number; dry: number }> = {
   aggressive: { days: 5, dry: Infinity },
 };
 
+/**
+ * His counsel about the money, and what it rests on: "negative" evidence seen in the ground, the
+ * "money" alone (not enough for another hundred feet), or "none" (nothing seen either way, so no
+ * recommendation, only the cost of going on).
+ */
+export interface Counsel {
+  kind: "quit" | "decide";
+  grounds: "negative" | "money" | "none";
+  text: string;
+}
+
 const usd = (cents: number) => "$" + Math.round(cents / 100).toLocaleString("en-US");
 
 const QUIT_WORDS: Record<Temperament, string> = {
@@ -99,44 +113,53 @@ const QUIT_WORDS: Record<Temperament, string> = {
  * what the hole has cost, the money and credit left, how deep it is, and what the bailer has
  * shown. Prudence (hidden, independent of skill) moves when he speaks; temperament how.
  */
-export function moneyConcern(o: Observations, a: Ability, t: Temperament): string | null {
+export function moneyConcern(o: Observations, a: Ability, t: Temperament): Counsel | null {
   if (o.depthFt < 150 || o.wellSpentCents <= 0) return null;
   // The rig runs on cash in hand: credit keeps it going only if the owner chooses to borrow.
   const cash = Math.max(0, o.cashCents), credit = Math.max(0, o.creditRoomCents);
   const days = cash / o.dayCents;
   const d = Math.round(o.depthFt);
-  // In the salt: nothing has been found under it in this country. Every man says so plainly.
-  if (o.inSalt) return `We're in rock salt at ${d} ft${o.rockFt !== null ? `, under the rock we met at ${o.rockFt} ft, and the rock gave no oil` : ""}. Nobody has found anything under the salt in this country. Every foot more is money thrown away: I'd plug it.`;
-  // In the rock, or the cuttings speak of rock not far below: where oil is found here, if anywhere. He will not counsel quitting.
-  if (o.rockFt !== null && o.depthFt - o.rockFt < 200) return null;
-  if (o.gypsumFt !== null && o.rockFt === null && o.depthFt - o.gypsumFt < 100) return null;
-  // What going on would cost at this hole's own pace.
   const per100 = (100 / o.paceFtDay) * o.dayCents;
   const costTo = (ft: number) => ({ days: Math.max(0, ft - o.depthFt) / o.paceFtDay, cents: (Math.max(0, ft - o.depthFt) / o.paceFtDay) * o.dayCents });
+  const ft = (n: number) => n.toLocaleString("en-US");
+
+  // ── Negative evidence: something seen in the ground says stop. He recommends it, and says what he saw.
+  if (o.inSalt) return { kind: "quit", grounds: "negative", text: `We're in rock salt at ${d} ft${o.rockFt !== null ? `, under the rock we met at ${o.rockFt} ft, and the rock gave no oil` : ""}. Nobody has found anything under the salt in this country. Every foot more is money thrown away: I'd plug it.` };
+  if (o.expect && o.rockFt === null && o.expect.hi !== null && o.depthFt > o.expect.hi + 150) {
+    const { lo, hi, basis } = o.expect;
+    return { kind: "quit", grounds: "negative", text: `We're at ${d} ft. The rock was looked for at ${ft(lo)} to ${ft(hi)} ft (${basis}), and we have not met it: that reading was wrong here, or this spot is off the rock. This hole has cost ${usd(o.wellSpentCents)}. ${QUIT_WORDS[t]}` };
+  }
+
+  // ── Positive evidence: something seen says oil, or the rock that holds it, may be near. He does not counsel stopping.
+  if (o.lastShow && o.lastShow.kind !== "sulphur" && o.depthFt - o.lastShow.ft < 150) return null;
+  if (o.sheenFt !== null && o.depthFt - o.sheenFt < 150) return null;
+  if (o.rockFt !== null && o.depthFt - o.rockFt < 200) return null;
+  if (o.gypsumFt !== null && o.rockFt === null && o.depthFt - o.gypsumFt < 100) return null;
   if (o.expect && o.rockFt === null) {
     const { lo, hi, basis } = o.expect;
-    const range = hi === null ? `deeper than ${lo.toLocaleString("en-US")} ft` : `at ${lo.toLocaleString("en-US")} to ${hi.toLocaleString("en-US")} ft`;
-    // Past where the evidence put the rock, and no rock: the reading was wrong here, or the hole is off the rock.
-    if (hi !== null && o.depthFt > hi + 150) return `We're at ${d} ft. The rock was looked for ${range} (${basis}), and we have not met it: that reading was wrong here, or this spot is off the rock. This hole has cost ${usd(o.wellSpentCents)}. ${QUIT_WORDS[t]}`;
+    const range = hi === null ? `deeper than ${ft(lo)} ft` : `at ${ft(lo)} to ${ft(hi)} ft`;
     const target = hi ?? lo + 300;
     const need = costTo(target);
-    // Within the company's means, cash and credit: he says what it will take, and does not counsel quitting.
     if (o.depthFt < target && need.cents <= cash + credit) return null;
-    if (o.depthFt < target) return `The rock is looked for ${range} (${basis}). Reaching ${target.toLocaleString("en-US")} ft at this pace is about ${Math.ceil(need.days)} days and ${usd(need.cents)} more; the company has ${usd(cash)} in hand${credit > 0 ? ` and ${usd(credit)} of credit` : ""}. ${QUIT_WORDS[t]}`;
+    // The evidence puts the rock beyond the company's means: that is a reason to stop, and he gives it.
+    if (o.depthFt < target) return { kind: "quit", grounds: "negative", text: `The rock is looked for ${range} (${basis}). Reaching ${ft(target)} ft at this pace is about ${Math.ceil(need.days)} days and ${usd(need.cents)} more; the company has ${usd(cash)} in hand${credit > 0 ? ` and ${usd(credit)} of credit` : ""}. ${QUIT_WORDS[t]}` };
   }
+
+  // ── Insufficient evidence: nothing seen says oil, and nothing says no oil. He speaks only of the money.
   const share = o.wellSpentCents / (o.wellSpentCents + cash + credit);
-  // A show of oil or gas near the bottom is reason to keep on: he will not counsel quitting then.
-  if (o.lastShow && o.lastShow.kind !== "sulphur" && o.depthFt - o.lastShow.ft < 150) return null;
   const m = MONEY_SENSE[t];
   const p = a.prudence;
   // Running short: the cash in hand would barely start another hole. A prudent man says so sooner.
   const short = days <= m.days * (0.3 + 0.9 * p);
-  // A long run of dry hole that has eaten most of the money: he begins to doubt it.
+  // A long run of hole that has eaten most of the money: he raises it, without calling it barren.
   const sinceShow = o.depthFt - (o.lastShow?.ft ?? 0);
   const longDry = sinceShow >= m.dry * (1.5 - p) && share >= 0.65 - (p - 0.5) * 0.2;
   if (!short && !longDry) return null;
-  const shown = o.lastShow ? `the last show was ${o.lastShow.kind === "sulphur" ? "sulphur water" : o.lastShow.kind} at ${Math.round(o.lastShow.ft)} ft` : "no show of oil or gas yet";
-  return `This hole has cost ${usd(o.wellSpentCents)} to ${d} ft, and ${shown}. Each hundred feet more is about ${Math.ceil(100 / o.paceFtDay)} days and ${usd(per100)} at this pace. The company has ${usd(cash)} in hand: about ${Math.floor(days)} days of rig time${credit > 0 ? `, and ${usd(credit)} more only if you borrow` : ""}. ${QUIT_WORDS[t]}`;
+  const shown = o.lastShow ? `the last show was ${o.lastShow.kind === "sulphur" ? "sulphur water" : o.lastShow.kind} at ${Math.round(o.lastShow.ft)} ft` : "no show of oil or gas";
+  const costs = `Each hundred feet more is about ${Math.ceil(100 / o.paceFtDay)} days and ${usd(per100)} at this pace. The company has ${usd(cash)} in hand: about ${Math.floor(days)} days of rig time${credit > 0 ? `, and ${usd(credit)} more only if you borrow` : ""}.`;
+  // Not even another hundred feet left, cash and credit together: that is a fact about the money, and he says to stop.
+  if (cash + credit < per100) return { kind: "quit", grounds: "money", text: `This hole has cost ${usd(o.wellSpentCents)} to ${d} ft, and ${shown}. ${costs} There is not the money for another hundred feet. ${QUIT_WORDS[t]}` };
+  return { kind: "decide", grounds: "none", text: `This hole has cost ${usd(o.wellSpentCents)} to ${d} ft, and ${shown}; nor any sign of rock. That is no proof there is nothing below: I can't tell you either way. ${costs} It's your money: plug it and keep the rest, or drill on.` };
 }
 
 /** How many swaging jobs on a collapsed string before he would rather plug the hole. */
@@ -176,8 +199,8 @@ export function assess(o: Observations, a: Ability, t: Temperament, noise: numbe
     const made = o.driving.lastTwoHoursFt < 1 ? `${Math.max(1, Math.round(o.driving.lastTwoHoursFt * 12))} inches` : `${o.driving.lastTwoHoursFt.toFixed(1)} ft`;
     return { kind: "setdrive", text: `The ${o.driving.pipe} has about stopped: ${made} in the last two hours with the maul going steady, ${Math.round(o.driving.drivenFt)} ft driven. ${REFUSAL_WORDS[t]} Set it here at ${Math.round(o.driving.shoeFt)} ft.`, costCents: 0 };
   }
-  const quit = moneyConcern(o, a, t);
-  if (quit) return { kind: "quit", text: quit, costCents: 0 };
+  const counsel = moneyConcern(o, a, t);
+  if (counsel) return { kind: counsel.kind, text: counsel.text, costCents: 0 };
   // Sand that runs back in as fast as it is bailed: let-down pipe will hang in it. He knows it
   // by the bailer; a poor judge mistakes it either way.
   if (o.stringsLeft > 0 && o.nextPipe && o.openSandFt >= 10 && o.inflowFtHr > 3.6 + (noise2 - 0.5) * 4.4 * (1 - a.judgement)) {

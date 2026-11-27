@@ -19,12 +19,15 @@ export function AdviceCard({ runtime, snap, onOpenRig }: { runtime: GameRuntime;
   const pipe = PIPE[w.strings.length];
   const yes = p.kind === "case" ? `Set the ${pipe?.name ?? "pipe"}` : p.kind === "drive" ? `Drive the ${pipe?.name ?? "pipe"}` : p.kind === "setdrive" ? "Set it here" : p.kind === "fish" ? (w.collapse ? "Swaging job" : "Fishing job") : "Plug the hole";
   const no = p.kind === "abandon" ? "Keep at it" : p.kind === "quit" ? "Keep drilling" : p.kind === "setdrive" ? "Drive on" : p.kind === "drive" ? "Not yet" : "Drill on";
+  // With nothing seen either way he recommends nothing: neither choice is set as his.
+  const open = p.kind === "decide";
   return (
     <div class="advice" role="group" aria-label="The driller's advice" data-testid="advice">
       <p class="advice-who">{snap.ops.crew.driller.name}, the driller</p>
       <p class="advice-text">“{p.text}”</p>
+      {open && <p class="advice-open" data-testid="advice-open">He makes no recommendation: the choice is yours.</p>}
       <div class="row">
-        <button type="button" class="button button-primary" data-testid="advice-yes" onClick={() => runtime.command("crew.accept", { id: p.id })}>
+        <button type="button" class={`button ${open ? "" : "button-primary"}`} data-testid="advice-yes" onClick={() => runtime.command("crew.accept", { id: p.id })}>
           {yes}{p.costCents > 0 && <small>{quote(p.costCents)}</small>}
         </button>
         <button type="button" class="button" data-testid="advice-no" onClick={() => runtime.command("crew.decline", { id: p.id })}>

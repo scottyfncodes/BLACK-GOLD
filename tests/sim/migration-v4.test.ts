@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { gameEngine, MINUTES_PER_DAY, operationsOf, PIPE, type WorldState } from "../../src/sim";
 import { canonicalJson } from "../../src/sim/core/hash";
-import { recompute } from "../../src/sim/company/ledger";
+import { post, recompute } from "../../src/sim/company/ledger";
 import { startingDriller } from "../../src/sim/company/crew";
 import { MIGRATIONS, worldProblem } from "../../src/sim/migrations";
 import { decodeSave, SCHEMA_VERSION } from "../../src/app/save/format";
@@ -71,6 +71,8 @@ describe("a production schema-3 save", () => {
     if (o.well!.strings.length > 1) expect(o.well!.strings[1]!.size).toBe(1);
     else if (o.well!.status === "drilling" && !o.well!.busy) {
       o.well!.auto = false;
+      // The string must be paid for: put the money in hand first (test only), so the check is of the size, not the purse.
+      post((w.systems.operations as unknown as { ledger: Parameters<typeof post>[0] }).ledger, w.time, "opening", "Test: capital", [{ account: "cash", cents: 50_000 }, { account: "equity", cents: -50_000 }]);
       expect(cmd(w, "rig.case").events.find((e) => e.type === "command.rejected")).toBeUndefined();
       gameEngine.advance(w, operationsOf(w).well!.busy!.until + 5);
       expect(operationsOf(w).well!.strings[1]).toMatchObject({ size: 1 });

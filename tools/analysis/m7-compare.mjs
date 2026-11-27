@@ -57,7 +57,18 @@ function summary(rows, tag) {
     console.log(`  abandoned with oil within 400 ft below (truth): ${r.reduce((a, x) => a + x.abandonedReachable, 0)} holes, ${r.reduce((a, x) => a + x.abandonedFtToPay, 0)} ft short in all`);
     console.log(`  spend: drilling ${usd(mean(r.map((x) => x.drillingSpend)))}, fieldwork ${usd(mean(r.map((x) => x.fieldworkSpend)))} a company | oil discoveries ${oil} | cost per discovery ${oil ? usd(spend / oil) : "n/a"}`);
     if (prod.length) console.log(`  to production: months median ${med(prod.map((x) => x.monthsToProduction)).toFixed(1)}, cash spent median ${usd(med(prod.map((x) => x.spentToProduction)))}`);
-    if (qa.length) console.log(`  counsel to quit ${qa.length}: with oil below and within reach (truth) ${pct(qa.filter(reach).length, qa.length)}; no oil below ${pct(qa.filter((q) => q.payFt === null).length, qa.length)}; declined ${qa.filter((q) => !q.accepted).length}`);
+    if (qa.length) {
+      const quits = qa.filter((q) => (q.kind ?? "quit") === "quit"), decides = qa.filter((q) => q.kind === "decide");
+      console.log(`  counsel about the money ${qa.length}: recommendations to quit ${quits.length}, open decisions (no recommendation) ${decides.length}; declined ${qa.filter((q) => !q.accepted).length}`);
+      console.log(`    FALSE-QUIT RATE (recommendations to quit with oil below and within reach, truth): ${pct(quits.filter(reach).length, quits.length)}; recommendations with no oil below ${pct(quits.filter((q) => q.payFt === null).length, quits.length)}`);
+      if (decides.length) console.log(`    open decisions with oil below and within reach ${pct(decides.filter(reach).length, decides.length)}; with no oil below ${pct(decides.filter((q) => q.payFt === null).length, decides.length)}`);
+      console.log(`    all counsel (either kind) with oil below and within reach ${pct(qa.filter(reach).length, qa.length)}`);
+    }
+    const holes = r.flatMap((x) => (x.holes ?? []).map((h) => ({ ...h, counselled: x.quitAdvice.some((q) => q.wellId === h.id) })));
+    if (holes.length && holes[0].id !== undefined && r[0].quitAdvice.every((q) => q.wellId !== undefined)) {
+      const barrenDry = holes.filter((h) => h.dry && h.barren), goodDry = holes.filter((h) => h.dry && !h.barren);
+      console.log(`    ADVISORY COVERAGE: dry holes with no oil below that drew counsel ${pct(barrenDry.filter((h) => h.counselled).length, barrenDry.length)}; dry holes with oil still below that drew counsel ${pct(goodDry.filter((h) => h.counselled).length, goodDry.length)}`);
+    }
   }
   const cal = rows.filter((r) => r.calibration).map((r) => r.calibration);
   if (cal.length) {
@@ -65,6 +76,7 @@ function summary(rows, tag) {
     console.log(`\n## calibration`);
     console.log(`  geologist's ranges: ${c.readings}; containing the true rock depth ${pct(c.contained, c.readings)}; rock deeper than his range ${c.below}, shallower ${c.above} | "deeper than" readings ${c.deep}, right ${pct(c.deepRight, c.deep)} | "flat" ${c.flat}`);
     console.log(`  gypsum in the bailer: within 100 ft above the rock ${pct(c.gypsumNear, c.samplesNear)} of samples; elsewhere ${pct(c.gypsumFar, c.samplesFar)}`);
+    if (c.sheenSamplesNear !== undefined) console.log(`  rainbow of oil on the bailer water: within 150 ft above oil ${pct(c.sheenNear, c.sheenSamplesNear)} of samples; elsewhere ${pct(c.sheenFar, c.sheenSamplesFar)}`);
   }
 }
 

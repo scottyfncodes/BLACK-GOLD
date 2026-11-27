@@ -35,6 +35,7 @@ export function accountOf(st: OperationsState, w: Well, result: AccountEvidence[
   const rockDry = !!rock && saltFt !== null && !own.some((s) => (s.show === "oil" || s.show === "gas") && s.baseFt >= rock.topFt);
   // The gypsum call nearest the rock (or the bottom): a stray chip far up the hole says little.
   const gyp = [...own].reverse().find((s) => s.gypsum && (!rock || s.baseFt <= rock.topFt + rock.withinFt));
+  const sheen = [...own].reverse().find((s) => s.sheen);
   const deepest = Math.round(w.depthFt);
   const proved: string[] = [], suggests: string[] = [], unknown: string[] = [];
   if (result === "dry") proved.push(`No oil or gas came into the hole from the surface to ${ftw(deepest)} ft.`);
@@ -42,10 +43,12 @@ export function accountOf(st: OperationsState, w: Well, result: AccountEvidence[
   if (rock) proved.push(`Hard rock from about ${ftw(rock.topFt)} ft (to within ${rock.withinFt} ft: the bailer's interval).`);
   if (saltFt !== null) proved.push(`Rock salt at about ${ftw(saltFt)} ft.`);
   const showWords = { gas: "gas", oil: "oil", sulphur: "sulphur water" } as const;
+  if (sheen) proved.push(`A rainbow of oil on the bailer water at about ${ftw(sheen.baseFt)} ft.`);
   if (shows.length) proved.push(`Shows: ${shows.map((x) => `${showWords[x.kind]} at ${ftw(x.ft)} ft`).join("; ")}.`);
   if (w.strings.length) proved.push(`${w.strings.length} string${w.strings.length > 1 ? "s" : ""} of pipe; the deepest shoe at ${ftw(w.casedFt)} ft.`);
   if (rockDry) suggests.push(`The rock was dry from its top to the salt. If the rock under this rise is one body, as such rock usually is, there is no oil in it anywhere on the rise. That is a reading, not a proof.`);
   if (saltFt !== null) suggests.push("Nobody has found anything under the salt in this country: a hole in the salt is finished.");
+  if (sheen && result === "dry") suggests.push(`The rainbow at ${ftw(sheen.baseFt)} ft may mean oil not far below ${ftw(deepest)} ft, or it was a stray film from the clays.`);
   if (!rock && gyp) suggests.push(`Chips of gypsum from about ${ftw(gyp.baseFt)} ft: rock may lie not far below ${ftw(deepest)} ft, or the chips were the clay's own.`);
   const expect = readSpot(st.notebook, w.x, w.y).expect;
   if (!rock && expect && expect.rockFt[1] !== null && deepest > expect.rockFt[1]) suggests.push(`The rock was looked for at ${ftw(expect.rockFt[0])} to ${ftw(expect.rockFt[1])} ft (${expect.basis}) and not met: that reading was wrong, or this spot is off the rock.`);
@@ -53,6 +56,6 @@ export function accountOf(st: OperationsState, w: Well, result: AccountEvidence[
   else if (saltFt === null) unknown.push(`What lies below ${ftw(deepest)} ft.`);
   if (!rock) unknown.push("Whether there is rock under this spot at all.");
   unknown.push(rockDry ? "Whether the flanks of the rise, off the rock, hold oil in their sands." : "Whether the rest of the rise holds oil: its crest, its flanks.");
-  return { kind: "account", provenance: "observed", wellId: w.id, name: w.name, surveyId: w.surveyId, x: w.x, y: w.y, result, deepestFt: deepest, rock, rockDry, saltFt, shows, gypsumFt: gyp ? gyp.baseFt : null, costCents: wellSpent(st, w), proved, suggests, unknown };
+  return { kind: "account", provenance: "observed", wellId: w.id, name: w.name, surveyId: w.surveyId, x: w.x, y: w.y, result, deepestFt: deepest, rock, rockDry, saltFt, shows, gypsumFt: gyp ? gyp.baseFt : null, sheenFt: sheen ? sheen.baseFt : null, costCents: wellSpent(st, w), proved, suggests, unknown };
 }
 

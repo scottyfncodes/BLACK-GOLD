@@ -133,20 +133,30 @@ describe("readSpot: the company's reading of the rock at a spot", () => {
 });
 
 describe("counsel that weighs the evidence", () => {
-  const OBS: Observations = { depthFt: 700, casedFt: 0, stringsLeft: 3, nextPipe: "10-inch", nextCostCents: 20_000, openSandFt: 0, bottom: null, waterSeen: false, waterShutOff: false, stuck: false, fishCount: 0, cashCents: 10_000, dayCents: 1_200, fishingCents: 6_000, creditRoomCents: 0, wellSpentCents: 90_000, lastShow: null, inflowFtHr: 0, driving: null, collapse: null, driveHead: false, nextDriveCents: 0, swageCents: 15_000, expect: null, rockDry: null, rockFt: null, inSalt: false, gypsumFt: null, paceFtDay: 40 };
+  const OBS: Observations = { depthFt: 700, casedFt: 0, stringsLeft: 3, nextPipe: "10-inch", nextCostCents: 20_000, openSandFt: 0, bottom: null, waterSeen: false, waterShutOff: false, stuck: false, fishCount: 0, cashCents: 10_000, dayCents: 1_200, fishingCents: 6_000, creditRoomCents: 0, wellSpentCents: 90_000, lastShow: null, inflowFtHr: 0, driving: null, collapse: null, driveHead: false, nextDriveCents: 0, swageCents: 15_000, expect: null, rockDry: null, rockFt: null, inSalt: false, gypsumFt: null, sheenFt: null, paceFtDay: 40 };
   const A = { feel: 0.6, judgement: 0.6, reliability: 0.6, prudence: 0.5 };
-  it("without evidence of depth, says what another hundred feet would cost", () => {
-    expect(moneyConcern(OBS, A, "methodical")).toMatch(/Each hundred feet more is about 3 days and \$30/);
+  it("with nothing seen either way, makes no recommendation: it says so, and what another hundred feet would cost", () => {
+    const c = moneyConcern(OBS, A, "methodical")!;
+    expect(c).toMatchObject({ kind: "decide", grounds: "none" });
+    expect(c.text).toMatch(/no proof there is nothing below: I can't tell you either way/);
+    expect(c.text).toMatch(/Each hundred feet more is about 3 days and \$30/);
+  });
+  it("says to stop when the money cannot pay for another hundred feet: a fact, not a reading", () => {
+    expect(moneyConcern({ ...OBS, cashCents: 2_000 }, A, "methodical")).toMatchObject({ kind: "quit", grounds: "money" });
+  });
+  it("a rainbow of oil on the bailer water is a reason to keep on", () => {
+    expect(moneyConcern({ ...OBS, sheenFt: 640 }, A, "cautious")).toBeNull();
+    expect(moneyConcern({ ...OBS, sheenFt: 400 }, A, "cautious")).not.toBeNull();
   });
   it("in the salt, says plainly the hole is finished", () => {
     expect(assess({ ...OBS, inSalt: true, rockFt: 600, cashCents: 500_000 }, A, "aggressive", 0.5, 0.5)).toMatchObject({ kind: "quit" });
   });
   it("does not counsel quitting when the evidence puts the rock within the company's means, cash and credit", () => {
     expect(moneyConcern({ ...OBS, expect: { lo: 700, hi: 900, basis: "the geologist put the rock at 700 to 900 ft" }, creditRoomCents: 20_000 }, A, "methodical")).toBeNull();
-    expect(moneyConcern({ ...OBS, expect: { lo: 700, hi: 1_400, basis: "x" } }, A, "methodical")).toMatch(/Reaching 1,400 ft at this pace is about 18 days and \$210 more/);
+    expect(moneyConcern({ ...OBS, expect: { lo: 700, hi: 1_400, basis: "x" } }, A, "methodical")).toMatchObject({ kind: "quit", grounds: "negative", text: expect.stringMatching(/Reaching 1,400 ft at this pace is about 18 days and \$210 more/) });
   });
   it("says when the hole is past where the rock was looked for", () => {
-    expect(moneyConcern({ ...OBS, depthFt: 1_100, cashCents: 500_000, expect: { lo: 600, hi: 900, basis: "the geologist put the rock at 600 to 900 ft" } }, A, "aggressive")).toMatch(/not met it: that reading was wrong here, or this spot is off the rock/);
+    expect(moneyConcern({ ...OBS, depthFt: 1_100, cashCents: 500_000, expect: { lo: 600, hi: 900, basis: "the geologist put the rock at 600 to 900 ft" } }, A, "aggressive")).toMatchObject({ kind: "quit", grounds: "negative", text: expect.stringMatching(/not met it: that reading was wrong here, or this spot is off the rock/) });
   });
   it("does not counsel quitting in the rock, or with gypsum in the cuttings just above", () => {
     expect(moneyConcern({ ...OBS, rockFt: 650 }, A, "cautious")).toBeNull();

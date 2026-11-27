@@ -135,15 +135,32 @@ function gypsumChips(ctx: Ctx, w: Well, here: RockAt): boolean {
   return ctx.random("rig:gypsum") < p;
 }
 
+/**
+ * A rainbow of oil on the bailer water: oil leaks up a little way from an oil-bearing bed into the
+ * waters above it, so the film comes more often as the bit nears oil (within about 150 ft). Lignite
+ * and old wood in the clays leave a stray film now and then, so it is no proof. Observation, with
+ * misses and false alarms; the bed itself is never named.
+ */
+export const SHEEN = { reachFt: 150, near: 0.15, close: 0.7, stray: 0.02 } as const;
+function oilSheen(ctx: Ctx, w: Well, here: RockAt): boolean {
+  if (here.lithology === "salt" || here.fluid === "oil" || here.fluid === "gas") return false;
+  let to: number | null = null;
+  for (let ft = 5; ft <= SHEEN.reachFt; ft += 5) if (rock(ctx, w, w.depthFt + ft).fluid === "oil") { to = ft; break; }
+  const p = to === null ? SHEEN.stray : SHEEN.near + (SHEEN.close - SHEEN.near) * (1 - to / SHEEN.reachFt);
+  return ctx.random("rig:sheen") < p;
+}
+
 function bail(ctx: Ctx, w: Well): void {
   const st = S(ctx);
   const at = Math.max(w.lastBailFt, w.depthFt - 1);
   const r = rock(ctx, w, at);
   const said = words(r, { gas: gasBelow(ctx, w) });
   const gyp = gypsumChips(ctx, w, r);
+  const sheen = oilSheen(ctx, w, r);
+  const call = `${said.call}${gyp ? ", a few chips of gypsum" : ""}${sheen ? ", a rainbow of oil on the water" : ""}`;
   const sample: SampleEvidence = {
     id: `rs-${st.next++}`, t: ctx.now, provenance: "observed", kind: "sample", wellId: w.id, x: w.x, y: w.y,
-    topFt: Math.round(w.lastBailFt), baseFt: Math.round(w.depthFt), ...said, ...(gyp ? { call: `${said.call}, a few chips of gypsum`, gypsum: true } : {}),
+    topFt: Math.round(w.lastBailFt), baseFt: Math.round(w.depthFt), ...said, call, ...(gyp ? { gypsum: true } : {}), ...(sheen ? { sheen: true } : {}),
   };
   if (sample.baseFt > sample.topFt) st.samples.push(sample);
   observeStrings(ctx, w);
@@ -407,11 +424,12 @@ function observe(st: OperationsState, w: Well, now: number): Observations {
 }
 
 /** What the company's evidence says about this hole's ground, and what the bailer has shown of the rock. */
-function groundOf(st: OperationsState, w: Well, own: readonly SampleEvidence[], now: number): Pick<Observations, "expect" | "rockDry" | "rockFt" | "inSalt" | "gypsumFt" | "paceFtDay"> {
+function groundOf(st: OperationsState, w: Well, own: readonly SampleEvidence[], now: number): Pick<Observations, "expect" | "rockDry" | "rockFt" | "inSalt" | "gypsumFt" | "sheenFt" | "paceFtDay"> {
   const r = readSpot(st.notebook, w.x, w.y);
   const rockS = own.find((s) => s.lith === "rock");
   const last = own[own.length - 1];
   const gyp = [...own].reverse().find((s) => s.gypsum);
+  const sheen = [...own].reverse().find((s) => s.sheen);
   const drillingDays = Math.max(1, (now - w.spudAt) / MINUTES_PER_DAY - RIGUP_DAYS);
   return {
     expect: r.expect ? { lo: r.expect.rockFt[0], hi: r.expect.rockFt[1], basis: r.expect.basis } : null,
@@ -419,6 +437,7 @@ function groundOf(st: OperationsState, w: Well, own: readonly SampleEvidence[], 
     rockFt: rockS ? rockS.topFt : null,
     inSalt: last?.lith === "salt",
     gypsumFt: gyp ? gyp.baseFt : null,
+    sheenFt: sheen ? sheen.baseFt : null,
     paceFtDay: Math.max(10, w.depthFt / drillingDays),
   };
 }
@@ -446,7 +465,7 @@ function stillDeclined(m: DeclineMemo | undefined, now: DeclineMemo, kind: Advic
   // Told to drive on past refusal, he lets the pipe go another 15 ft before he calls it again.
   if (kind === "setdrive") return (now.drivenFt ?? 0) < (m.drivenFt ?? 0) + 15;
   // Told once to drill on, he raises money again only when the cash in hand has fallen by a third, or the hole is 300 ft deeper.
-  if (kind === "quit") return now.depthFt < m.depthFt + 300 && (now.capitalCents ?? 0) > (m.capitalCents ?? 0) * (2 / 3);
+  if (kind === "quit" || kind === "decide") return now.depthFt < m.depthFt + 300 && (now.capitalCents ?? 0) > (m.capitalCents ?? 0) * (2 / 3);
   return m.stuckCount === now.stuckCount && m.strings === now.strings;
 }
 
@@ -1254,7 +1273,7 @@ export const rig: System<Json> = {
       else if (r.kind === "drive") { buyDriveHead(ctx); driveNow(ctx, w); }
       else if (r.kind === "setdrive") { if (!w.drive) throw new CommandRejected("No pipe is being driven."); setDrive(ctx, w, false); }
       else if (r.kind === "fish") fishNow(ctx, w);
-      else finish(ctx, w, "dry", r.kind === "quit" ? `The ${w.name} is plugged at ${Math.round(w.depthFt)} ft to save the company's money.` : `The ${w.name} is plugged and abandoned at ${Math.round(w.depthFt)} ft.`);
+      else finish(ctx, w, "dry", r.kind === "quit" ? `The ${w.name} is plugged at ${Math.round(w.depthFt)} ft to save the company's money.` : r.kind === "decide" ? `The ${w.name} is plugged at ${Math.round(w.depthFt)} ft: the company chose to keep its money.` : `The ${w.name} is plugged and abandoned at ${Math.round(w.depthFt)} ft.`);
       note(ctx, w.id, "acted", r.kind === "case" ? "Running the pipe, as agreed." : r.kind === "drive" ? "Putting the drive head on, as agreed." : r.kind === "setdrive" ? "Setting it here, as agreed." : r.kind === "fish" ? (w.collapse ? "Rigging the swage, as agreed." : "Rigging the jars, as agreed.") : "Plugging the hole, as agreed.");
     },
     "crew.decline"(ctx, c: Command) {

@@ -87,6 +87,8 @@ export interface SampleEvidence extends Base {
   show?: "gas" | "oil" | "sulphur";
   /** Chips of gypsum came up with the cuttings: often a sign of rock below, not always. */
   gypsum?: boolean;
+  /** A rainbow of oil on the bailer water: oil may lie not far below, or it is a stray film. */
+  sheen?: boolean;
 }
 
 /**
@@ -137,6 +139,8 @@ export interface AccountEvidence extends Base {
   shows: { kind: "gas" | "oil" | "sulphur"; ft: number }[];
   /** The deepest call of gypsum chips above the rock (or in the hole, if it met no rock). */
   gypsumFt: number | null;
+  /** The deepest rainbow of oil on the bailer water (absent in accounts written before it was looked for). */
+  sheenFt?: number | null;
   costCents: number;
   /** Plain statements: what the hole proved, what the company may make of it, and what it leaves unknown. */
   proved: string[];

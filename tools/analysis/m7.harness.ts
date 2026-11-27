@@ -145,7 +145,7 @@ function expectAt(w: WorldState, x: number, y: number): { lo: number; hi: number
 
 // ───────────────────────────────────────────── drilling
 type Profile = "blind" | "informed" | "disciplined" | "omniscient";
-interface Rec { quitAdvice: { depthFt: number; cash: number; credit: number; payFt: number | null; accepted: boolean }[]; capFailed: number; withdrew: boolean }
+interface Rec { quitAdvice: { depthFt: number; cash: number; credit: number; payFt: number | null; accepted: boolean; kind: string; wellId: string }[]; capFailed: number; withdrew: boolean }
 
 function drillOut(w: WorldState, prof: Profile, site: Site, rec: Rec): void {
   gameEngine.advance(w, w.time + 3 * MINUTES_PER_DAY + 10);
@@ -167,12 +167,12 @@ function drillOut(w: WorldState, prof: Profile, site: Site, rec: Rec): void {
     const q = ops(w).crew.pending;
     if (q) {
       let accept = true;
-      if (q.kind === "quit") {
+      if (q.kind === "quit" || q.kind === "decide") {
         const p = pos(w);
         const daysLeft = (p.cashCents + (disciplined ? p.creditRoomCents : 0)) / 1_200;
         const inSalt = /rock salt/.test(q.text);
         accept = inSalt || !(disciplined && reach && (target! - well.depthFt) / 40 < daysLeft);
-        rec.quitAdvice.push({ depthFt: well.depthFt, cash: p.cashCents, credit: p.creditRoomCents, payFt: truthPay(w.seed, well.x, well.y), accepted: accept });
+        rec.quitAdvice.push({ depthFt: well.depthFt, cash: p.cashCents, credit: p.creditRoomCents, payFt: truthPay(w.seed, well.x, well.y), accepted: accept, kind: q.kind, wellId: well.id });
       }
       cmd(w, accept ? "crew.accept" : "crew.decline", { id: q.id });
     }
@@ -414,6 +414,8 @@ function campaign(seed: string, prof: Profile) {
     causes: all.map((x) => diagnose(seed, x)),
     firstSiteHasOil: truthPay(seed, firstSite.x, firstSite.y) !== null,
     quitAdvice: rec.quitAdvice,
+    // Each hole: did it end dry, was there oil within reach below it (truth), and how far below the bottom.
+    holes: all.map((x) => { const pay = truthPay(seed, x.x, x.y); return { id: x.id, dry: x.status === "dry", barren: pay === null, gapFt: pay === null ? null : Math.round(pay - x.depthFt) }; }),
     capFailed: rec.capFailed,
   };
 }
@@ -439,7 +441,7 @@ it("campaigns", () => {
  */
 it("calibration", () => {
   if (!M7 || !OUT || ONLY) return;
-  const cal = { readings: 0, contained: 0, below: 0, above: 0, deep: 0, deepRight: 0, flat: 0, gypsumNear: 0, gypsumFar: 0, samplesNear: 0, samplesFar: 0 };
+  const cal = { sheenNear: 0, sheenFar: 0, sheenSamplesNear: 0, sheenSamplesFar: 0, readings: 0, contained: 0, below: 0, above: 0, deep: 0, deepRight: 0, flat: 0, gypsumNear: 0, gypsumFar: 0, samplesNear: 0, samplesFar: 0 };
   for (const s of seedsFor()) {
     const w = gameEngine.createWorld(s, CAMPAIGN_START);
     const t = generateGeology(s);
@@ -469,6 +471,9 @@ it("calibration", () => {
       let near = false;
       for (let f = 5; f <= 100; f += 5) if (rockAt(t, hill.x, hill.y, (sm.baseFt + f) / FT).lithology === "caprock") { near = true; break; }
       if (near) { cal.samplesNear++; if (sm.gypsum) cal.gypsumNear++; } else { cal.samplesFar++; if (sm.gypsum) cal.gypsumFar++; }
+      let oilNear = false;
+      for (let f = 5; f <= 150; f += 5) if (rockAt(t, hill.x, hill.y, (sm.baseFt + f) / FT).fluid === "oil") { oilNear = true; break; }
+      if (oilNear) { cal.sheenSamplesNear++; if ((sm as { sheen?: boolean }).sheen) cal.sheenNear++; } else { cal.sheenSamplesFar++; if ((sm as { sheen?: boolean }).sheen) cal.sheenFar++; }
     }
   }
   appendFileSync(OUT, JSON.stringify({ calibration: cal, shard: SHARD }) + "\n");
