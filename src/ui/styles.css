@@ -1680,7 +1680,8 @@ table.book tr.nocash td {
   color: var(--ink-soft);
 }
 .result {
-  max-height: calc(100% - 36px);
+  /* Leave the rig's header (and its way back to the map) uncovered; the card scrolls instead. */
+  max-height: calc(100% - 150px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }

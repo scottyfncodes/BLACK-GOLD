@@ -67,7 +67,7 @@ test("fieldwork costs money, and the geologist's depth reading is shown as an in
   const reading = page.getByTestId("reading");
   await reading.scrollIntoViewIfNeeded();
   await expect(reading).toContainText("a reading, not a fact");
-  await expect(reading).toContainText(/the rock is looked for at [\d,]+ to [\d,]+ ft: the geologist put the rock/);
+  await expect(reading).toContainText(/the rock is looked for at [\d,]+ to [\d,]+ ft\. On the geologist's reading of the rise/);
   await expect(page.getByTestId("evidence")).toContainText("an interpretation, from a rise he measured");
 });
 

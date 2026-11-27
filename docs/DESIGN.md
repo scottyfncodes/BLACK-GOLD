@@ -588,7 +588,7 @@ BLACK GOLD should reward geological knowledge, drilling competence, calculated r
 - **Gas** should become meaningful geological information and an operational challenge, not an automatic end to a well. Today a gas sand finishes the well; the review found that a quarter of wells drilled over the shallowest oil end at a gas cap above it.
 - **Company progression** should emerge from successful exploration, production, reinvestment and expansion, not from arbitrary deadlines.
 - **Open findings from the review**, deliberately not addressed in this revision:
-  - prospecting is free, and surface signs are weakly predictive;
+  - prospecting is free, and surface signs are weakly predictive (M7 prices fieldwork, provisionally);
   - the hired driller never sets casing, so fishing jobs dominate the cost of a well;
   - after the first producing well, money accumulates with nothing to spend it on;
   - on phones the goal sits below the fold;
@@ -1049,6 +1049,110 @@ The first three never read hidden state; truth is used only afterwards, to class
 
   Gas development and rotary drilling remain deferred.
 
+**M7, Reading the Ground (approved and built, schema 7)**
+
+*Why:* the PR #11 audit found that fieldwork pays but discipline after spudding did not, because the player had almost no legitimate sense of how deep the pay lies. M7 adds honest, imprecise depth evidence, makes negative evidence count, and lets the company's own holes inform the next one. There are no character upgrades and no probability readouts: the player gets better by reading evidence better.
+
+*The owner's decisions:* the golden hash is replaced deliberately (below); worlds with no reachable oil stay as they are, with no guarantee and no reveal; fieldwork costs are provisional and calibrated against the survival threshold.
+
+- **Observation, measurement and interpretation are kept apart.** Every new piece of evidence says which it is.
+  - *Observation* (`provenance: "observed"`): the bailer's calls, now sometimes with "a few chips of gypsum"; and the account of a hole. Observations can be missed or false: gypsum comes up in about half the samples within 100 ft above the rock, and in about 3% elsewhere, from the clays.
+  - *Measurement uncertainty:* each depth is given to within what produced it. The rock's top is known only to within its bail interval, and the geologist measures a rise roughly.
+  - *Interpretation* (`provenance: "opinion"`, labelled "a reading" in the UI): the geologist's depth range and the company's reading of a spot. An accurate observation can still lead to a wrong conclusion. Examples: rock under a rise is no promise of oil; a dry rock says nothing of the flanks; a hole off the rock does not prove the geologist wrong.
+- **The geologist's depth reading** (`ReadingEvidence`):
+  - When consulted on a survey, he judges its most prominent rise.
+  - He trusts, in order: the company's own log of a hole on the rise; then a settler's account of hard rock nearby; then his own rule of thumb from his measure of the rise ("the lower the rise, the deeper the rock").
+  - The rule states its own spread and trusts his measurement, so it is sometimes wrong. Measured: his range contains the true depth to the rock 70% of the time (639 of 909 readings); 148 were deeper and 122 shallower.
+  - On a low rise he says only "deeper than", which is right 67% of the time. On flat ground he declines to guess.
+  - After a hole found the rock dry to the salt, he says he would not look for oil in that rock again, and that the flanks are deeper and harder.
+- **The account of a hole** (`AccountEvidence`), written when a hole ends:
+  - *Proved:* no oil or gas to N ft; hard rock from about X ft; salt; shows; pipe.
+  - *What we make of it:* a reading. Examples: the rock was dry to the salt, so if it is one body there is no oil in it on this rise; nobody finds anything under the salt; gypsum suggests rock not far below; the rock was looked for and not met.
+  - *Still unknown:* below the hole, the flanks, whether there is rock here at all.
+  - The account is built from the bailer's calls and the books only (`company/account.ts`, which imports no truth). It is shown at the rig when a hole ends, and in the survey's notes.
+- **The company's knowledge accumulates.** `knowledge/reading.ts` reads a spot from evidence alone: own holes on the same rise first, then the latest geologist's reading, then a settler's hard rock.
+  - The driller's notebook (`operations.notebook`) holds what bears on his holes: readings and settlers' accounts, told to him as they come in, and the accounts of the company's own holes. The fieldwork and rig systems pass these as events.
+  - The second hole on a rise is judged by the first. A rise whose rock was found dry is read as dead for caprock oil.
+- **Counsel that weighs evidence.** The driller's money counsel now:
+  - says plainly that a hole in the salt is finished;
+  - does not counsel quitting in the rock, or with gypsum just above;
+  - does not counsel quitting while the company's evidence puts the rock within its means (cash and credit). Otherwise it says what reaching it would cost ("about N days and $X more");
+  - says when the hole is past where the rock was looked for and has not met it;
+  - without evidence of depth, adds what each hundred feet more would cost at this hole's pace.
+
+  It is still blind to hidden geology.
+- **The section drawing distinguishes observed from inferred.**
+  - The company's own holes are drawn from their bailer samples in a heavy solid frame: observed.
+  - Settlers' wells are drawn in a dashed frame, "his account": told.
+  - Correlations between logs are dashed carmine, and the geologist's range is a hatched, dashed carmine band, "the geologist's reading": inferred.
+  - A key says which is which.
+- **Fieldwork costs money** (`FIELD_COSTS`, *provisional*):
+  - a man and a horse walking a survey, 50¢ a day;
+  - a settler's time, 50¢;
+  - Beaumont gossip, 25¢;
+  - a geologist's fee and fare, $10.
+
+  The cost is paid as the party sets out, under a new **Fieldwork** heading in the books. Without the money, the party stays home.
+  - *Calibration:* at the first provisional values ($2 a day and $50 a geologist), the scripted informed operator spent $442 a company on its exhaustive programme, and its survival fell from 17% to 2%. At a quarter of those, it kept exactly 80% of its free-fieldwork survival (32 of 40 worlds).
+  - The values chosen are a little under that. They are low for the period. A historical check may well raise them, and a higher cost would make an exhaustive survey programme a losing strategy for this scripted operator.
+- **Schema 7** (`v6ToV7`): the driller's notebook is started from the settlers' accounts already held. Each ended hole gets its account, written from its samples. Old geologist opinions carry no depth reading; a new consultation gives one.
+- **Golden hash, replaced on purpose.** The determinism run now plays the company as well as the stress system: fieldwork paid for, a settler's account, a geologist's reading, a hole drilled with the driller and abandoned, and the geologist again on the company's own log. The new world also carries the notebook. The new hash is `06ce6a7704aa28`. The baseline before M7, for main at 65a7053, was `1e3c8857be2e29` (a stress-only run).
+
+*Measured* (`tools/analysis/m7.harness.ts` and `m7-compare.mjs`, outside CI). The same 240 seeded worlds were played on the build before M7 (65a7053) and on M7, three years each, with the PR #11 profiles.
+- The Disciplined Operator on M7 also reads the new evidence, from the fields the field notes show:
+  - it ranks rises by signs and expected depth;
+  - it skips ground its evidence has ruled out;
+  - it declines counsel to quit only when its reading puts the rock within its means;
+  - it steps out onto the flank after a rock found dry, or back to the crest after missing the rock;
+  - it stops drilling when nothing worth a hole is left.
+- It never reads truth. Truth is read only to score outcomes and by the Omniscient bound. Paired sign tests and bootstrap intervals are used throughout.
+
+| | Blind before → after | Informed before → after | Disciplined before → after | Omniscient before → after |
+|---|---|---|---|---|
+| Solvent at three years | 3% → 3% | 12% → 13% | 12% → 20% | 52% → 52% |
+| Producing | 3% → 3% | 12% → 13% | 12% → 18% | 52% → 51% |
+| Capital at the end, mean | $605 → $724 | $3,476 → $3,888 | $3,418 → $5,404 | $16,615 → $16,614 |
+| Footage a company, of which on ground with no oil within reach | 732 / 659 → 732 / 659 ft | 992 / 712 → 956 / 676 ft | 913 / 620 → 823 / 566 ft | 921 / 173 → 918 / 170 ft |
+| Footage drilled in salt, a company | 20 → 2 ft | 40 → 2 ft | 33 → 4 ft | 5 → 0 ft |
+| Holes abandoned with oil within 400 ft below | 19 → 18 | 31 → 26 | 31 → 16 | 24 → 26 |
+| Spend (drilling and fieldwork) per discovery | $53,278 → $45,886 | $13,579 → $11,636 | $13,505 → $7,312 | $2,430 → $2,424 |
+
+- **Paired comparisons.**
+
+  | Comparison | Before M7 | With M7 |
+  |---|---|---|
+  | Disciplined vs Informed, solvent | +5 / −6 worlds, −0.4 pts | +19 / −3, **+6.7 pts** (4.2 to 10.4), p = 0.001 |
+  | Disciplined vs Informed, producing | −0.4 pts | +13 / −3, **+4.2 pts** (2.1 to 7.5), p = 0.021 |
+  | Informed vs Blind, solvent | +9.6 pts, p < 0.001 | +10.4 pts, p < 0.001 |
+  | Blind, M7 vs before | | +1 / −0 worlds, +0.4 pts |
+  | Omniscient, M7 vs before | | +1 / −2 worlds, −0.4 pts |
+  | Disciplined, M7 vs before (producing) | | +16 / −2, +5.8 pts, p = 0.001 |
+- **Acceptance criteria.**
+  - Met:
+    - discipline now pays, +6.7 pts (at least 5, p < 0.05);
+    - informed still beats blind;
+    - blind and the omniscient bound are unchanged within noise;
+    - the unwinnable worlds are unchanged (no truth changed);
+    - the geologist's range is 70% right (target 60–80%);
+    - informed survival is at 80% of its free-fieldwork level (target at least 80%);
+    - all tests pass, and saves from schema 6 load.
+  - **Not met: counsel on good ground without evidence.** The target was for the driller to urge quitting where oil lay within reach much less often than 60%, below 35%. On the Omniscient bound's holes it is still 61% (150 of 246; 57% before). That bound does no fieldwork, so its driller has no depth evidence. Gypsum and the rule against quitting in the rock help only over caprock, and most of its pay is in flank sands. Where the company holds evidence, the counsel is wrong less often: Disciplined 13% of counsels (15% before), Informed 11% (12%). On ordinary ground it is no worse: 80–91% of counsels had no oil below, against 83–92% before. Nothing was tuned to close the gap. Doing so would need a flank-sand precursor in the bailer, a new observation of the ground, which is a decision for a later pass.
+- **Unexpected results and tradeoffs, reported, not masked.**
+  - *Solvent is not producing.* The Disciplined Operator stops drilling by choice in 17 of 240 worlds (7%). Its solvency (20%) runs ahead of its production (18%) because a company that stops keeps some capital. Production is reported beside solvency for that reason.
+  - *Capital is preserved unevenly.* Mean capital rises (+$1,516 over Informed, p = 0.04), but in 125 worlds the Disciplined company ended a little poorer than the Informed one and in 94 richer: the gain is concentrated in the extra discoveries.
+    - The median company without oil still ends about $240 in debt. Negative evidence stops waste (salt footage down 88%, holes abandoned short of reachable oil halved), but it does not yet turn a failing company into a solvent one.
+    - Withdrawing is rarely the best play in this economy: a producing well is worth about $30,000, so even a 15% chance justifies a $900 hole.
+  - *The first rule tried was wrong.* A disciplined rule that skipped any site it could not afford outright refused the game's recovery path (contract work): it stopped drilling in 55% of worlds and found less oil. It was replaced by skipping only ground the evidence has ruled out. The rejected rule's numbers are in the analysis notes; it was a harness error, not a game result.
+  - *The informed operator gains little from M7* (+1.3 pts): the new counsel helps it, the fieldwork cost takes about as much away.
+- **Limits.**
+  - Scripted heuristics, not an optimal player.
+  - One campaign per world and profile.
+  - 240 worlds: survivor counts of 32 to 48 per profile.
+  - The quit-counsel "within reach" test uses a flat 40 ft a day.
+  - The geologist's rule of thumb is a game abstraction: no 1890 geologist knew salt-dome structure.
+  - Settlers' wells were not made deeper near rises, to leave the ground unchanged. Their depth evidence is still rare.
+  - Gas development and rotary drilling remain deferred. M8 (The Field) is next and not yet authorised.
+
 ## 9. Open decisions
 
 Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.
@@ -1064,3 +1168,9 @@ Decisions taken so far are marked. Where a decision is still open, its default i
 9. **Next priority:** *Decided:* casing mechanics and hired-driller intelligence. Approved with the refinements recorded under "Casing and hired drillers (approved design)" in §8.
 10. **Historical economics:** *Decided:* rig at $1,500 (verified against period supply-house prices), a 20% advance on it, 10% interest, and the year's documented crude price. Book value, resale value and replacement price are kept apart so the rig is never a cheap source of cash. Casing, wages and other figures wait for better evidence.
 11. **Driven casing through quicksand:** *Decided and built* (§8): drive pipe at 1.6×, a reusable drive head and a shoe per string, costly swaging with no promise, and thick sand that may cost two sizes or the hole. Gas development remains deferred.
+12. **Reading the Ground (M7):** *Decided and built* (§8):
+    - The golden hash is replaced deliberately: `06ce6a7704aa28`, with `1e3c8857be2e29` recorded as the baseline for 65a7053.
+    - Worlds without reachable oil stay, with no guarantee and no reveal.
+    - Fieldwork costs are provisional and calibrated to the survival threshold.
+    - Open: the counsel on good ground without evidence (target missed, see §8), and a historical check of fieldwork prices.
+13. **Next milestone:** M8, The Field (shared reservoirs, offset drilling, the rule of capture, a first Rush), intended but not yet authorised.
