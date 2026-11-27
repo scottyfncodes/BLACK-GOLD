@@ -24,11 +24,12 @@ export type Account =
   | "royalty"
   | "hauling"
   | "wages"
+  | "fieldwork"
   | "interest"
   | "loan";
 
 /** What an entry is about, for the ledger book's grouping. */
-export type Category = "opening" | "lease" | "drilling" | "equipment" | "operating" | "production" | "bank";
+export type Category = "opening" | "lease" | "fieldwork" | "drilling" | "equipment" | "operating" | "production" | "bank";
 
 export interface Line {
   account: Account;

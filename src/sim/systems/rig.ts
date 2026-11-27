@@ -16,6 +16,8 @@ import { ftToM } from "../math/units";
 import { SURVEYS, insidePoly } from "../../content/geography/surveys";
 import { generateGeology, rockAt, type Lithology, type RockAt } from "../geology/truth/model";
 import type { SampleEvidence } from "../knowledge/types";
+import { readSpot } from "../knowledge/reading";
+import { accountOf, wellSpent } from "../company/account";
 import { accruedCents, COSTS, emptyOutcome, RIG_VALUE, STARTING_CASH, type Operation, type OperationsState, type Well } from "../operations";
 import { cashCents, debtCents, dollarsToCents, emptyLedger, pay, post, receive } from "../company/ledger";
 import { rngKey, rngUnit } from "../core/rng";
@@ -119,13 +121,29 @@ function gasBelow(ctx: Ctx, w: Well): boolean {
   return false;
 }
 
+/**
+ * Chips of gypsum in the cuttings: over a salt stock they come more often as the rock nears
+ * (within about a hundred feet), but the clays of the coast carry a little gypsum anywhere, so the
+ * sign is no proof. Observation, with misses and false alarms.
+ */
+export const GYPSUM = { reachFt: 100, near: 0.25, close: 0.85, stray: 0.03 } as const;
+function gypsumChips(ctx: Ctx, w: Well, here: RockAt): boolean {
+  if (here.lithology === "caprock" || here.lithology === "salt") return false;
+  let to: number | null = null;
+  for (let ft = 5; ft <= GYPSUM.reachFt; ft += 5) if (rock(ctx, w, w.depthFt + ft).lithology === "caprock") { to = ft; break; }
+  const p = to === null ? GYPSUM.stray : GYPSUM.near + (GYPSUM.close - GYPSUM.near) * (1 - to / GYPSUM.reachFt);
+  return ctx.random("rig:gypsum") < p;
+}
+
 function bail(ctx: Ctx, w: Well): void {
   const st = S(ctx);
   const at = Math.max(w.lastBailFt, w.depthFt - 1);
   const r = rock(ctx, w, at);
+  const said = words(r, { gas: gasBelow(ctx, w) });
+  const gyp = gypsumChips(ctx, w, r);
   const sample: SampleEvidence = {
     id: `rs-${st.next++}`, t: ctx.now, provenance: "observed", kind: "sample", wellId: w.id, x: w.x, y: w.y,
-    topFt: Math.round(w.lastBailFt), baseFt: Math.round(w.depthFt), ...words(r, { gas: gasBelow(ctx, w) }),
+    topFt: Math.round(w.lastBailFt), baseFt: Math.round(w.depthFt), ...said, ...(gyp ? { call: `${said.call}, a few chips of gypsum`, gypsum: true } : {}),
   };
   if (sample.baseFt > sample.topFt) st.samples.push(sample);
   observeStrings(ctx, w);
@@ -384,17 +402,25 @@ function observe(st: OperationsState, w: Well, now: number): Observations {
     driveHead: st.tools.driveHead,
     nextDriveCents: driveEstimateCents(st, w) + (st.tools.driveHead ? 0 : DRIVE.headCents),
     swageCents: DRIVE.swageCents,
+    ...groundOf(st, w, own, now),
   };
 }
 
-/** What this hole has cost: every payment the books charge to it, and today's rig time not yet entered. */
-function wellSpent(st: OperationsState, w: Well): number {
-  let cents = 0;
-  for (const e of st.ledger.entries) {
-    if (e.ref?.wellId !== w.id) continue;
-    for (const l of e.lines) if (l.account === "cash" && l.cents < 0) cents -= l.cents;
-  }
-  return cents + accruedCents(st);
+/** What the company's evidence says about this hole's ground, and what the bailer has shown of the rock. */
+function groundOf(st: OperationsState, w: Well, own: readonly SampleEvidence[], now: number): Pick<Observations, "expect" | "rockDry" | "rockFt" | "inSalt" | "gypsumFt" | "paceFtDay"> {
+  const r = readSpot(st.notebook, w.x, w.y);
+  const rockS = own.find((s) => s.lith === "rock");
+  const last = own[own.length - 1];
+  const gyp = [...own].reverse().find((s) => s.gypsum);
+  const drillingDays = Math.max(1, (now - w.spudAt) / MINUTES_PER_DAY - RIGUP_DAYS);
+  return {
+    expect: r.expect ? { lo: r.expect.rockFt[0], hi: r.expect.rockFt[1], basis: r.expect.basis } : null,
+    rockDry: r.rockDry,
+    rockFt: rockS ? rockS.topFt : null,
+    inSalt: last?.lith === "salt",
+    gypsumFt: gyp ? gyp.baseFt : null,
+    paceFtDay: Math.max(10, w.depthFt / drillingDays),
+  };
 }
 
 /** The deepest show the bailer has brought up in this hole. */
@@ -546,6 +572,11 @@ function pullReckoning(st: OperationsState): { wellId: string; costCents: number
 }
 
 function finish(ctx: Ctx, w: Well, status: "gusher" | "dry", outcome: string): void {
+  const st0 = S(ctx);
+  // The hole's account is written before the books close on it, and the company keeps it.
+  const account = accountOf(st0, w, status === "dry" ? "dry" : outcome.startsWith("OIL") ? "oil" : "gas");
+  st0.notebook.push({ ...account, id: `acct-${w.id}`, t: ctx.now });
+  ctx.schedule(ctx.now, "knowledge.account", account as unknown as Json);
   const rec = recordOf(S(ctx), w);
   if (status === "gusher" && outcome.startsWith("OIL")) rec.oil++;
   else rec.dry++;
@@ -928,7 +959,7 @@ function well(ctx: Ctx): Well {
 
 export const rig: System<Json> = {
   id: "operations",
-  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), bank: emptyBank(), contract: null, outcome: emptyOutcome(), crew: null, tools: { driveHead: false }, well: null, past: [], samples: [], next: 1 }) as unknown as Json,
+  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), bank: emptyBank(), contract: null, outcome: emptyOutcome(), crew: null, tools: { driveHead: false }, well: null, past: [], samples: [], notebook: [], next: 1 }) as unknown as Json,
   init(ctx) {
     const st = S(ctx);
     st.crew = emptyCrew(ctx.seed);
@@ -938,6 +969,21 @@ export const rig: System<Json> = {
     ctx.schedule(nextMidnight(ctx.now), "company.day");
   },
   events: {
+    /** What fieldwork learned that bears on the company's holes: the driller is told. */
+    "ops.learn"(ctx, payload) {
+      const e = payload as unknown as OperationsState["notebook"][number];
+      if (e && (e.kind === "reading" || e.kind === "wellRecord")) S(ctx).notebook.push(e);
+    },
+    /** The field party's errand is paid for as it sets out; if the money is not there, it stays home. */
+    "ops.fieldExpense"(ctx, payload) {
+      const st = S(ctx);
+      const { cents, memo } = payload as { cents: number; memo: string };
+      if (st.outcome.endedAt !== null || available(st) < cents) {
+        ctx.schedule(ctx.now, "fieldwork.recall", { message: st.outcome.endedAt !== null ? "The company is finished; the party stays at home." : `The party stays at home: the errand costs ${usd(cents)}, and the company has not got it in hand.` });
+        return;
+      }
+      pay(st.ledger, ctx.now, "fieldwork", memo, "fieldwork", cents);
+    },
     "company.day"(ctx) {
       // Rig time is entered in the books once a day, for the day just ended.
       // One event, one fixed order: the day's rig time, the day's oil, then (on the first of

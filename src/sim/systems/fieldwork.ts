@@ -13,7 +13,9 @@ import { SURVEYS, insidePoly, surveyAt } from "../../content/geography/surveys";
 import { generateGeology } from "../geology/truth/model";
 import { surfaceSigns, type SurfaceSign } from "../geology/truth/surface";
 import { waterWells, type WaterWell } from "../geology/truth/waterWells";
-import type { Evidence, FieldTask, KnowledgeState, OpinionEvidence, ReportedInterval, Strength, WellRecordEvidence } from "../knowledge/types";
+import type { AccountEvidence, Evidence, FieldTask, KnowledgeState, OpinionEvidence, ReadingEvidence, ReportedInterval, Strength, WellRecordEvidence } from "../knowledge/types";
+import { SAME_RISE_KM } from "../knowledge/reading";
+import { printedMap } from "../surface/print";
 
 type Ctx = SystemContext<Json>;
 const S = (ctx: Ctx) => ctx.state as unknown as KnowledgeState;
@@ -30,6 +32,28 @@ function returnTime(now: number, days: number): number {
 export const WALK_DAYS = (acres: number) => (acres < 450 ? 1 : acres < 800 ? 2 : 3);
 export const CONSULT_DAYS = { gossip: 1, geologist: 6 } as const;
 export const INQUIRE_DAYS = 1;
+
+/**
+ * What fieldwork costs (cents). PROVISIONAL gameplay values, pending period evidence: a man and a
+ * horse on the company's errand by the day; a settler's time and a gift for it; drinks in
+ * Beaumont; a consulting geologist's fee with his fare from Austin. Calibrated (docs/DESIGN.md §8,
+ * M7) so that a thorough survey programme keeps at least 80% of its value: they are low for the
+ * period, and say so.
+ */
+export const FIELD_COSTS = { walkDayCents: 50, inquireCents: 50, gossipCents: 25, geologistCents: 1_000 } as const;
+
+/** The cost of an errand, and how the books describe it. */
+export function errandCost(task: FieldTask, acres = 0): { cents: number; memo: string } {
+  if (task.kind === "walk") {
+    const d = WALK_DAYS(acres);
+    const name = SURVEYS.find((s) => s.id === task.surveyId)?.name ?? "";
+    return { cents: d * FIELD_COSTS.walkDayCents, memo: `Field party walking the ${name} survey, ${d} day${d > 1 ? "s" : ""}` };
+  }
+  if (task.kind === "inquire") return { cents: FIELD_COSTS.inquireCents, memo: "A day's ride to ask a settler about his well, and a gift for his time" };
+  return task.who === "geologist"
+    ? { cents: FIELD_COSTS.geologistCents, memo: "A consulting geologist from Austin: his fee and his fare" }
+    : { cents: FIELD_COSTS.gossipCents, memo: "Asking around Beaumont: drinks and a day" };
+}
 
 function busy(ctx: Ctx): void {
   const t = S(ctx).task;
@@ -125,12 +149,74 @@ function inquire(ctx: Ctx, wellId: string): string {
   const w = waterWells(generateGeology(ctx.seed)).find((x) => x.id === wellId)!;
   const memory = 0.55 + (rngKey(ctx.seed, "memory", w.id, "memory") / 0x100000000) * 0.4;
   const intervals = remember(ctx, w);
-  record(ctx, {
+  const rec = record(ctx, {
     kind: "wellRecord", provenance: "hearsay", wellId: w.id, x: w.x, y: w.y, owner: w.owner, year: w.year,
     depthFt: Math.round(mToFt(w.depth) / 5) * 5, intervals, memory,
   });
+  ctx.schedule(ctx.now, "ops.learn", rec as unknown as Json);
   const show = intervals.find((i) => i.show);
   return `${w.owner} described his well, ${Math.round(mToFt(w.depth) / 5) * 5} ft deep${show ? `. He mentioned ${show.show === "gas" ? "gas" : show.show === "oil" ? "an oily scum" : "sulphur"}` : ""}.`;
+}
+
+const ftWords = (n: number) => Math.round(n).toLocaleString("en-US");
+const round50 = (n: number) => Math.round(n / 50) * 50;
+
+/**
+ * His rule of thumb for the depth to the rock under a rise of `reliefFt` (ft): the lower the rise,
+ * the deeper the rock. He states the rule's own spread (rises of one height stand over rock at
+ * different depths) but trusts his own measure of the rise, so the range is sometimes wrong: an
+ * honest guess, not a promise. A rise may have no rock under it at all.
+ */
+export function rockRule(reliefFt: number): [number, number] {
+  const at = (k: number) => 500 + 620 * Math.log((17 * k) / Math.max(0.5, reliefFt));
+  return [Math.max(300, round50(at(0.8))), round50(at(1.2))];
+}
+
+/**
+ * The geologist's reading of the depth to the rock under the most prominent rise on a survey:
+ * from the company's own holes on it if there are any (he trusts a log over a guess), else a
+ * settler's account of hard rock nearby, else his own rough measure of the rise.
+ */
+function readRise(ctx: Ctx, surveyId: string, noticed: SurfaceSign[]): Omit<ReadingEvidence, "id" | "t"> {
+  const survey = SURVEYS.find((s) => s.id === surveyId)!;
+  const ev = S(ctx).evidence;
+  const printed = printedMap(ctx.seed).hills.filter((h) => insidePoly(survey.poly, h.x, h.y)).sort((a, b) => b.reliefFt - a.reliefFt)[0];
+  const mound = noticed.filter((m) => m.kind === "mound").sort((a, b) => (b.relief ?? 0) - (a.relief ?? 0))[0];
+  const rise = printed ? { x: printed.x, y: printed.y, relief: printed.reliefFt } : mound ? { x: mound.x, y: mound.y, relief: mToFt(mound.relief ?? 0) } : null;
+  const base = { kind: "reading" as const, provenance: "opinion" as const, from: "geologist" as const, surveyId };
+  if (!rise) {
+    const [cx, cy] = [survey.poly.reduce((a, p) => a + p[0], 0) / survey.poly.length, survey.poly.reduce((a, p) => a + p[1], 0) / survey.poly.length];
+    return { ...base, x: cx, y: cy, verdict: "flat", rockFt: null, basis: ["he found no rise on the survey"], text: "He found no rise on this survey to judge the depth of anything by. \"Flat ground tells a geologist nothing.\"" };
+  }
+  const near = (e: { x: number; y: number }) => Math.hypot(e.x - rise.x, e.y - rise.y) <= SAME_RISE_KM;
+  const holes = ev.filter((e): e is AccountEvidence => e.kind === "account" && near(e));
+  const dry = holes.find((h) => h.rockDry);
+  if (dry) {
+    return { ...base, x: rise.x, y: rise.y, verdict: "dry", rockFt: dry.rock ? [dry.rock.topFt, dry.rock.topFt] : null, basis: [`the log of the ${dry.name}`],
+      text: `He read the log of the ${dry.name}: rock at about ${ftWords(dry.rock!.topFt)} ft, dry all the way to the salt at ${ftWords(dry.saltFt!)} ft. He would not look for oil in the rock of this rise again. The flanks of the rise are another matter: deeper, and harder to find.` };
+  }
+  const logged = holes.find((h) => h.rock);
+  if (logged) {
+    const top = logged.rock!.topFt;
+    return { ...base, x: rise.x, y: rise.y, verdict: "range", rockFt: [Math.max(0, round50(top - logged.rock!.withinFt - 25)), round50(top + 50)], basis: [`the log of the ${logged.name}`],
+      text: `He takes the log of the ${logged.name} for his guide: it met the rock at about ${ftWords(top)} ft, and the top of such rock lies nearly level under a rise. "Off the rock, you will be on its flank, and the sands there lie deeper."` };
+  }
+  const told = ev.filter((e): e is WellRecordEvidence => e.kind === "wellRecord" && near(e)).map((e) => ({ e, rock: e.intervals.find((iv) => iv.lith === "rock") })).find((x) => x.rock);
+  if (told) {
+    const top = told.rock!.topFt;
+    return { ...base, x: rise.x, y: rise.y, verdict: "range", rockFt: [Math.max(0, round50(top - 30)), round50(top + 60)], basis: [`${told.e.owner}'s account of his well`],
+      text: `${told.e.owner}'s well struck hard rock at ${ftWords(top)} ft, by his account. He would sooner trust that than any guess of his own, though a settler's memory is no driller's log.` };
+  }
+  // His own measure of the rise: a level and a rod, done in an afternoon. Rough.
+  const measured = Math.max(1, Math.round(rise.relief * (0.88 + ctx.random("field:measure") * 0.24)));
+  const [lo, hi] = rockRule(measured);
+  const basis = [`a rise he measured at about ${measured} ft`];
+  if (measured < 3) {
+    return { ...base, x: rise.x, y: rise.y, verdict: "deep", rockFt: [lo, null], basis,
+      text: `The rise is barely ${measured} ft. If there is rock under it at all, he reckons it deeper than ${ftWords(lo)} ft: "Low ground hides its rock deep."` };
+  }
+  return { ...base, x: rise.x, y: rise.y, verdict: "range", rockFt: [lo, hi], basis,
+    text: `He measured the rise at about ${measured} ft. If there is rock under it, he reckons it at ${ftWords(lo)} to ${ftWords(hi)} ft: "a guess from the lie of the land, no more." Rock is no promise of oil.` };
 }
 
 function consult(ctx: Ctx, surveyId: string, who: "geologist" | "gossip"): string {
@@ -160,12 +246,19 @@ function consult(ctx: Ctx, surveyId: string, who: "geologist" | "gossip"): strin
     text = lines[Math.floor(ctx.random("field:gossip") * lines.length)]!;
   }
   record(ctx, { kind: "opinion", provenance: "opinion", surveyId, from: who, stance, text });
+  if (who === "geologist") {
+    const reading = record(ctx, readRise(ctx, surveyId, signs.filter(() => ctx.random("field:geologist:rise") < 0.8)));
+    // The company's driller is told what the geologist made of the ground.
+    ctx.schedule(ctx.now, "ops.learn", reading as unknown as Json);
+  }
   return who === "geologist" ? "The geologist from Austin has given his opinion." : "You heard what Beaumont is saying.";
 }
 
-function startTask(ctx: Ctx, task: FieldTask): void {
+/** The party sets out; the books pay for it (the company's operations may call it back if they cannot). */
+function startTask(ctx: Ctx, task: FieldTask, acres = 0): void {
   S(ctx).task = task;
   ctx.schedule(task.until, "fieldwork.return");
+  ctx.schedule(ctx.now, "ops.fieldExpense", errandCost(task, acres) as unknown as Json);
 }
 
 const pt = (v: unknown): [number, number] => {
@@ -177,6 +270,18 @@ export const fieldwork: System<Json> = {
   id: "knowledge",
   initialState: () => ({ evidence: [], interp: { sections: [], prospects: [] }, task: null, seen: [], visits: {}, next: 1 }) as unknown as Json,
   events: {
+    /** The company could not pay for the errand: the party stays at home. */
+    "fieldwork.recall"(ctx, payload) {
+      const st = S(ctx);
+      if (!st.task) return;
+      st.task = null;
+      const { day, month } = toCalendar(ctx.now);
+      ctx.emit({ type: "fieldwork.report", severity: "notice", interrupt: true, data: { message: (payload as { message?: string })?.message ?? "The party could not be paid and stayed at home.", day, month } });
+    },
+    /** One of the company's holes has ended: its account joins the evidence. */
+    "knowledge.account"(ctx, payload) {
+      record(ctx, payload as unknown as Omit<AccountEvidence, "id" | "t">);
+    },
     "fieldwork.return"(ctx) {
       const st = S(ctx);
       const task = st.task;
@@ -195,7 +300,7 @@ export const fieldwork: System<Json> = {
       busy(ctx);
       const survey = SURVEYS.find((s) => s.id === (c.payload as { surveyId?: string })?.surveyId);
       if (!survey) throw new CommandRejected("No such survey.");
-      startTask(ctx, { kind: "walk", surveyId: survey.id, until: returnTime(ctx.now, WALK_DAYS(survey.acres)) });
+      startTask(ctx, { kind: "walk", surveyId: survey.id, until: returnTime(ctx.now, WALK_DAYS(survey.acres)) }, survey.acres);
     },
     "fieldwork.inquire"(ctx, c: Command) {
       busy(ctx);

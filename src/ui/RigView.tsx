@@ -5,6 +5,7 @@ import { drawScene, SceneState } from "../render/rig/scene";
 import { CasingSheet } from "./Casing";
 import { AdviceCard } from "./Crew";
 import { RigAudio } from "./rigAudio";
+import { accountFor, HoleAccount } from "./Ground";
 
 interface Props {
   runtime: GameRuntime;
@@ -145,6 +146,7 @@ export function RigView({ runtime, snap, onClose }: Props) {
   const lineWord = slack < 0 ? "Tools short of bottom" : slack <= SWEET_FT ? "Striking square" : "Slack in the line";
   const days = Math.floor((snap.time - well.spudAt) / MINUTES_PER_DAY);
   const done = well.status === "gusher" || well.status === "dry";
+  const account = done ? accountFor(snap, well.id) : undefined;
   const nextPipe = well.strings.length < MAX_STRINGS ? PIPE[well.strings.length]! : null;
   const caseCost = nextPipe ? Math.ceil(stringCostCents(well.strings.length, Math.round(well.depthFt)) / 100) : 0;
   const canCase = !!nextPipe && well.depthFt - well.casedFt >= MIN_STRING_FT;
@@ -282,6 +284,7 @@ export function RigView({ runtime, snap, onClose }: Props) {
           <p class="result-word">{well.status === "gusher" ? (well.outcome?.startsWith("GAS") ? "Gas." : "Oil.") : "Dry hole."}</p>
           <p>{well.outcome}</p>
           <p class="result-meta">{wholeFeet(well.depthFt)} ft in {days} days · ${Math.floor(snap.ops.cash)} left</p>
+          {account && !(well.status === "gusher" && well.outcome?.startsWith("OIL")) && <HoleAccount account={account} />}
           {well.status === "gusher" && well.outcome?.startsWith("OIL") && !capped && (
             capBorrow > 0 ? (
               <button type="button" class="button button-primary" data-testid="cap" onClick={() => { audio.current.start(); if (!runtime.command("bank.borrow", { cents: capBorrow })) runtime.command("prod.cap", {}); }}>

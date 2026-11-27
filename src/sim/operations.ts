@@ -6,7 +6,7 @@
  */
 import type { WorldState } from "./core/engine";
 import type { GameTime } from "./core/time";
-import type { SampleEvidence } from "./knowledge/types";
+import type { AccountEvidence, ReadingEvidence, SampleEvidence, WellRecordEvidence } from "./knowledge/types";
 import { cashCents, debtCents, type Ledger } from "./company/ledger";
 import type { LeaseBook } from "./company/leases";
 import type { ProductionBook } from "./company/production";
@@ -112,6 +112,12 @@ export interface OperationsState {
   /** Earlier wells (finished). */
   past: Well[];
   samples: SampleEvidence[];
+  /**
+   * What the company knows that bears on its holes, kept where its driller can read it: the
+   * geologist's readings and settlers' accounts (told him as they come in), and the accounts of
+   * the company's own ended holes.
+   */
+  notebook: (ReadingEvidence | WellRecordEvidence | AccountEvidence)[];
   next: number;
 }
 

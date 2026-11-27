@@ -62,6 +62,7 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 const HEADS: Record<Category, string> = {
   opening: "Capital",
   lease: "Land",
+  fieldwork: "Fieldwork",
   drilling: "Drilling",
   equipment: "Rig and tools",
   operating: "Crew",

@@ -46,6 +46,20 @@ export interface Observations {
   driveHead: boolean;
   nextDriveCents: number;
   swageCents: number;
+  /**
+   * What the company's evidence says of the rock at this spot (its own holes, a geologist's
+   * reading, a settler's account), with the evidence named; an open `hi` means "deeper than lo".
+   */
+  expect: { lo: number; hi: number | null; basis: string } | null;
+  /** A hole on this rise went through the rock to the salt without a show, in words. */
+  rockDry: string | null;
+  /** Where this hole's bailer first brought up hard rock, and whether it is in salt now. */
+  rockFt: number | null;
+  inSalt: boolean;
+  /** The deepest call of gypsum chips in this hole. */
+  gypsumFt: number | null;
+  /** Feet a day this hole has made since the derrick was up. */
+  paceFtDay: number;
 }
 
 export type Advice =
@@ -90,6 +104,26 @@ export function moneyConcern(o: Observations, a: Ability, t: Temperament): strin
   // The rig runs on cash in hand: credit keeps it going only if the owner chooses to borrow.
   const cash = Math.max(0, o.cashCents), credit = Math.max(0, o.creditRoomCents);
   const days = cash / o.dayCents;
+  const d = Math.round(o.depthFt);
+  // In the salt: nothing has been found under it in this country. Every man says so plainly.
+  if (o.inSalt) return `We're in rock salt at ${d} ft${o.rockFt !== null ? `, under the rock we met at ${o.rockFt} ft, and the rock gave no oil` : ""}. Nobody has found anything under the salt in this country. Every foot more is money thrown away: I'd plug it.`;
+  // In the rock, or the cuttings speak of rock not far below: where oil is found here, if anywhere. He will not counsel quitting.
+  if (o.rockFt !== null && o.depthFt - o.rockFt < 200) return null;
+  if (o.gypsumFt !== null && o.rockFt === null && o.depthFt - o.gypsumFt < 100) return null;
+  // What going on would cost at this hole's own pace.
+  const per100 = (100 / o.paceFtDay) * o.dayCents;
+  const costTo = (ft: number) => ({ days: Math.max(0, ft - o.depthFt) / o.paceFtDay, cents: (Math.max(0, ft - o.depthFt) / o.paceFtDay) * o.dayCents });
+  if (o.expect && o.rockFt === null) {
+    const { lo, hi, basis } = o.expect;
+    const range = hi === null ? `deeper than ${lo.toLocaleString("en-US")} ft` : `at ${lo.toLocaleString("en-US")} to ${hi.toLocaleString("en-US")} ft`;
+    // Past where the evidence put the rock, and no rock: the reading was wrong here, or the hole is off the rock.
+    if (hi !== null && o.depthFt > hi + 150) return `We're at ${d} ft. The rock was looked for ${range} (${basis}), and we have not met it: that reading was wrong here, or this spot is off the rock. This hole has cost ${usd(o.wellSpentCents)}. ${QUIT_WORDS[t]}`;
+    const target = hi ?? lo + 300;
+    const need = costTo(target);
+    // Within the company's means, cash and credit: he says what it will take, and does not counsel quitting.
+    if (o.depthFt < target && need.cents <= cash + credit) return null;
+    if (o.depthFt < target) return `The rock is looked for ${range} (${basis}). Reaching ${target.toLocaleString("en-US")} ft at this pace is about ${Math.ceil(need.days)} days and ${usd(need.cents)} more; the company has ${usd(cash)} in hand${credit > 0 ? ` and ${usd(credit)} of credit` : ""}. ${QUIT_WORDS[t]}`;
+  }
   const share = o.wellSpentCents / (o.wellSpentCents + cash + credit);
   // A show of oil or gas near the bottom is reason to keep on: he will not counsel quitting then.
   if (o.lastShow && o.lastShow.kind !== "sulphur" && o.depthFt - o.lastShow.ft < 150) return null;
@@ -102,7 +136,7 @@ export function moneyConcern(o: Observations, a: Ability, t: Temperament): strin
   const longDry = sinceShow >= m.dry * (1.5 - p) && share >= 0.65 - (p - 0.5) * 0.2;
   if (!short && !longDry) return null;
   const shown = o.lastShow ? `the last show was ${o.lastShow.kind === "sulphur" ? "sulphur water" : o.lastShow.kind} at ${Math.round(o.lastShow.ft)} ft` : "no show of oil or gas yet";
-  return `This hole has cost ${usd(o.wellSpentCents)} to ${Math.round(o.depthFt)} ft, and ${shown}. The company has ${usd(cash)} in hand: about ${Math.floor(days)} days of rig time${credit > 0 ? `, and ${usd(credit)} more only if you borrow` : ""}. ${QUIT_WORDS[t]}`;
+  return `This hole has cost ${usd(o.wellSpentCents)} to ${d} ft, and ${shown}. Each hundred feet more is about ${Math.ceil(100 / o.paceFtDay)} days and ${usd(per100)} at this pace. The company has ${usd(cash)} in hand: about ${Math.floor(days)} days of rig time${credit > 0 ? `, and ${usd(credit)} more only if you borrow` : ""}. ${QUIT_WORDS[t]}`;
 }
 
 /** How many swaging jobs on a collapsed string before he would rather plug the hole. */

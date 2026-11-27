@@ -40,11 +40,11 @@ export function SectionFigure({ runtime, snap, line }: Props) {
     <figure class="fig fig-section">
       <div class="section-wrap" ref={wrap}>
         {line ? (
-          <canvas ref={canvas} class="section" role="img" data-testid="section" aria-label={`Section along ${line.letter}—${line.letter}′, drawn from the well records the company holds. Blank paper is unknown ground.`} />
+          <canvas ref={canvas} class="section" role="img" data-testid="section" aria-label={`Section along ${line.letter}—${line.letter}′, drawn from what the company holds: its own holes (observed), settlers' accounts (told), and the geologist's readings and correlations (inferred). Blank paper is unknown ground.`} />
         ) : (
           <div class="section-empty">
             <p class="section-empty-title">No line of section yet</p>
-            <p>Choose <b>Draw a section</b> and tap two points on the map. The section shows only what the company knows: the surface, and the logs of wells whose owners you have asked. Everything else stays blank paper.</p>
+            <p>Choose <b>Draw a section</b> and tap two points on the map. The section shows only what the company knows: the surface, its own holes as the bailer logged them, the wells whose owners you have asked, and the geologist's readings, each drawn so you can tell what was seen from what was told or guessed. Everything else stays blank paper.</p>
           </div>
         )}
       </div>
