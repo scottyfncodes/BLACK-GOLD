@@ -202,8 +202,15 @@ test("the first producing well is acknowledged as the goal met", async ({ page }
   await expect(sheet).toContainText("The goal is met");
   await sheet.getByTestId("carry-on").click();
   await expect(sheet).toBeHidden();
-  await page.getByRole("dialog", { name: /The rig/ }).getByRole("button", { name: /Back to the map|← Map/ }).first().click();
-  await page.keyboard.press("Escape"); // back to the field notes' front page
+  const rigView = page.getByRole("dialog", { name: /The rig/ });
+  await rigView.getByRole("button", { name: /Back to the map|← Map/ }).first().click();
+  // The map's keys listen only once the rig has closed and the page has re-rendered: an Escape sent
+  // in between is ignored (this flaked on slow CI runners), so press it until the front page shows.
+  await expect(rigView).toBeHidden();
+  await expect(async () => {
+    await page.keyboard.press("Escape"); // back to the field notes' front page
+    await expect(page.getByTestId("goal-head")).toBeAttached({ timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
   await page.getByTestId("goal-head").scrollIntoViewIfNeeded();
   await expect(page.getByTestId("goal-head")).toHaveText("You brought in a producing well.");
 });
