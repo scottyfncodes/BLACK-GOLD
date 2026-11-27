@@ -19,7 +19,9 @@ const cmd = (w: WorldState, type: string, payload: unknown = null) =>
 const rejected = (r: ReturnType<typeof cmd>) => r.events.find((e) => e.type === "command.rejected");
 const ops = (w: WorldState) => operationsOf(w);
 
-const OBS: Observations = { depthFt: 400, casedFt: 0, stringsLeft: 3, nextPipe: "10-inch", nextCostCents: 20_000, openSandFt: 0, bottom: null, waterSeen: false, waterShutOff: false, stuck: false, fishCount: 0, cashCents: 100_000, dayCents: 1_200, fishingCents: 6_000, creditRoomCents: 0, wellSpentCents: 0, lastShow: null, inflowFtHr: 0, driving: null, collapse: null, driveHead: false, nextDriveCents: 0, swageCents: 15_000 };
+/** Counsel about the money: a recommendation to quit, or (with nothing seen either way) a decision put to the owner. */
+const COUNSEL = /^(quit|decide)$/;
+const OBS: Observations = { depthFt: 400, casedFt: 0, stringsLeft: 3, nextPipe: "10-inch", nextCostCents: 20_000, openSandFt: 0, bottom: null, waterSeen: false, waterShutOff: false, stuck: false, fishCount: 0, cashCents: 100_000, dayCents: 1_200, fishingCents: 6_000, creditRoomCents: 0, wellSpentCents: 0, lastShow: null, inflowFtHr: 0, driving: null, collapse: null, driveHead: false, nextDriveCents: 0, swageCents: 15_000, expect: null, rockDry: null, rockFt: null, inSalt: false, gypsumFt: null, sheenFt: null, paceFtDay: 40 };
 const GOOD: Ability = { feel: 0.8, judgement: 0.9, reliability: 0.8, prudence: 0.5 };
 const POOR: Ability = { feel: 0.3, judgement: 0.1, reliability: 0.3, prudence: 0.5 };
 
@@ -59,9 +61,9 @@ describe("assess: what he would recommend, from what he can see", () => {
     // $700 spent on this hole, $250 left: about 20 days of rig time, too little to start another hole.
     const o = { ...OBS, depthFt: 900, wellSpentCents: 70_000, cashCents: 25_000 };
     const a = assess(o, { ...GOOD, prudence: 0.7 }, "cautious", 0.5, 0.5);
-    expect(a?.kind).toBe("quit");
+    expect(a?.kind).toMatch(COUNSEL);
     expect(a!.text).toMatch(/\$700 to 900 ft/);
-    expect(a!.text).toMatch(/no show of oil or gas yet/);
+    expect(a!.text).toMatch(/no show of oil or gas/);
     expect(a!.text).toMatch(/\$250 in hand: about 20 days of rig time\./);
   });
 
@@ -70,7 +72,7 @@ describe("assess: what he would recommend, from what he can see", () => {
     // fairly prudent man with $150 in hand and $300 of unused credit must still speak.
     const o = { ...OBS, depthFt: 900, wellSpentCents: 70_000, cashCents: 15_000, creditRoomCents: 30_000 };
     const a = assess(o, { ...GOOD, prudence: 0.67 }, "methodical", 0.5, 0.5);
-    expect(a?.kind).toBe("quit");
+    expect(a?.kind).toMatch(COUNSEL);
     expect(a!.text).toMatch(/\$150 in hand: about 12 days of rig time, and \$300 more only if you borrow\./);
   });
 
@@ -78,15 +80,16 @@ describe("assess: what he would recommend, from what he can see", () => {
     const o = { ...OBS, depthFt: 900, wellSpentCents: 70_000, cashCents: 25_000 };
     const fineButReckless: Ability = { feel: 0.95, judgement: 0.95, reliability: 0.95, prudence: 0.1 };
     const ordinaryButPrudent: Ability = { feel: 0.4, judgement: 0.35, reliability: 0.4, prudence: 0.9 };
-    expect(assess(o, fineButReckless, "methodical", 0.5, 0.5)?.kind).not.toBe("quit");
-    expect(assess(o, ordinaryButPrudent, "methodical", 0.5, 0.5)?.kind).toBe("quit");
+    expect(assess(o, fineButReckless, "methodical", 0.5, 0.5)?.kind ?? "").not.toMatch(COUNSEL);
+    expect(assess(o, ordinaryButPrudent, "methodical", 0.5, 0.5)?.kind).toMatch(COUNSEL);
   });
 
   it("temperament sets when he speaks: an aggressive man only when the money is nearly gone", () => {
     const mid = { ...OBS, depthFt: 900, wellSpentCents: 70_000, cashCents: 25_000 };
-    expect(assess(mid, GOOD, "aggressive", 0.5, 0.5)?.kind).not.toBe("quit");
-    expect(assess(mid, GOOD, "cautious", 0.5, 0.5)?.kind).toBe("quit");
-    const broke = { ...OBS, depthFt: 900, wellSpentCents: 110_000, cashCents: 3_000 };
+    expect(assess(mid, GOOD, "aggressive", 0.5, 0.5)?.kind ?? "").not.toMatch(COUNSEL);
+    expect(assess(mid, GOOD, "cautious", 0.5, 0.5)?.kind).toMatch(COUNSEL);
+    // Not even another hundred feet in cash and credit: a fact about the money, so he recommends stopping.
+    const broke = { ...OBS, depthFt: 900, wellSpentCents: 110_000, cashCents: 2_000 };
     const a = assess(broke, GOOD, "aggressive", 0.5, 0.5);
     expect(a?.kind).toBe("quit");
     expect(a!.text).toMatch(/I hate to quit a hole/);
@@ -94,9 +97,9 @@ describe("assess: what he would recommend, from what he can see", () => {
 
   it("a show of oil or gas near the bottom is reason to keep on; sulphur water is not", () => {
     const o = { ...OBS, depthFt: 900, wellSpentCents: 70_000, cashCents: 25_000 };
-    expect(assess({ ...o, lastShow: { kind: "gas", ft: 860 } }, GOOD, "cautious", 0.5, 0.5)?.kind).not.toBe("quit");
-    expect(assess({ ...o, lastShow: { kind: "sulphur", ft: 860 } }, GOOD, "cautious", 0.5, 0.5)?.kind).toBe("quit");
-    expect(assess({ ...o, lastShow: { kind: "gas", ft: 500 } }, GOOD, "cautious", 0.5, 0.5)?.kind).toBe("quit");
+    expect(assess({ ...o, lastShow: { kind: "gas", ft: 860 } }, GOOD, "cautious", 0.5, 0.5)?.kind ?? "").not.toMatch(COUNSEL);
+    expect(assess({ ...o, lastShow: { kind: "sulphur", ft: 860 } }, GOOD, "cautious", 0.5, 0.5)?.kind).toMatch(COUNSEL);
+    expect(assess({ ...o, lastShow: { kind: "gas", ft: 500 } }, GOOD, "cautious", 0.5, 0.5)?.kind).toMatch(COUNSEL);
   });
 
   it("is built so it cannot see the ground: its module imports no geological truth and no hidden casing", () => {
@@ -262,7 +265,7 @@ describe("his own judgement, within limits", () => {
     const ev = untilAdvice(w)!;
     const kind = (ev.data as { kind: string }).kind;
     // He either asks before spending, or counsels plugging the hole: he never spends below the reserve himself.
-    if (kind !== "abandon" && kind !== "quit") expect((ev.data as { message: string }).message).toMatch(/too little in hand|past this month's allowance/);
+    if (kind !== "abandon" && kind !== "quit" && kind !== "decide") expect((ev.data as { message: string }).message).toMatch(/too little in hand|past this month's allowance/);
     expect(ops(w).crew.orders.spentCents).toBe(0);
   });
 });
@@ -288,7 +291,7 @@ describe("counsel to quit a costly hole", () => {
       const ev = untilAdvice(w, 30);
       if (!ev) return null;
       const p = ops(w).crew.pending!;
-      if (p.kind === "quit") return { id: p.id, t: ev.t };
+      if (p.kind === "quit" || p.kind === "decide") return { id: p.id, t: ev.t };
       cmd(w, p.kind === "fish" ? "crew.accept" : "crew.decline", { id: p.id });
     }
     return null;
@@ -313,7 +316,7 @@ describe("counsel to quit a costly hole", () => {
     const q = untilQuit(w);
     expect(q).not.toBeNull();
     expect(ops(w).well!.status === "drilling" || ops(w).well!.status === "stuck").toBe(true);
-    expect(ops(w).crew.pending!.kind).toBe("quit");
+    expect(ops(w).crew.pending!.kind).toMatch(COUNSEL);
   });
 
   it("accepting it ends the well with the company's remaining capital kept", () => {
@@ -322,7 +325,7 @@ describe("counsel to quit a costly hole", () => {
     const cash = ops(w).cash;
     expect(rejected(cmd(w, "crew.accept", { id: q.id }))).toBeUndefined();
     expect(ops(w).well!.status).toBe("dry");
-    expect(ops(w).well!.outcome).toMatch(/to save the company's money/);
+    expect(ops(w).well!.outcome).toMatch(/to save the company's money|chose to keep its money/);
     expect(ops(w).cash).toBeCloseTo(cash, 0);
     expect(cash).toBeGreaterThan(50);
   });

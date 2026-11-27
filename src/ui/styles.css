@@ -1620,3 +1620,75 @@ table.book tr.nocash td {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* M7: the company's reading of the ground, and the account of a hole. Interpretation is set in
+   italic carmine and labelled; what was observed is set in ink. */
+.reading {
+  margin: 14px 0 4px;
+  padding: 10px 12px;
+  border: 1px dashed var(--accent);
+}
+.reading h3 {
+  margin-top: 0 !important;
+}
+.reading h3 small,
+.account h4 small {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--accent);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.reading p {
+  font-size: 15px;
+}
+.account {
+  margin: 8px 0 4px;
+  text-align: left;
+  font-size: 14px;
+}
+.account summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: var(--ink);
+}
+.account h4 {
+  margin: 8px 0 2px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.account ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.account li {
+  margin: 2px 0;
+  color: var(--ink);
+}
+.account .suggests li {
+  font-style: italic;
+  color: var(--accent);
+}
+.account-cost {
+  margin: 6px 0 0 !important;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+.result {
+  /* Leave the rig's header (and its way back to the map) uncovered; the card scrolls instead. */
+  max-height: calc(100% - 150px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The driller's open question: no recommendation, so no choice is drawn as his. */
+.advice-open {
+  margin: 0 0 10px;
+  font-style: italic;
+  color: var(--ink-soft);
+}

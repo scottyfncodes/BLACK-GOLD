@@ -55,8 +55,12 @@ export interface Orders {
   spentCents: number;
 }
 
-/** "abandon": plug a hole with the tools fast in it. "quit": plug a hole that is costing more than it promises. */
-export type RecommendationKind = "case" | "fish" | "abandon" | "quit" | "drive" | "setdrive";
+/**
+ * "abandon": plug a hole with the tools fast in it. "quit": plug a hole the evidence, or the money,
+ * says to stop. "decide": no recommendation: the evidence says neither way, and the owner must
+ * choose between the money and the hole.
+ */
+export type RecommendationKind = "case" | "fish" | "abandon" | "quit" | "decide" | "drive" | "setdrive";
 
 export interface Recommendation {
   id: number;

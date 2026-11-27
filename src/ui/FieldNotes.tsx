@@ -1,7 +1,8 @@
 import type { GameRuntime, Snapshot } from "../app/runtime";
 import { formatDate } from "../app/runtime";
 import { SURVEYS, insidePoly } from "../content/geography/surveys";
-import { activeLease, askingTerms, CONSULT_DAYS, COSTS, INQUIRE_DAYS, WALK_DAYS, wholeFeet, type Evidence, type FieldTask, type Well } from "../sim";
+import { activeLease, askingTerms, CONSULT_DAYS, COSTS, FIELD_COSTS, INQUIRE_DAYS, WALK_DAYS, wholeFeet, type Evidence, type FieldTask, type Well } from "../sim";
+import { GroundReading, HoleAccount } from "./Ground";
 import type { Selection } from "../render/plate/map";
 import { nextStep } from "./advice";
 
@@ -18,6 +19,7 @@ interface Props {
 
 const ROMAN = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii", "xiii", "xiv", "xv", "xvi", "xvii", "xviii", "xix", "xx"];
 const days = (n: number) => (n === 1 ? "1 day" : `${n} days`);
+const cost = (cents: number) => `$${cents % 100 ? (cents / 100).toFixed(2) : cents / 100}`;
 
 function taskLine(task: FieldTask, snap: Snapshot): string {
   const back = `back ${formatDate(task.until)} at evening`;
@@ -41,6 +43,10 @@ function evidenceLine(e: Evidence): { text: string; src: string; red?: boolean }
       return { text: `Bailer sample, ${e.topFt}–${e.baseFt} ft: ${e.call}.`, src: `Our own well, ${when}`, red: !!e.show };
     case "wellRecord":
       return { text: `${e.owner}'s water well (${e.year}), ${e.depthFt} ft. ${e.intervals.length} beds described.`, src: `His account, ${when} · ${memoryWord(e.memory)}`, red: e.intervals.some((i) => i.show) };
+    case "reading":
+      return { text: e.text, src: `The geologist's reading, ${when} · an interpretation, from ${e.basis.join("; ")}` };
+    case "account":
+      return { text: `The ${e.name}, ended at ${e.deepestFt.toLocaleString("en-US")} ft${e.rock ? `: rock at about ${e.rock.topFt.toLocaleString("en-US")} ft${e.rockDry ? ", dry to the salt" : ""}` : ": no rock met"}.`, src: `Our own hole, ${when} · observed`, red: e.result !== "dry" };
   }
 }
 
@@ -145,19 +151,20 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
         ) : (
           <ol class="ev" data-testid="evidence">
             {items.map((e, i) => { const l = evidenceLine(e); return (
-              <li key={e.id}><span class="num">{ROMAN[i] ?? i + 1}.</span><span class={l.red ? "red" : ""}>{l.text}<small>{l.src}</small></span></li>
+              <li key={e.id}><span class="num">{ROMAN[i] ?? i + 1}.</span><span class={l.red ? "red" : ""}>{l.text}<small>{l.src}</small>{e.kind === "account" && <HoleAccount account={e} />}</span></li>
             ); })}
           </ol>
         )}
+        <GroundReading snap={snap} surveyId={s.id} />
         {wellsHere.length > 0 && (
           <p class="wells-here">Water well{wellsHere.length > 1 ? "s" : ""} on this survey: {wellsHere.map((w, i) => (
             <button type="button" class="link" key={w.id} onClick={() => onSelect({ kind: "well", id: w.id })}>{w.owner}'s{i < wellsHere.length - 1 ? ", " : ""}</button>
           ))}</p>
         )}
         <div class="acts">
-          <button type="button" class="button button-primary" disabled={!!task} onClick={act("fieldwork.walk", { surveyId: s.id })}>Walk the ground<small>{days(WALK_DAYS(s.acres))}</small></button>
-          <button type="button" class="button" disabled={!!task} onClick={act("fieldwork.consult", { surveyId: s.id, who: "gossip" })}>Ask in Beaumont<small>{days(CONSULT_DAYS.gossip)}</small></button>
-          <button type="button" class="button" disabled={!!task} onClick={act("fieldwork.consult", { surveyId: s.id, who: "geologist" })}>Send for a geologist<small>{days(CONSULT_DAYS.geologist)}</small></button>
+          <button type="button" class="button button-primary" data-testid="walk" disabled={!!task || snap.ops.cash * 100 < WALK_DAYS(s.acres) * FIELD_COSTS.walkDayCents} onClick={act("fieldwork.walk", { surveyId: s.id })}>Walk the ground<small>{days(WALK_DAYS(s.acres))} · {cost(WALK_DAYS(s.acres) * FIELD_COSTS.walkDayCents)}</small></button>
+          <button type="button" class="button" data-testid="gossip" disabled={!!task || snap.ops.cash * 100 < FIELD_COSTS.gossipCents} onClick={act("fieldwork.consult", { surveyId: s.id, who: "gossip" })}>Ask in Beaumont<small>{days(CONSULT_DAYS.gossip)} · {cost(FIELD_COSTS.gossipCents)}</small></button>
+          <button type="button" class="button" data-testid="geologist" disabled={!!task || snap.ops.cash * 100 < FIELD_COSTS.geologistCents} onClick={act("fieldwork.consult", { surveyId: s.id, who: "geologist" })}>Send for a geologist<small>{days(CONSULT_DAYS.geologist)} · {cost(FIELD_COSTS.geologistCents)}, fee and fare</small></button>
         </div>
         <LeaseBlock runtime={runtime} snap={snap} surveyId={s.id} />
         <div class="acts">
@@ -192,7 +199,7 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
         ) : (
           <>
             <p class="empty">Nobody has asked {w.owner} what his well went through. Its record is unknown.</p>
-            <div class="acts"><button type="button" class="button button-primary" disabled={!!task} onClick={act("fieldwork.inquire", { wellId: w.id })}>Ask {w.owner} about his well<small>{days(INQUIRE_DAYS)}</small></button></div>
+            <div class="acts"><button type="button" class="button button-primary" disabled={!!task || snap.ops.cash * 100 < FIELD_COSTS.inquireCents} onClick={act("fieldwork.inquire", { wellId: w.id })}>Ask {w.owner} about his well<small>{days(INQUIRE_DAYS)} · {cost(FIELD_COSTS.inquireCents)}</small></button></div>
           </>
         )}
       </section>

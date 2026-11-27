@@ -1,12 +1,15 @@
 /**
- * Fig. 2: a section along a player-drawn line, built from knowledge alone:
+ * Fig. 2: a section along a player-drawn line, built from knowledge alone, with what was observed,
+ * what was told and what is inferred kept visibly apart:
  *   - the surface (printed hills and rises the party has seen),
- *   - well records near the line (owners' accounts), drawn as patterned columns,
- *   - correlations between neighbouring records, dashed (inferred), queried beyond the last one,
+ *   - the company's own holes near the line, from their bailer samples: OBSERVED, solid ink columns,
+ *   - settlers' wells near the line, from their owners' accounts: HEARSAY, columns in a dashed frame,
+ *   - correlations between neighbouring logs, dashed carmine (inferred), queried beyond the last one,
+ *   - a geologist's reading of the depth to the rock: INFERRED, a hatched carmine band,
  *   - the player's prospects, dotted (conjecture).
  * Everything else is blank paper, which means unknown (docs/ART-DIRECTION.md §1).
  */
-import { type KnowledgeView, type PrintedMap, type ReportedInterval, type SectionLine, type WellRecordEvidence } from "../../sim";
+import { type KnowledgeView, type PrintedMap, type ReadingEvidence, type ReportedInterval, type SampleEvidence, type SectionLine } from "../../sim";
 import { Placer, type Pt } from "./kit";
 import { FONT, INK, LITH } from "./palette";
 import { paper } from "./paper";
@@ -25,23 +28,73 @@ export interface SectionGeometry {
   b: Pt;
 }
 
+/** A log on the section: a settler's account (hearsay) or the company's own hole (observed). */
+interface Log {
+  owner: string;
+  depthFt: number;
+  intervals: ReportedInterval[];
+  observed: boolean;
+}
+
 interface Control {
-  rec: WellRecordEvidence;
+  rec: Log;
   along: number;
 }
 
-export function controlsFor(line: SectionLine, k: KnowledgeView): Control[] {
+/** Where a point falls along the line (km), or null when it is outside the corridor. */
+function project(line: SectionLine, x: number, y: number, corridor = CORRIDOR_KM): number | null {
   const [ax, ay] = line.a, [bx, by] = line.b;
   const dx = bx - ax, dy = by - ay, L = Math.hypot(dx, dy);
+  const t = ((x - ax) * dx + (y - ay) * dy) / (L * L);
+  if (t < 0 || t > 1) return null;
+  const off = Math.abs((x - ax) * dy - (y - ay) * dx) / L;
+  return off <= corridor ? t * L : null;
+}
+
+/** The company's own holes as logs, built from their bailer samples: each bed as the bailer called it. */
+function ownLogs(k: KnowledgeView): (Log & { x: number; y: number })[] {
+  const by = new Map<string, SampleEvidence[]>();
+  for (const e of k.evidence) if (e.kind === "sample") by.set(e.wellId, [...(by.get(e.wellId) ?? []), e]);
+  const names = new Map<string, string>();
+  for (const e of k.evidence) if (e.kind === "account") names.set(e.wellId, e.name);
+  const out: (Log & { x: number; y: number })[] = [];
+  for (const [id, ss] of by) {
+    const intervals: ReportedInterval[] = [];
+    for (const s of ss) {
+      const call = s.call.split(",")[0]!;
+      const prev = intervals[intervals.length - 1];
+      if (prev && prev.lith === s.lith && !s.show && !prev.show) { prev.baseFt = s.baseFt; continue; }
+      intervals.push({ topFt: s.topFt, baseFt: s.baseFt, call: s.show ? s.call : call, lith: s.lith, ...(s.show ? { show: s.show } : {}) });
+    }
+    out.push({ owner: names.get(id) ?? "our well", depthFt: ss[ss.length - 1]!.baseFt, intervals, observed: true, x: ss[0]!.x, y: ss[0]!.y });
+  }
+  return out;
+}
+
+export function controlsFor(line: SectionLine, k: KnowledgeView): Control[] {
   const out: Control[] = [];
   for (const e of k.evidence) {
     if (e.kind !== "wellRecord") continue;
-    const t = ((e.x - ax) * dx + (e.y - ay) * dy) / (L * L);
-    if (t < 0 || t > 1) continue;
-    const off = Math.abs((e.x - ax) * dy - (e.y - ay) * dx) / L;
-    if (off <= CORRIDOR_KM) out.push({ rec: e, along: t * L });
+    const along = project(line, e.x, e.y);
+    if (along !== null) out.push({ rec: { owner: e.owner, depthFt: e.depthFt, intervals: e.intervals, observed: false }, along });
+  }
+  for (const o of ownLogs(k)) {
+    const along = project(line, o.x, o.y);
+    if (along !== null) out.push({ rec: o, along });
   }
   return out.sort((p, q) => p.along - q.along);
+}
+
+/** The geologist's readings of rock depth near the line (the latest per rise). */
+function readingsFor(line: SectionLine, k: KnowledgeView): { r: ReadingEvidence; along: number }[] {
+  const out: { r: ReadingEvidence; along: number }[] = [];
+  for (const e of [...k.evidence].reverse()) {
+    if (e.kind !== "reading" || !e.rockFt || (e.verdict !== "range" && e.verdict !== "deep")) continue;
+    const along = project(line, e.x, e.y, CORRIDOR_KM * 1.5);
+    if (along === null || out.some((o) => Math.abs(o.along - along) < 0.4)) continue;
+    out.push({ r: e, along });
+  }
+  return out;
 }
 
 /** Surface relief (ft) at a point along the line, from printed hills and observed rises only. */
@@ -66,11 +119,12 @@ export function drawSection(
 ): void {
   paper(ctx, w, h);
   const compact = w < 520;
-  const padL = compact ? 44 : 58, padR = compact ? 18 : 28, padT = compact ? 50 : 56, padB = compact ? 34 : 40;
+  const padL = compact ? 44 : 58, padR = compact ? 18 : 28, padT = compact ? 50 : 56, padB = compact ? 50 : 56;
   const [ax, ay] = line.a, [bx, by] = line.b;
   const L = Math.hypot(bx - ax, by - ay);
   const controls = controlsFor(line, k);
-  const deepest = Math.max(0, ...controls.map((c) => c.rec.depthFt));
+  const readings = readingsFor(line, k);
+  const deepest = Math.max(0, ...controls.map((c) => c.rec.depthFt), ...readings.map(({ r }) => (r.rockFt![1] ?? r.rockFt![0] + 250)));
   const maxFt = Math.max(600, Math.ceil((deepest + 150) / 100) * 100);
   const X = (km: number) => padL + (km / L) * (w - padL - padR);
   const Y = (ft: number) => padT + (ft / maxFt) * (h - padT - padB);
@@ -92,6 +146,34 @@ export function drawSection(
   for (let km = 0.04; km < L; km += Math.max(0.05, L / 60)) {
     const x = X(km), y = groundY(km);
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 1.5, y - 3); ctx.moveTo(x, y); ctx.lineTo(x + 1.5, y - 3); ctx.stroke();
+  }
+
+  // The geologist's reading: where he looks for the rock. Inferred, so hatched and dashed, never solid.
+  for (const { r, along } of readings) {
+    const [lo, hiOrNull] = r.rockFt!;
+    const hi = hiOrNull ?? Math.min(maxFt, lo + 250);
+    const half = Math.min(0.5, L * 0.12);
+    const x0 = X(Math.max(0, along - half)), x1 = X(Math.min(L, along + half));
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x0, Y(lo), x1 - x0, Y(hi) - Y(lo));
+    ctx.clip();
+    ctx.strokeStyle = INK.carmine;
+    ctx.globalAlpha = 0.45;
+    ctx.lineWidth = 0.8;
+    for (let d = -(Y(hi) - Y(lo)); d < x1 - x0; d += 7) { ctx.beginPath(); ctx.moveTo(x0 + d, Y(hi)); ctx.lineTo(x0 + d + (Y(hi) - Y(lo)), Y(lo)); ctx.stroke(); }
+    ctx.restore();
+    ctx.strokeStyle = INK.carmine;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(x0, Y(lo), x1 - x0, Y(hi) - Y(lo));
+    ctx.setLineDash([]);
+    ctx.font = `italic ${compact ? 11 : 12}px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    halo(ctx, hiOrNull === null ? `rock, if any, deeper than ${lo} ft?` : `rock looked for, ${lo}–${hi} ft?`, (x0 + x1) / 2, Y(hi) + 3, INK.carmine);
+    ctx.font = `italic ${compact ? 10 : 11}px ${FONT}`;
+    halo(ctx, "the geologist's reading", (x0 + x1) / 2, Y(hi) + (compact ? 16 : 18), INK.carmine);
   }
 
   // Correlations between neighbouring records: dashed, carmine (the company's inference).
@@ -132,6 +214,12 @@ export function drawSection(
   controls.forEach((c, ci) => {
     const x = X(c.along) - colW / 2;
     for (const iv of c.rec.intervals) column(ctx, x, Y(iv.topFt), colW, Math.max(2, Y(iv.baseFt) - Y(iv.topFt)), iv.lith);
+    // Observed by our bailer: a heavy solid frame. Told by a settler: a dashed frame.
+    ctx.strokeStyle = INK.ink;
+    ctx.lineWidth = c.rec.observed ? 2 : 1.1;
+    ctx.setLineDash(c.rec.observed ? [] : [3, 3]);
+    ctx.strokeRect(x - 2, Y(0), colW + 4, Y(c.rec.depthFt) - Y(0));
+    ctx.setLineDash([]);
     // Bottom of knowledge.
     ctx.strokeStyle = INK.carmine;
     ctx.lineWidth = 1.3;
@@ -141,7 +229,7 @@ export function drawSection(
     ctx.textBaseline = "top";
     const crowded = ci > 0 && X(c.along) - X(controls[ci - 1]!.along) < 120;
     const tight = compact && (crowded || (controls[ci + 1] !== undefined && X(controls[ci + 1]!.along) - X(c.along) < 120));
-    const base = tight ? `to ${c.rec.depthFt} ft` : `no record below ${c.rec.depthFt} ft`, bw = ctx.measureText(base).width;
+    const base = tight ? `to ${c.rec.depthFt} ft` : c.rec.observed ? `our hole, ${c.rec.depthFt} ft` : `no record below ${c.rec.depthFt} ft`, bw = ctx.measureText(base).width;
     // Step the label down until it overlaps no other label.
     for (const dy of [5, 19, 33, 47]) {
       const y = Y(c.rec.depthFt) + dy;
@@ -155,7 +243,7 @@ export function drawSection(
     ctx.beginPath(); ctx.arc(X(c.along), groundY(c.along) - 8, 4, 0, Math.PI * 2); ctx.fill();
     ctx.font = `${compact ? 11 : 12}px ${FONT}`;
     ctx.textBaseline = "bottom";
-    halo(ctx, `${c.rec.owner}`, X(c.along), groundY(c.along) - 14 - (crowded && ci % 2 ? 14 : 0), INK.ink);
+    halo(ctx, c.rec.observed ? c.rec.owner : `${c.rec.owner} (his account)`, X(c.along), groundY(c.along) - 14 - (crowded && ci % 2 ? 14 : 0), INK.ink);
     // His words, beside the column, only where there is room before the next record.
     if (room[ci]! > (compact ? 120 : 170)) {
       ctx.textAlign = "left";
@@ -193,7 +281,7 @@ export function drawSection(
   }
 
   // When nothing is known below the surface, say so plainly. The paper stays blank.
-  if (controls.length === 0) {
+  if (controls.length === 0 && readings.length === 0) {
     ctx.fillStyle = INK.inkSoft;
     ctx.font = `italic ${compact ? 13 : 15}px ${FONT}`;
     ctx.textAlign = "center";
@@ -238,9 +326,35 @@ export function drawSection(
   ctx.font = `italic ${compact ? 11 : 12}px ${FONT}`;
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.fillText(`${controls.length} record${controls.length === 1 ? "" : "s"} within ½ mile · relief ×4`, padL - 10, Y(maxFt) + 6 + (compact ? 13 : 14));
+  const ours = controls.filter((c) => c.rec.observed).length;
+  ctx.fillText(compact ? `${controls.length} log${controls.length === 1 ? "" : "s"} · relief ×4` : `${ours} of ours, ${controls.length - ours} settlers' within ½ mile · relief ×4`, padL - 10, Y(maxFt) + 6 + (compact ? 13 : 14));
+  // The key, under the scale: what was seen, what was told, what is inferred.
+  legend(ctx, w - padR, Y(maxFt) + 6 + (compact ? 32 : 36), compact);
 
   overlay?.(ctx, { X, Y: (ft) => Y(ft), lengthKm: L, a: line.a, b: line.b });
+}
+
+/** A small key, right-aligned at (right, y): solid frame observed, dashed frame told, hatching and dashes inferred. */
+function legend(ctx: CanvasRenderingContext2D, right: number, y: number, compact: boolean): void {
+  ctx.save();
+  ctx.font = `italic ${compact ? 10 : 11}px ${FONT}`;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  const items: [string, (x: number) => void][] = [
+    ["observed", (x) => { ctx.strokeStyle = INK.ink; ctx.lineWidth = 2; ctx.setLineDash([]); ctx.strokeRect(x, y - 5, 10, 10); }],
+    ["told", (x) => { ctx.strokeStyle = INK.ink; ctx.lineWidth = 1.1; ctx.setLineDash([3, 2]); ctx.strokeRect(x, y - 5, 10, 10); }],
+    ["inferred", (x) => { ctx.strokeStyle = INK.carmine; ctx.lineWidth = 1; ctx.setLineDash([4, 3]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 12, y); ctx.stroke(); }],
+  ];
+  const widths = items.map(([t]) => ctx.measureText(t).width + 18);
+  let x = right - widths.reduce((a, b) => a + b + 8, 0);
+  items.forEach(([t, mark], i) => {
+    mark(x);
+    ctx.setLineDash([]);
+    ctx.fillStyle = i === 2 ? INK.carmine : INK.inkSoft;
+    ctx.fillText(t, x + 15, y);
+    x += widths[i]! + 8;
+  });
+  ctx.restore();
 }
 
 function halo(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, color: string): void {

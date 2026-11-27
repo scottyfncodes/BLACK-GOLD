@@ -85,9 +85,70 @@ export interface SampleEvidence extends Base {
   lith: ReportedLith;
   call: string;
   show?: "gas" | "oil" | "sulphur";
+  /** Chips of gypsum came up with the cuttings: often a sign of rock below, not always. */
+  gypsum?: boolean;
+  /** A rainbow of oil on the bailer water: oil may lie not far below, or it is a stray film. */
+  sheen?: boolean;
 }
 
-export type Evidence = SignEvidence | WalkEvidence | WellRecordEvidence | OpinionEvidence | SampleEvidence;
+/**
+ * A geologist's reading of the depth to the rock under a rise: an interpretation, not an
+ * observation. It names what he based it on (his own rough measure of the rise, and the records
+ * the company held), and it can be wrong even when every observation behind it was right.
+ */
+export interface ReadingEvidence extends Base {
+  kind: "reading";
+  provenance: "opinion";
+  from: "geologist";
+  surveyId: string;
+  /** The rise he judged (km), roughly its crest. */
+  x: number;
+  y: number;
+  /**
+   * "range": he puts the rock between `rockFt[0]` and `rockFt[1]`.
+   * "deep": the rise is too low to tell; if there is rock, it is deeper than `rockFt[0]`.
+   * "flat": he sees nothing in the lie of the land to judge depth by.
+   * "dry": the company's own hole found the rock dry through: he will not look for oil in it.
+   */
+  verdict: "range" | "deep" | "flat" | "dry";
+  rockFt: [number, number | null] | null;
+  /** What he went on, in words: each is an observation the company holds or that he made. */
+  basis: string[];
+  text: string;
+}
+
+/**
+ * What one of the company's own holes proved, written when it ended. Built only from what the
+ * crew saw: the bailer's calls (each known only to the bail interval), the pipe, the money.
+ */
+export interface AccountEvidence extends Base {
+  kind: "account";
+  provenance: "observed";
+  wellId: string;
+  name: string;
+  surveyId: string;
+  x: number;
+  y: number;
+  result: "oil" | "gas" | "dry";
+  deepestFt: number;
+  /** Where the bailer first brought up hard rock (to within its bail interval), and the salt below it. */
+  rock: { topFt: number; withinFt: number } | null;
+  /** The rock gave no show of oil or gas from its top to the salt below it. */
+  rockDry: boolean;
+  saltFt: number | null;
+  shows: { kind: "gas" | "oil" | "sulphur"; ft: number }[];
+  /** The deepest call of gypsum chips above the rock (or in the hole, if it met no rock). */
+  gypsumFt: number | null;
+  /** The deepest rainbow of oil on the bailer water (absent in accounts written before it was looked for). */
+  sheenFt?: number | null;
+  costCents: number;
+  /** Plain statements: what the hole proved, what the company may make of it, and what it leaves unknown. */
+  proved: string[];
+  suggests: string[];
+  unknown: string[];
+}
+
+export type Evidence = SignEvidence | WalkEvidence | WellRecordEvidence | OpinionEvidence | SampleEvidence | ReadingEvidence | AccountEvidence;
 
 export interface SectionLine {
   id: string;

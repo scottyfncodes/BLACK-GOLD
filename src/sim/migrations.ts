@@ -11,6 +11,9 @@ import { emptyCrew } from "./company/crew";
 import { emptyLeaseBook, ROYALTY, termEnd, type LeaseBook } from "./company/leases";
 import { emptyProductionBook } from "./company/production";
 import { RIG_BOOK, USED_RIG_PRICE } from "./company/bank";
+import { accountOf } from "./company/account";
+import type { OperationsState, Well } from "./operations";
+import type { Evidence, KnowledgeState } from "./knowledge/types";
 
 /** The rules as they stood when the v1 → v2 migration was written: it must keep producing a v2 world. */
 const V2_RIG_VALUE = 400;
@@ -168,7 +171,32 @@ export function v5ToV6(input: Record<string, unknown>): Record<string, unknown> 
   return world;
 }
 
-export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5, 5: v5ToV6 };
+/**
+ * v6 → v7: reading the ground.
+ * - The driller's notebook starts with what the company already holds that bears on its holes:
+ *   the settlers' accounts it has collected, and an account of each of its ended holes, written
+ *   from their bailer samples as they would have been when each ended. The accounts also join the
+ *   company's evidence. (Old geologist opinions carry no depth reading; a new consultation gives one.)
+ * - Fieldwork costs money from now on; errands already under way were paid for by the old rules.
+ */
+export function v6ToV7(input: Record<string, unknown>): Record<string, unknown> {
+  const world = structuredClone(input) as unknown as WorldState & Record<string, unknown>;
+  const ops = world.systems.operations as unknown as OperationsState | undefined;
+  const k = world.systems.knowledge as unknown as KnowledgeState | undefined;
+  if (!ops || (ops as unknown as Record<string, unknown>).notebook) return world;
+  ops.notebook = [];
+  for (const e of k?.evidence ?? []) if (e.kind === "wellRecord") ops.notebook.push(e);
+  const ended = [...(ops.past ?? []), ...(ops.well && (ops.well.status === "dry" || ops.well.status === "gusher") ? [ops.well] : [])] as Well[];
+  for (const w of ended) {
+    const acct = accountOf(ops, w, w.status === "dry" ? "dry" : w.outcome?.startsWith("OIL") ? "oil" : "gas");
+    const t = world.time;
+    ops.notebook.push({ ...acct, id: `acct-${w.id}`, t });
+    if (k) k.evidence.push({ ...acct, id: `ev-${k.next++}`, t } as Evidence);
+  }
+  return world;
+}
+
+export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5, 5: v5ToV6, 6: v6ToV7 };
 
 /** Invariants a loaded world must hold beyond its shape. Returns a reason, or null. */
 export function worldProblem(world: WorldState): string | null {
