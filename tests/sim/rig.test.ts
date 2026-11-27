@@ -110,7 +110,7 @@ describe("cable-tool drilling", () => {
       expect(["oil", "gas"]).toContain(fluid);
     }
     expect(gushers).toBeGreaterThan(2);
-  });
+  }, 60_000); // drills up to 40 worlds: ~3 s here, over the 5 s default on a loaded CI runner
 
   it("ends the well when the money runs out", () => {
     const at = { x: (SURVEYS[6]!.poly[0]![0] + SURVEYS[6]!.poly[2]![0]) / 2, y: (SURVEYS[6]!.poly[0]![1] + SURVEYS[6]!.poly[2]![1]) / 2 };
