@@ -959,6 +959,96 @@ The scripted player:
   - One best-site company struck oil and still failed. The scripted player caps the well without first borrowing, where the game's own cap path would offer to borrow, so this is probably the harness, not the game. Unverified.
   - The driller's counsel to quit plugged 20 wells with oil below them in failed companies. Declining it saved only 2, so it is mostly right about the money. It is still the single most common end of a hole in the best-site campaigns, and worth watching in playtests.
 
+**Player agency audit (PR #11; analysis only, nothing changed in the game)**
+
+*The question:* does an experienced operator, using only what the game shows the player, do meaningfully better than an inexperienced speculator?
+
+*Method* (`tools/analysis/agency.harness.ts`, outside CI). Matched three-year campaigns on the same 120 seeded worlds (every seed with a printed hill), compared in pairs, world by world. Uncertainty: exact sign tests on the worlds where the outcomes differ, and paired bootstrap 95% intervals.
+
+| Profile | What it may read | How it plays |
+|---|---|---|
+| Blind Speculator | the printed map | The existing scripted player: hill flank first; after a failure, the game's recovery paths at a survey's centre; accepts every recommendation; caps without borrowing. |
+| Informed Operator | evidence only (`knowledgeOf`), the printed map, the books | Walks every survey, then twice more around each rise; the geologist on the five likeliest; asks the settlers near the three likeliest. Reads seeps and waxy dirt as oil signs, a sour spring as caprock, seeps in the mapped marsh as marsh gas. Drills the best-evidenced rise, on the crest drawn toward its strongest sign. Otherwise plays as Blind. |
+| Disciplined Operator | the same as Informed | As Informed, plus: hires a well-spoken-of driller; caps with the bank's help; declines the counsel to quit only when the settlers' wells put the pay within reach; borrows to finish then; steps out about 0.6 km toward the signs after a dry hole on a rise with oil signs. |
+| Omniscient Operator | hidden truth | The Disciplined play on truth's best sites, which weigh depth to the pay against running sand above it. An upper bound, not a strategy. |
+
+The first three never read hidden state; truth is used only afterwards, to classify why wells ended.
+
+- **Outcomes** (120 worlds, 36 months):
+
+  | | Blind | Informed | Disciplined | Omniscient |
+  |---|---|---|---|---|
+  | Survived three years | 5 (4%) | 16 (13%) | 12 (10%) | 57 (48%) |
+  | First site has oil below it (truth) | 10% | 36% | 36% | 75% |
+  | First well struck oil | 4% | 13% | 10% | 48% |
+  | First well commercial (its oil repaid its cost) | 4% | 13% | 10% | 48% |
+  | Bankrupt before production | 96% | 87% | 90% | 53% |
+  | Bankrupt after finding oil | 0 | 0 | 0 | 0 |
+  | Months to production (median, producers) | 0.4 | 6.2 (5 of them fieldwork) | 6.2 | 0.5 |
+  | Cash spent to production (median) | $1,407 | $1,211 | $1,246 | $1,307 |
+  | Cash − debt at the end (median: all / producers) | −$221 / $29,121 | −$210 / $34,722 | −$208 / $35,472 | −$135 / $32,796 |
+  | Failed companies' first well, main causes | no oil at the site 108 of 115 | no oil at the site 73; casing sizes 10; plugged on counsel 9; sand 6; gas 4 | no oil at the site 72; sand 12; plugged on counsel 11; casing sizes 7; gas 5 | no oil shallow enough to choose 30; mechanical 16; sand 9; gas 4 |
+
+- **Paired differences** (same worlds):
+
+  | Comparison | Worlds better / worse | Survival difference (95% CI) | Sign test |
+  |---|---|---|---|
+  | Informed vs Blind | +14 / −3 | +9.2 pts (+3.3 to +15.0) | p = 0.013 |
+  | Disciplined vs Informed | +0 / −4 | −3.3 pts (−6.7 to −0.8) | p = 0.125 |
+  | Disciplined vs Blind | +10 / −3 | +5.8 pts (+0.8 to +10.8) | p = 0.092 |
+  | Omniscient vs Disciplined | +46 / −1 | +37.5 pts (+28.3 to +45.8) | p < 0.001 |
+- **The PR #10 findings, resolved.**
+  - *The company that struck oil and failed* (world `…fccd0`) was the harness, not the game. Its first well came in on day 11 with $56.09 in hand; capping costs $80. The scripted player's cap was refused, though the game's own recovery path offered "cap, borrowing $50" against $300 of credit, and the rig shows that as a button. Replayed taking that offer, the company survives the three years. No change is needed. The Blind profile keeps the old behaviour so it stays comparable with PR #10.
+  - *Combinations of decisions.* At PR #10's truth-chosen best site, playing every disciplined decision lifts survival from 28% to 45% (+24 / −3 worlds, +17.5 pts, 10.0 to 25.0, p < 0.001). Most of the gain came from declining the counsel to quit when the pay was within reach. In that comparison the operator knew the pay depth from truth. So combinations do rescue campaigns that single decisions could not, *when the operator knows how far the pay lies*.
+  - *The driller's counsel to quit, judged against the truth below and the money left* (pay counted "within reach" if cash and credit cover the remaining feet at about 40 ft a day):
+
+    | Profile | Times given | No pay below | Pay below, out of reach | Pay below, within reach |
+    |---|---|---|---|---|
+    | Blind | 209 | 197 | 1 | 11 (5%) |
+    | Informed | 215 | 177 | 7 | 31 (14%) |
+    | Omniscient (on oil) | 173 | 49 | 21 | 103 (60%) |
+
+    His money sense is right most of the time on ordinary ground. On good ground it is wrong more often than right, and nothing the player legitimately sees tells the two apart.
+- **Player agency, assessed.**
+  - *Fieldwork gives actionable information: yes, strongly.*
+    - Measured on truth over 120 worlds, domes showing gas seeps or waxy dirt had oil within the rig's reach 98% of the time (148 of 151). Sour springs alone: 13%. A mound alone: 15%.
+    - On a seep-bearing dome, 60–70% of spots within 0.9 km of the crest have oil below.
+    - The informed operator's first site held oil 3.6 times as often as the blind one's.
+  - *Players can recognise and avoid inferior sites: largely.* Where the signs were found, the informed operator chose the right rise. In about a third of worlds the walks and the geologist found no seep or waxy dirt, and it fell back on a sour spring or a bare rise; those mostly failed. Signs are easily missed, and fieldwork costs no money, so walking again is free.
+  - *Experience and discipline improve outcomes: experience yes, discipline not measurably, and this is the main design finding.* The decisions that matter after spudding (drill on or plug, borrow to finish, step out or move on) need some sense of how far the pay lies. The game offers almost none:
+    - a settler's account of "hard rock" near a rise is rare;
+    - the bailer shows nothing until the pay is near;
+    - the driller's counsel to quit is, by design, blind to geology.
+
+    With only that, no scripted rule tried beat the driller's own counsel. Each extra decision mostly spent money on worse odds: a dearer man's wage, step-outs on dry rises. With depth known (the truth-informed combination), the same decisions gained 17.5 points. A human player may do better than these rules; the gap is in information, not in the rules.
+  - *Risk remains meaningful when the decisions are good: yes.* The Omniscient bound found oil shallower than about 1,640 ft (its search depth) in 90 of the worlds, and it still lost 33 of them: collapses and parted pipe 16, running sand 9, gas instead of oil 4.
+  - *Some failures are unavoidable: yes.* In 21 of the 120 worlds (18%) no leasable survey has oil within 2,000 ft. In 30, none is shallower than about 1,640 ft. No play finds oil in the first group, and the second leaves only deep, costly holes. Contract drilling only delays the end.
+  - *Players get enough information to understand why they failed: only partly.*
+    - The hole's own evidence is shown: the bailer's calls, running sand, refusal, the money.
+    - A dry hole never says whether the pay was absent or lay just below. That is inherent to drilling blind.
+    - Nothing helps the player put a failed hole in context: the rise's signs, the settlers' wells and the bailer's log are never drawn together into a reading of the ground.
+- **Finding oil against commercial production.** In this build the two are the same. Every first-well strike repaid its well, and no company failed after finding oil once it capped. All the risk sits before the strike. Two exceptions: a gas strike, which ends the well, and the uncapped case above.
+- **Assumptions and limits.**
+  - Scripted players are heuristics, not an optimal player. The disciplined rules are one reasonable set: a better rule set could narrow the gap; a human might do better.
+  - "Oil within reach" means truth's first oil at or above 2,500 ft.
+  - 120 worlds, one campaign per world and profile. The game's randomness is seeded, so differences between profiles are paired, but each world is a single draw.
+  - Sample sizes are small for rare events: 16 and 12 informed and disciplined survivors.
+  - The quit-counsel "within reach" test uses a flat 40 ft a day, a rough rate.
+- **Recommendations** (for decision; none implemented):
+  1. **Give a legitimate, imprecise sense of depth.** For example:
+     - settlers' wells near a rise more often reaching the hard rock;
+     - the geologist offering a range ("the caprock, if there is one, might lie at six to nine hundred feet");
+     - the bailer's sulphur water and gas showing more clearly as the caprock nears.
+
+     This is the one change most likely to turn the existing decisions (drill on, borrow, step out) into real skill. The truth-informed combination puts its value at up to about 17 points of survival.
+  2. **Let the counsel to quit weigh the evidence the company has** (shows, the settlers' wells, signs on the rise), not only the money, and say what drilling on would cost ("about N more days at this pace"). It stays blind to hidden geology.
+  3. **Give fieldwork a modest cash cost** (the party's wages), so that walking a survey again is a decision, not a free action.
+  4. **A plain account after a dry hole:** what the hole proved (deepest bed reached, shows, sand, pipe used) and what it leaves unknown. Nothing hidden, but enough for the player to learn from a failure.
+  5. **Campaign seeds:** decide whether a campaign should always have oil within reach in at least one leasable survey. About one world in five has none within 2,000 ft.
+  6. **Later phase:** risk after discovery (declining wells, price slumps, hauling limits). Today finding oil is the whole game.
+
+  Gas development and rotary drilling remain deferred.
+
 ## 9. Open decisions
 
 Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.

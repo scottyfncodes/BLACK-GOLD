@@ -3,7 +3,7 @@
  * Three-year campaigns over the 44 seeded worlds used for PR #9; every well that does not
  * strike oil is given one primary cause, and failed companies are replayed with one decision
  * changed (counterfactuals) to separate avoidable mistakes from geology no decision could beat.
- * Not part of CI (minutes long). Run: npx vitest run --dir tools/analysis --include 'tools/analysis/*.harness.ts'
+ * Not part of CI (minutes long). Run: npx vitest run --config tools/analysis/vitest.config.mjs --disableConsoleIntercept tools/analysis/diagnose.harness.ts
  * Findings: docs/DESIGN.md §8, "Why companies fail".
  */
 import { it } from "vitest";
