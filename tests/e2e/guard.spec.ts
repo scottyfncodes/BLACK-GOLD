@@ -209,8 +209,8 @@ test("the first producing well is acknowledged as the goal met", async ({ page }
   await expect(rigView).toBeHidden();
   await expect(async () => {
     await page.keyboard.press("Escape"); // back to the field notes' front page
-    await expect(page.getByTestId("goal-head")).toBeAttached({ timeout: 1_000 });
-  }).toPass({ timeout: 10_000 });
+    await expect(page.getByTestId("goal-head"), "Escape should bring back the field notes' front page").toBeAttached({ timeout: 1_000 });
+  }, "Escape never brought back the field notes' front page (tried for 10 s)").toPass({ timeout: 10_000, intervals: [250, 500, 1_000] });
   await page.getByTestId("goal-head").scrollIntoViewIfNeeded();
   await expect(page.getByTestId("goal-head")).toHaveText("You brought in a producing well.");
 });
