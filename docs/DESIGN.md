@@ -1095,8 +1095,9 @@ The first three never read hidden state; truth is used only afterwards, to class
   The cost is paid as the party sets out, under a new **Fieldwork** heading in the books. Without the money, the party stays home.
   - *Calibration:* at the first provisional values ($2 a day and $50 a geologist), the scripted informed operator spent $442 a company on its exhaustive programme, and its survival fell from 17% to 2%. At a quarter of those, it kept exactly 80% of its free-fieldwork survival (32 of 40 worlds).
   - The values chosen are a little under that. They are low for the period. A historical check may well raise them, and a higher cost would make an exhaustive survey programme a losing strategy for this scripted operator.
+  - **They are provisionally calibrated for gameplay, pending a future holistic review of the historical economy.** They were not changed in the refinement below.
 - **Schema 7** (`v6ToV7`): the driller's notebook is started from the settlers' accounts already held. Each ended hole gets its account, written from its samples. Old geologist opinions carry no depth reading; a new consultation gives one.
-- **Golden hash, replaced on purpose.** The determinism run now plays the company as well as the stress system: fieldwork paid for, a settler's account, a geologist's reading, a hole drilled with the driller and abandoned, and the geologist again on the company's own log. The new world also carries the notebook. The new hash is `06ce6a7704aa28`. The baseline before M7, for main at 65a7053, was `1e3c8857be2e29` (a stress-only run).
+- **Golden hash, replaced on purpose.** The determinism run now plays the company as well as the stress system: fieldwork paid for, a settler's account, a geologist's reading, a hole drilled with the driller and abandoned, and the geologist again on the company's own log. The new world also carries the notebook. The new hash is `1a1dfac96d01af` (it was `06ce6a7704aa28` before the refinement below added the rainbow of oil). The baseline before M7, for main at 65a7053, was `1e3c8857be2e29` (a stress-only run).
 
 *Measured* (`tools/analysis/m7.harness.ts` and `m7-compare.mjs`, outside CI). The same 240 seeded worlds were played on the build before M7 (65a7053) and on M7, three years each, with the PR #11 profiles.
 - The Disciplined Operator on M7 also reads the new evidence, from the fields the field notes show:
@@ -1136,7 +1137,7 @@ The first three never read hidden state; truth is used only afterwards, to class
     - the geologist's range is 70% right (target 60–80%);
     - informed survival is at 80% of its free-fieldwork level (target at least 80%);
     - all tests pass, and saves from schema 6 load.
-  - **Not met: counsel on good ground without evidence.** The target was for the driller to urge quitting where oil lay within reach much less often than 60%, below 35%. On the Omniscient bound's holes it is still 61% (150 of 246; 57% before). That bound does no fieldwork, so its driller has no depth evidence. Gypsum and the rule against quitting in the rock help only over caprock, and most of its pay is in flank sands. Where the company holds evidence, the counsel is wrong less often: Disciplined 13% of counsels (15% before), Informed 11% (12%). On ordinary ground it is no worse: 80–91% of counsels had no oil below, against 83–92% before. Nothing was tuned to close the gap. Doing so would need a flank-sand precursor in the bailer, a new observation of the ground, which is a decision for a later pass.
+  - *First pass, superseded by the refinement below:* **not met: counsel on good ground without evidence.** The target was for the driller to urge quitting where oil lay within reach much less often than 60%, below 35%. On the Omniscient bound's holes it is still 61% (150 of 246; 57% before). That bound does no fieldwork, so its driller has no depth evidence. Gypsum and the rule against quitting in the rock help only over caprock, and most of its pay is in flank sands. Where the company holds evidence, the counsel is wrong less often: Disciplined 13% of counsels (15% before), Informed 11% (12%). On ordinary ground it is no worse: 80–91% of counsels had no oil below, against 83–92% before. Nothing was tuned to close the gap. Doing so would need a flank-sand precursor in the bailer, a new observation of the ground, which is a decision for a later pass.
 - **Unexpected results and tradeoffs, reported, not masked.**
   - *Solvent is not producing.* The Disciplined Operator stops drilling by choice in 17 of 240 worlds (7%). Its solvency (20%) runs ahead of its production (18%) because a company that stops keeps some capital. Production is reported beside solvency for that reason.
   - *Capital is preserved unevenly.* Mean capital rises (+$1,516 over Informed, p = 0.04), but in 125 worlds the Disciplined company ended a little poorer than the Informed one and in 94 richer: the gain is concentrated in the extra discoveries.
@@ -1152,6 +1153,38 @@ The first three never read hidden state; truth is used only afterwards, to class
   - The geologist's rule of thumb is a game abstraction: no 1890 geologist knew salt-dome structure.
   - Settlers' wells were not made deeper near rises, to leave the ground unchanged. Their depth evidence is still rare.
   - Gas development and rotary drilling remain deferred. M8 (The Field) is next and not yet authorised.
+
+**M7 refinement: the rainbow of oil, and counsel by its grounds**
+
+*Why:* the first pass missed one criterion. On good ground, the driller urged quitting wrongly in 61% of his counsels. The cause was not a missing sign near the pay. Of those 150 wrong counsels, 89 came more than 250 ft above the oil, and only about 19 within 150 ft; no honest bailer sign reaches that far. The cause was that, having seen nothing either way, he recommended quitting all the same: a lack of positive evidence was treated as negative evidence.
+
+- **A rainbow of oil on the bailer water** (`sheen`, observation):
+  - Oil leaks a little way up from an oil-bearing bed into the waters above it, so the film comes more often as the bit nears oil.
+  - It reaches about 150 ft, and applies to flank sands and caprock alike.
+  - Lignite and old wood in the clays leave a stray film now and then, so it is no proof.
+  - The bed is never named; the sign is in the sample's call and in the hole's account.
+  - Measured: it appears in 47% of samples within 150 ft above oil, and in 2% elsewhere.
+- **Counsel by its grounds.** The driller's money counsel now rests on one of three things, and says which:
+  - *Negative evidence* (`quit`): in the salt; past where the rock was looked for and not met; the rock expected beyond the company's means. He recommends stopping, and says what he saw.
+  - *Positive evidence* (no counsel to stop): a show of oil or gas, the rainbow, gypsum just above, in the rock, or the rock expected ahead within means.
+  - *No evidence either way* (`decide`, new): he makes no recommendation. He says it is no proof there is nothing below, gives the cost of each hundred feet more and the money left, and leaves the choice to the owner. The advice card says "He makes no recommendation" and draws neither button as his.
+  - *Money* (`quit`): when cash and credit cannot pay for another hundred feet, that is a fact, not a reading, and he recommends stopping.
+- **Measured** (the same 240 worlds, paired with the build before M7). The scripted Blind and Informed players treat an open decision as he used to treat a quit (they plug), so their play is unchanged. Changes in the rates below come from what the counsel says, not from fewer warnings.
+
+  | | Blind | Informed | Disciplined | Omniscient |
+  |---|---|---|---|---|
+  | **False-quit rate** (recommendations to quit with oil below and within reach), before M7 → first pass → refined | 6% → 7% → **0%** (0 of 25) | 12% → 11% → **3%** (3 of 90) | 15% → 13% → **10%** (15 of 152) | 57% → 61% → **0%** (0 of 7) |
+  | Recommendations to quit with no oil below | **96%** | **89%** | **85%** | 43% |
+  | Open decisions (no recommendation), and the share with oil within reach | 235, 8% | 60, 18% | 51, 20% | 210, 63% |
+  | All counsel about the money with oil within reach | 7% | 9% | 12% | 61% |
+  | Advisory coverage: dry holes with no oil below that drew counsel | 42% | 29% | 47% | 36% |
+  | Solvent / producing at three years | 3% / 3% | 14% / 14% | 20% / 18% | 52% / 52% |
+  | Spend per discovery | $45,959 | $11,223 | $7,324 | $2,400 |
+
+  - **The gains are kept.** Disciplined vs Informed: +6.7 pts solvent (+18 / −2 worlds, p < 0.001), +3.8 pts producing (p = 0.035). Informed vs Blind: +10.8 pts. Blind and Omniscient are unchanged against the build before M7 (+0.4 and 0.0 pts).
+  - **Read the false-quit rate honestly.** It meets the target (below 35%) because, on ground where he has seen nothing, the driller no longer recommends quitting: on the Omniscient bound's holes, 210 of its 217 money counsels are now open decisions. Oil was within reach below 63% of those. He does not know, and now says so. Where he does recommend quitting, he is now nearly always right on ordinary ground (85–96% with no oil below).
+  - *Advisory coverage* was not measured before this refinement, so there is no baseline. About a third to a half of dry holes on barren ground drew counsel before they ended; the rest ended by other means (fishing jobs, the money running out, or the player's own choice).
+- **Golden hash** re-pinned again on purpose: `1a1dfac96d01af`. The rainbow draws from its own random stream as each sample is taken.
 
 ## 9. Open decisions
 
@@ -1169,8 +1202,9 @@ Decisions taken so far are marked. Where a decision is still open, its default i
 10. **Historical economics:** *Decided:* rig at $1,500 (verified against period supply-house prices), a 20% advance on it, 10% interest, and the year's documented crude price. Book value, resale value and replacement price are kept apart so the rig is never a cheap source of cash. Casing, wages and other figures wait for better evidence.
 11. **Driven casing through quicksand:** *Decided and built* (§8): drive pipe at 1.6×, a reusable drive head and a shoe per string, costly swaging with no promise, and thick sand that may cost two sizes or the hole. Gas development remains deferred.
 12. **Reading the Ground (M7):** *Decided and built* (§8):
-    - The golden hash is replaced deliberately: `06ce6a7704aa28`, with `1e3c8857be2e29` recorded as the baseline for 65a7053.
+    - The golden hash is replaced deliberately: `1a1dfac96d01af`, with `1e3c8857be2e29` recorded as the baseline for 65a7053.
     - Worlds without reachable oil stay, with no guarantee and no reveal.
     - Fieldwork costs are provisional and calibrated to the survival threshold.
-    - Open: the counsel on good ground without evidence (target missed, see §8), and a historical check of fieldwork prices.
+    - Refined (§8): the rainbow of oil on the bailer water; counsel by its grounds (negative evidence, money, or no evidence and no recommendation). The false-quit target is met.
+    - Open: a holistic historical review of the economy, fieldwork prices included (provisional, calibrated for gameplay).
 13. **Next milestone:** M8, The Field (shared reservoirs, offset drilling, the rule of capture, a first Rush), intended but not yet authorised.
