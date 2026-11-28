@@ -14,6 +14,7 @@ import { RIG_BOOK, type BankState } from "./company/bank";
 import { oilPriceCents } from "./company/production";
 import type { CasingString, DriveJob } from "./company/casing";
 import { dayRateCents, type Crew } from "./company/crew";
+import type { FieldState } from "./hidden/reservoir";
 
 export type WellStatus = "rigging" | "drilling" | "stuck" | "gusher" | "dry";
 export type Operation = "rigup" | "bail" | "dress" | "case" | "fish" | "drive" | "swage";
@@ -118,6 +119,8 @@ export interface OperationsState {
    * the company's own ended holes.
    */
   notebook: (ReadingEvidence | WellRecordEvidence | AccountEvidence)[];
+  /** HIDDEN: the oil in the ground as it is drawn (sim/hidden/reservoir.ts). Never in the view. */
+  field: FieldState;
   next: number;
 }
 

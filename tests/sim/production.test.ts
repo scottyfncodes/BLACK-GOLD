@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { CAMPAIGN_START, fromCalendar, gameEngine, MINUTES_PER_DAY, operationsOf, startOfNextMonth, type WorldState } from "../../src/sim";
 import { canonicalJson } from "../../src/sim/core/hash";
 import { recompute } from "../../src/sim/company/ledger";
-import { dayBarrels, HAUL_LIMIT_BBL, HAULING_CENTS, oilPriceCents, type Producer } from "../../src/sim/company/production";
+import { HAULING_CENTS, oilPriceCents } from "../../src/sim/company/production";
+import { flowToday, type FieldState } from "../../src/sim/hidden/reservoir";
 import { creditLimitCents } from "../../src/sim/company/bank";
 import { columnAt, generateGeology, isCharged } from "../../src/sim/geology/truth/model";
 import { SURVEYS, insidePoly } from "../../src/content/geography/surveys";
@@ -111,7 +112,8 @@ describe("production", () => {
     while (boundary <= now + 2 * MINUTES_PER_DAY) boundary = startOfNextMonth(boundary);
     gameEngine.advance(w, boundary - 1);
     const p = ops(w).production.producers[0]!;
-    const expected = p.monthBbl + Math.floor(dayBarrels(p, ops(w).production.drawn[p.trap]!) * (1 - p.waterCut));
+    const field = (w.systems.operations as unknown as { field: FieldState }).field;
+    const expected = p.monthBbl + Math.floor(flowToday(field, field.taps.find((t) => t.wellId === p.wellId)!) * (1 - p.waterCut));
     gameEngine.advance(w, boundary);
     const sale = ops(w).ledger.entries.filter((e) => e.memo.startsWith("Oil sold")).at(-1)!;
     expect(sale.t).toBe(boundary);
@@ -143,18 +145,3 @@ describe("production", () => {
     expect(cmd(w, "prod.cap").events[0]!.type).toBe("command.rejected");
   });
 });
-
-describe("depletion", () => {
-  const p: Producer = { wellId: "w", name: "W", surveyId: "s", x: 0, y: 0, since: 0, trap: "t", initialBbl: 900, reserveBbl: 100_000, cumBbl: 0, monthBbl: 0, lastDayBbl: 0, waterCut: 0 };
-  it("is limited by hauling until the trap is drawn down, then falls", () => {
-    expect(dayBarrels(p, 0)).toBe(HAUL_LIMIT_BBL);
-    expect(dayBarrels(p, 90_000)).toBe(90);
-    expect(dayBarrels(p, 100_000)).toBe(0);
-    let last = Infinity;
-    for (let d = 0; d <= 100_000; d += 5_000) { const q = dayBarrels(p, d); expect(q).toBeLessThanOrEqual(last); last = q; }
-  });
-  it("wells in one trap share it", () => {
-    expect(dayBarrels(p, 85_000)).toBeLessThan(dayBarrels(p, 40_000));
-  });
-});
-

@@ -26,7 +26,9 @@ describe("a production schema-3 save", () => {
     const w = save.world;
     expect(worldProblem(w)).toBeNull();
     const o = operationsOf(w);
-    for (const k of ["leases", "production", "contract", "outcome", "samples", "past"]) expect(canonicalJson((w.systems.operations as unknown as Record<string, unknown>)[k] as never), k).toBe(canonicalJson(before[k] as never));
+    // Production's producers are kept; its hidden per-trap counts moved to the field in v8 (none here).
+    expect(o.production.producers).toEqual((before.production as { producers: unknown[] }).producers);
+    for (const k of ["leases", "contract", "outcome", "samples", "past"]) expect(canonicalJson((w.systems.operations as unknown as Record<string, unknown>)[k] as never), k).toBe(canonicalJson(before[k] as never));
     // The books keep every entry, with one more at the end: the rig revalued at period prices (v4 → v5).
     const ledger = (w.systems.operations as unknown as { ledger: { entries: unknown[] } }).ledger;
     const was = before.ledger as { entries: unknown[] };
