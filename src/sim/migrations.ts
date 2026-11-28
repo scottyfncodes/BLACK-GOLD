@@ -196,7 +196,35 @@ export function v6ToV7(input: Record<string, unknown>): Record<string, unknown> 
   return world;
 }
 
-export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5, 5: v5ToV6, 6: v6ToV7 };
+/**
+ * v7 → v8: the field (M8a). Production moves onto authoritative tanks shared by every well.
+ * - Each capped well's hidden figures (its trap's key, the trap's recoverable oil, its opening
+ *   flow) leave the company's production book for the hidden field, with the barrels already drawn
+ *   from each trap: production continues exactly where it was.
+ * - The company keeps what it saw: each well's first day's barrels (taken as its opening flow
+ *   within the haul, less its water) and, from now on, its sales month by month.
+ */
+export function v7ToV8(input: Record<string, unknown>): Record<string, unknown> {
+  const world = structuredClone(input) as unknown as WorldState & Record<string, unknown>;
+  const ops = world.systems.operations as Record<string, unknown> | undefined;
+  if (!ops || ops.field) return world;
+  const field = { tanks: {} as Record<string, { originalBbl: number; drawnBbl: number }>, taps: [] as { wellId: string; tank: string; q0: number }[] };
+  const book = (ops.production ?? { producers: [] }) as { producers: Record<string, unknown>[]; drawn?: Record<string, number> };
+  for (const p of book.producers) {
+    const trap = String(p.trap), q0 = Number(p.initialBbl), reserve = Number(p.reserveBbl);
+    field.tanks[trap] ??= { originalBbl: reserve, drawnBbl: Math.min(reserve, book.drawn?.[trap] ?? 0) };
+    field.taps.push({ wellId: String(p.wellId), tank: trap, q0 });
+    p.firstDayBbl = Math.floor(Math.min(150, q0) * (1 - Number(p.waterCut ?? 0)));
+    p.months = [];
+    delete p.trap; delete p.initialBbl; delete p.reserveBbl;
+  }
+  delete book.drawn;
+  ops.production = book;
+  ops.field = field;
+  return world;
+}
+
+export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5, 5: v5ToV6, 6: v6ToV7, 7: v7ToV8 };
 
 /** Invariants a loaded world must hold beyond its shape. Returns a reason, or null. */
 export function worldProblem(world: WorldState): string | null {

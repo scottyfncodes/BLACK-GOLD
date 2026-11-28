@@ -20,10 +20,11 @@ import { readSpot } from "../knowledge/reading";
 import { accountOf, wellSpent } from "../company/account";
 import { accruedCents, COSTS, emptyOutcome, RIG_VALUE, STARTING_CASH, type Operation, type OperationsState, type Well } from "../operations";
 import { cashCents, debtCents, dollarsToCents, emptyLedger, pay, post, receive } from "../company/ledger";
-import { rngKey, rngUnit } from "../core/rng";
+import { rngUnit } from "../core/rng";
 import { activeLease, askingTerms, emptyLeaseBook, ownerAccepts, REFUSAL_DAYS, surveyById, termEnd, type PublicNews } from "../company/leases";
 import { printedMap } from "../surface/print";
-import { CAP_COST, dayBarrels, emptyProductionBook, HAULING_CENTS, oilPriceCents } from "../company/production";
+import { CAP_COST, emptyProductionBook, HAULING_CENTS, oilPriceCents } from "../company/production";
+import { drawDay, emptyField, openTap } from "../hidden/reservoir";
 import { ACCRUAL_UNITS, RATE_PERCENT, BORROW_STEP_CENTS, creditLimitCents, dayAccrual, emptyBank, RIG_RESALE, STRIKES_TO_FORECLOSE, USED_RIG_PRICE } from "../company/bank";
 import { CONTRACT_DAYS, CONTRACT_PAY, CONTRACT_WAGES, contractOffered, recoveryPaths, type Position } from "../company/recovery";
 import { candidatesFor, dayRateCents, emptyCrew, emptyRecord, type Driller, type DrillerRecord } from "../company/crew";
@@ -894,15 +895,17 @@ function guard(ctx: Ctx, w: Well, before: number): void {
 
 /** One day's oil from every capped well. */
 function produceDay(ctx: Ctx): void {
-  const pb = S(ctx).production;
-  for (const p of pb.producers) {
-    const flow = dayBarrels(p, pb.drawn[p.trap] ?? 0);
+  const st = S(ctx);
+  // Every open well on the field draws on its tank together; the company sees only its own barrels.
+  const flows = drawDay(st.field);
+  for (const p of st.production.producers) {
+    const flow = flows[p.wellId] ?? 0;
     // Water from sands never shut off comes up with the oil and is let run to the pit.
     const bbl = Math.floor(flow * (1 - p.waterCut));
+    if (p.cumBbl === 0 && p.lastDayBbl === 0) p.firstDayBbl = bbl;
     p.lastDayBbl = bbl;
     p.cumBbl += bbl;
     p.monthBbl += bbl;
-    pb.drawn[p.trap] = (pb.drawn[p.trap] ?? 0) + flow;
   }
 }
 
@@ -915,6 +918,7 @@ function settleMonth(ctx: Ctx, dayOf: number): void {
   for (const p of st.production.producers) {
     const bbl = p.monthBbl;
     p.monthBbl = 0;
+    p.months.push(bbl);
     if (bbl <= 0) continue;
     const gross = bbl * oilPriceCents(dayOf);
     const ref = { wellId: p.wellId, surveyId: p.surveyId };
@@ -978,7 +982,7 @@ function well(ctx: Ctx): Well {
 
 export const rig: System<Json> = {
   id: "operations",
-  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), bank: emptyBank(), contract: null, outcome: emptyOutcome(), crew: null, tools: { driveHead: false }, well: null, past: [], samples: [], notebook: [], next: 1 }) as unknown as Json,
+  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), bank: emptyBank(), contract: null, outcome: emptyOutcome(), crew: null, tools: { driveHead: false }, well: null, past: [], samples: [], notebook: [], field: emptyField(), next: 1 }) as unknown as Json,
   init(ctx) {
     const st = S(ctx);
     st.crew = emptyCrew(ctx.seed);
@@ -1191,17 +1195,11 @@ export const rig: System<Json> = {
       if (!w.outcome?.startsWith("OIL")) throw new CommandRejected("Gas has no buyer in 1890. There is nothing to sell.");
       if (st.production.producers.some((p) => p.wellId === w.id)) throw new CommandRejected("That well is already capped and selling.");
       if (available(st) < dollarsToCents(CAP_COST)) throw new CommandRejected(`Capping the well costs $${CAP_COST}.`);
-      const r = rock(ctx, w, w.depthFt);
-      const t = r.trap;
-      const dome = generateGeology(ctx.seed).domes.find((d) => d.id === t?.domeId);
-      // The flow and the oil in reach come from the ground the well drains.
-      const fill = dome?.charge.fill ?? 0.3;
-      const initialBbl = Math.round(220 + 1600 * fill);
-      const reserveBbl = Math.round((t?.kind === "caprock" ? 160_000 : 90_000) * (0.4 + fill));
-      const trap = rngKey(ctx.seed, "trap", t ? `${t.domeId}:${t.formation}` : w.id).toString(16);
+      // The well is opened on the oil at its bottom: its flow and its tank are the ground's (hidden).
+      openTap(st.field, ctx.seed, w.id, w.x, w.y, w.depthFt);
       pay(st.ledger, ctx.now, "production", `Capping the ${w.name}`, "drilling", dollarsToCents(CAP_COST), { wellId: w.id, surveyId: w.surveyId });
       const cut = waterCut(openWaterSands(ctx, w, w.depthFt));
-      st.production.producers.push({ wellId: w.id, name: w.name, surveyId: w.surveyId, x: w.x, y: w.y, since: ctx.now, trap, initialBbl, reserveBbl, cumBbl: 0, monthBbl: 0, lastDayBbl: 0, waterCut: cut });
+      st.production.producers.push({ wellId: w.id, name: w.name, surveyId: w.surveyId, x: w.x, y: w.y, since: ctx.now, firstDayBbl: 0, cumBbl: 0, monthBbl: 0, lastDayBbl: 0, waterCut: cut, months: [] });
       if (cut > 0) recordOf(st, w).wet++;
       if (cut > 0) report(ctx, "wet", `Water comes up with the oil: about ${cut > 0.5 ? "half" : "a third"} of what flows from the ${w.name} is water from sands above the pay that no casing shuts off.`, false);
       notice(ctx, `The ${w.name} is capped. Teamsters will haul up to 150 barrels a day to the railhead.`);

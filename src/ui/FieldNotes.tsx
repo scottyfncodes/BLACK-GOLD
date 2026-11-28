@@ -102,6 +102,17 @@ function wellWords(w: Well): string {
   return `· ${wholeFeet(w.depthFt)} ft${w.status === "stuck" ? ", tools stuck" : ""}`;
 }
 
+/**
+ * What the company sees of a producing well: what it made when new and what it makes now. A fall
+ * is observed; why it falls (the well's own drawing, or other wells on the same oil) is not said:
+ * the company cannot see its oil, only its barrels.
+ */
+function flowWords(p: { lastDayBbl: number; firstDayBbl: number; since: number }): string {
+  const now = `producing ${p.lastDayBbl} bbl a day`;
+  if (!p.firstDayBbl || p.lastDayBbl >= p.firstDayBbl) return now;
+  return `${now}, down from ${p.firstDayBbl} when capped (${formatDate(p.since)})`;
+}
+
 const memoryWord = (m: number) => (m > 0.85 ? "remembers well" : m > 0.7 ? "fair memory" : "hazy memory");
 
 export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpenRig, onOpenBooks, onOpenCrew }: Props) {
@@ -127,7 +138,7 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
       {producers.length > 0 && (
         <div class="producing" data-testid="producing">
           {producers.map((p) => (
-            <p key={p.wellId}><b>{p.name}</b> · producing {p.lastDayBbl} bbl a day · {p.monthBbl.toLocaleString("en-US")} bbl hauled this month</p>
+            <p key={p.wellId}><b>{p.name}</b> · {flowWords(p)} · {p.monthBbl.toLocaleString("en-US")} bbl hauled this month</p>
           ))}
         </div>
       )}

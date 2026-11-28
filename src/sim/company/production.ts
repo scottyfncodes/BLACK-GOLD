@@ -1,13 +1,13 @@
 /**
- * Minimal production (a slice of DESIGN §4.4, not M4): enough to close the economic loop.
+ * Production as the company sees it (DESIGN §4.4): its capped wells, what each flows and sells.
  *
  * A capped oil well flows each day. What it can sell is limited by what teamsters can haul to
- * the railhead at Beaumont; its own capacity falls as the trap it drains is depleted (wells in
- * one trap share the depletion). Sales post once a month: oil sold, hauling, and the
- * landowner's royalty. All money in whole cents; all barrels in whole barrels.
- *
- * Gas has no market in 1890: a gas well cannot be capped for sale. Imports no truth; the system
- * that owns this state supplies each well's capacity from the ground.
+ * the railhead at Beaumont; what it can flow falls as the oil it drains is drawn down, by it and
+ * by any other well on the same oil (the authoritative tanks are hidden, sim/hidden/reservoir.ts).
+ * The company sees only its own barrels: each well's opening rate, its rate now, what it has
+ * sold month by month. Never its tank, its reserve, or which other wells share it.
+ * Sales post once a month: oil sold, hauling, and the landowner's royalty. All money in whole
+ * cents; all barrels in whole barrels. Gas has no market in 1890. Imports no truth.
  */
 import { toCalendar, type GameTime } from "../core/time";
 
@@ -44,11 +44,8 @@ export interface Producer {
   x: number;
   y: number;
   since: GameTime;
-  /** Opaque key of the reservoir drained (wells in one trap share depletion). */
-  trap: string;
-  /** Flowing capacity when first capped (bbl/day), and the trap's recoverable oil (bbl). */
-  initialBbl: number;
-  reserveBbl: number;
+  /** Barrels of oil it sold on its first day: what the company saw it make when new. */
+  firstDayBbl: number;
   /** Barrels produced in total, and since the last monthly sale. */
   cumBbl: number;
   monthBbl: number;
@@ -56,19 +53,12 @@ export interface Producer {
   lastDayBbl: number;
   /** The share of what flows that is water from sands above the pay never shut off (0 when sealed). */
   waterCut: number;
+  /** Barrels sold, month by month, oldest first: the record a decline is read from. */
+  months: number[];
 }
 
 export interface ProductionBook {
   producers: Producer[];
-  /** Barrels drawn from each trap by all the company's wells. */
-  drawn: Record<string, number>;
 }
 
-export const emptyProductionBook = (): ProductionBook => ({ producers: [], drawn: {} });
-
-/** One day's barrels for a producer: its depleting capacity, capped by what can be hauled. */
-export function dayBarrels(p: Producer, drawnFromTrap: number): number {
-  // Integer arithmetic: capacity falls in proportion to the oil left in the trap.
-  const left = Math.max(0, p.reserveBbl - drawnFromTrap);
-  return Math.min(HAUL_LIMIT_BBL, Math.floor((p.initialBbl * left) / p.reserveBbl));
-}
+export const emptyProductionBook = (): ProductionBook => ({ producers: [] });

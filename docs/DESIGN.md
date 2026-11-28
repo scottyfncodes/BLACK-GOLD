@@ -1186,6 +1186,42 @@ The first three never read hidden state; truth is used only afterwards, to class
   - *Advisory coverage* was not measured before this refinement, so there is no baseline. About a third to a half of dry holes on barren ground drew counsel before they ended; the rest ended by other means (fishing jobs, the money running out, or the player's own choice).
 - **Golden hash** re-pinned again on purpose: `1a1dfac96d01af`. The rainbow draws from its own random stream as each sample is taken.
 
+**M8, The Field: approved decisions**
+
+The owner accepted the six recommended decisions:
+- only public strikes start the Rush;
+- the company keeps one rig;
+- annual EIA prices are kept;
+- selling leases is deferred;
+- campaigns stay open-ended, analysed at 3 and 5 years;
+- a Beaumont rush in the 1890s is accepted as the game's alternate-history premise.
+
+Guardrails:
+- *Reservoir knowledge.* Neighbouring production and changes in the company's own production are observable. Shared reservoir connectivity stays inferred unless legitimate evidence establishes it. Field notes never expose trap membership.
+- *Defensive leasing.* Acquiring the whole surrounding structure is not assumed optimal. The analysis measures capital committed, acreage acquired, opportunity cost, dry-acreage exposure and the resulting share of the field. Nothing is rebalanced.
+- *The Rush.* It must be legible through the world, the news, the field notes and the section drawing. Rival dry holes are evidence as well as rival strikes. It should feel like an emerging oilfield, not an invisible income penalty.
+- *Analysis.* Report absolute and relative effect sizes, capital required, downside risk and outcome distributions, as well as paired significance. Compare passive play, defensive leasing, quick offsets and their combination.
+- *Architecture.* Clean material accounting and deterministic interference come first, without future recovery mechanics. Company and rival production draw from the same authoritative reservoir state.
+
+**M8a, shared reservoirs (as built, schema 8)**
+
+- **One authoritative tank per trap** (`sim/hidden/reservoir.ts`, sealed from the UI by lint).
+  - It holds the trap's recoverable oil and every barrel drawn by any well on it.
+  - A tank is created when its first well is opened, from the trap's charge and kind: the same figures production used before M8.
+  - A well's flow is its opening flow in proportion to the oil left in the tank, within the 150 bbl a day the teamsters can haul. A lone well therefore produces exactly as it did before.
+- **Material accounting is exact,** in whole barrels.
+  - `drawDay` sets every open well's flow from its tank as the day began, then draws all of them together. If a tank cannot cover the day, the shortfall is shared in proportion, so the order of the wells changes nothing.
+  - No tank ever yields more than it held: a property test covers this.
+  - Interference follows from the accounting alone. Two wells on one tank empty it faster, and each flows less than a lone well would.
+  - Nothing else is modelled: no pressure drive, water encroachment, pumping or gushing on pressure.
+- **What the company sees: its own barrels, never its oil.**
+  - Before M8a, the production book the UI received carried each well's trap key, the trap's reserve and its opening flow. Equal keys would have shown which wells share oil.
+  - These now live only in the hidden field. A test checks that every field of a producer in the view is one the company saw: the first day's barrels, barrels now, month by month, total, and water.
+  - The field notes say "producing 96 bbl a day, down from 150 when capped". The decline is observed; why it falls is not said.
+- **Offset wells:** the one rig can drill again on the structure once a well is capped. The next-step advice now says so.
+- **Schema 8** (`v7ToV8`): each producer's hidden figures move into the field, with the barrels already drawn from each trap. A test migrates a producing world and checks that two more years of production, field and books match the unmigrated world barrel for barrel.
+- **Golden hash** re-pinned on purpose, because the world now carries the field: `10b5a4766fa733`. The M8 golden run will play an offset well and a rush once M8b lands.
+
 ## 9. Open decisions
 
 Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.

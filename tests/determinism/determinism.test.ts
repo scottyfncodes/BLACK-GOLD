@@ -114,4 +114,5 @@ describe("performance", () => {
 // and the world carries the driller's notebook. The baseline before M7, for main at 65a7053, was
 // "1e3c8857be2e29" (the stress-only run, no company play). The M7 refinement (a rainbow of oil on the
 // bailer water, drawn from its own stream) moved it once more, from "06ce6a7704aa28".
-const GOLDEN_TEN_YEAR_HASH = "1a1dfac96d01af";
+// M8a (the hidden field: tanks shared by every well) moved it from "1a1dfac96d01af", the M7 baseline.
+const GOLDEN_TEN_YEAR_HASH = "10b5a4766fa733";

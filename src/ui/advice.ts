@@ -32,7 +32,7 @@ export function nextStep({ ops, paths, knowledge, formatDate, surveyName }: Advi
     const cap = find("cap");
     if (cap) return `You struck oil. Go to the rig and cap it for $${CAP_COST}${borrowing(cap.borrowCents)}; the oil sells each month.`;
   }
-  if (ops.production.producers.length) return "The oil sells at each month's end. Lease more land and drill again when you are ready.";
+  if (ops.production.producers.length) return "The oil sells at each month's end. The rig is free: drill an offset on the structure, lease more of the ground around it, or look elsewhere.";
 
   // Before the first well: how to find a place to drill.
   if (!w && ops.past.length === 0 && (find("drill") || find("leaseAndDrill"))) {
