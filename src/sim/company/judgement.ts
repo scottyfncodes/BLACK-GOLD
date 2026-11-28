@@ -62,6 +62,11 @@ export interface Observations {
   sheenFt: number | null;
   /** Feet a day this hole has made since the derrick was up. */
   paceFtDay: number;
+  /**
+   * The hole has stopped making footage: bails in a row that came up from the same bottom, and
+   * days since the bailer last brought up new hole (or since the last string was set).
+   */
+  noHole: { bails: number; days: number };
 }
 
 export type Advice =
@@ -71,7 +76,8 @@ export type Advice =
   | { kind: "fish"; text: string; costCents: number }
   | { kind: "abandon"; text: string; costCents: 0 }
   | { kind: "quit"; text: string; costCents: 0 }
-  | { kind: "decide"; text: string; costCents: 0 };
+  | { kind: "decide"; text: string; costCents: 0 }
+  | { kind: "stalled"; text: string; costCents: 0 };
 
 /** How much open sand he will stand before he wants pipe (ft): a habit of temperament. */
 const PATIENCE: Record<Temperament, number> = { cautious: 45, methodical: 60, economical: 85, aggressive: 110 };
@@ -173,6 +179,17 @@ const REFUSAL_WORDS: Record<Temperament, string> = {
   aggressive: "I'd as soon give her a few more licks, but that's refusal by any fair count.",
 };
 
+/**
+ * When he says the hole is making no footage: bails in a row from the same bottom, and days of it.
+ * A cable-tool driller logs his footage every tour; two tours of bailing and no hole is plain to a
+ * good one. A poor judge keeps at it for days, hoping the sand will tire; a hard driver longer still.
+ * (Provisional: no period source puts a number on it.)
+ */
+export const NO_HOLE = { bails: 8, days: 1, poorDays: 3, aggressiveDays: 1 } as const;
+export function noHoleDays(a: Ability, t: Temperament): number {
+  return NO_HOLE.days + NO_HOLE.poorDays * (1 - a.judgement) + (t === "aggressive" ? NO_HOLE.aggressiveDays : 0);
+}
+
 /** How many fishing jobs on one hole before he would rather plug it. */
 const FISH_LIMIT: Record<Temperament, number> = { cautious: 2, economical: 2, methodical: 3, aggressive: 5 };
 
@@ -198,6 +215,17 @@ export function assess(o: Observations, a: Ability, t: Temperament, noise: numbe
     if (!o.driving.refused) return null;
     const made = o.driving.lastTwoHoursFt < 1 ? `${Math.max(1, Math.round(o.driving.lastTwoHoursFt * 12))} inches` : `${o.driving.lastTwoHoursFt.toFixed(1)} ft`;
     return { kind: "setdrive", text: `The ${o.driving.pipe} has about stopped: ${made} in the last two hours with the maul going steady, ${Math.round(o.driving.drivenFt)} ft driven. ${REFUSAL_WORDS[t]} Set it here at ${Math.round(o.driving.shoeFt)} ft.`, costCents: 0 };
+  }
+  // No footage: the hole is filling as fast as it is cleaned. A mechanical fact, not a guess about
+  // the ground, so it comes before any talk of money. He never plugs it himself: he says what he
+  // sees and what could still be tried, and asks.
+  if (o.noHole.bails >= NO_HOLE.bails && o.noHole.days >= noHoleDays(a, t)) {
+    const d = Math.round(o.depthFt), days = Math.floor(o.noHole.days);
+    const sand = o.inflowFtHr >= 4 ? "the sand comes back in as fast as we bail it" : o.inflowFtHr >= 1.5 ? "sand keeps running back in" : "the hole fills as fast as we clean it";
+    const left = o.stringsLeft > 0 && o.nextPipe
+      ? `The ${o.nextPipe} could still be driven through it (about ${usd(o.nextDriveCents)}); without it, nothing I know of will make hole here.`
+      : `Every size of pipe we have is in the hole already: there is nothing smaller to drive through it, and nothing I know of will make hole here.`;
+    return { kind: "stalled", text: `We've bailed ${o.noHole.bails} times from ${d} ft in ${days === 1 ? "a day" : `${days} days`} and made no hole: ${sand}. ${left} Every day of it is wages for nothing. I'd plug it, unless you want something else tried.`, costCents: 0 };
   }
   const counsel = moneyConcern(o, a, t);
   if (counsel) return { kind: counsel.kind, text: counsel.text, costCents: 0 };

@@ -133,7 +133,7 @@ describe("readSpot: the company's reading of the rock at a spot", () => {
 });
 
 describe("counsel that weighs the evidence", () => {
-  const OBS: Observations = { depthFt: 700, casedFt: 0, stringsLeft: 3, nextPipe: "10-inch", nextCostCents: 20_000, openSandFt: 0, bottom: null, waterSeen: false, waterShutOff: false, stuck: false, fishCount: 0, cashCents: 10_000, dayCents: 1_200, fishingCents: 6_000, creditRoomCents: 0, wellSpentCents: 90_000, lastShow: null, inflowFtHr: 0, driving: null, collapse: null, driveHead: false, nextDriveCents: 0, swageCents: 15_000, expect: null, rockDry: null, rockFt: null, inSalt: false, gypsumFt: null, sheenFt: null, paceFtDay: 40 };
+  const OBS: Observations = { depthFt: 700, casedFt: 0, stringsLeft: 3, nextPipe: "10-inch", nextCostCents: 20_000, openSandFt: 0, bottom: null, waterSeen: false, waterShutOff: false, stuck: false, fishCount: 0, cashCents: 10_000, dayCents: 1_200, fishingCents: 6_000, creditRoomCents: 0, wellSpentCents: 90_000, lastShow: null, inflowFtHr: 0, driving: null, collapse: null, driveHead: false, nextDriveCents: 0, swageCents: 15_000, expect: null, rockDry: null, rockFt: null, inSalt: false, gypsumFt: null, sheenFt: null, paceFtDay: 40, noHole: { bails: 0, days: 0 } };
   const A = { feel: 0.6, judgement: 0.6, reliability: 0.6, prudence: 0.5 };
   it("with nothing seen either way, makes no recommendation: it says so, and what another hundred feet would cost", () => {
     const c = moneyConcern(OBS, A, "methodical")!;

@@ -166,7 +166,8 @@ function bail(ctx: Ctx, w: Well): void {
     id: `rs-${st.next++}`, t: ctx.now, provenance: "observed", kind: "sample", wellId: w.id, x: w.x, y: w.y,
     topFt: Math.round(w.lastBailFt), baseFt: Math.round(w.depthFt), ...said, call, ...(gyp ? { gypsum: true } : {}), ...(sheen ? { sheen: true } : {}),
   };
-  if (sample.baseFt > sample.topFt) st.samples.push(sample);
+  if (sample.baseFt > sample.topFt) { st.samples.push(sample); w.emptyBails = 0; }
+  else w.emptyBails = (w.emptyBails ?? 0) + 1;
   observeStrings(ctx, w);
   // How much sand came in beyond the cuttings since the last bail: the crew sees it in the bailer.
   const hours = Math.max(0.5, (ctx.now - (w.lastBailAt ?? w.spudAt)) / 60);
@@ -355,6 +356,7 @@ function setDrive(ctx: Ctx, w: Well, parted: boolean, quiet = false): void {
   const pipe = PIPE[d.size]!.name;
   const seatCall = seatCallAt(st, w, shoe);
   w.strings.push({ size: d.size, seatFt: shoe, costCents: cost, setAt: ctx.now, seatCall, observed: "pending", pulled: false, method: "driven", drivenFt: Math.round(d.drivenFt), damage: parted ? "parted" : null });
+  w.emptyBails = 0;
   recordOf(st, w).strings++;
   w.drive = null;
   w.casedFt = shoe;
@@ -423,6 +425,7 @@ function observe(st: OperationsState, w: Well, now: number): Observations {
     driveHead: st.tools.driveHead,
     nextDriveCents: driveEstimateCents(st, w) + (st.tools.driveHead ? 0 : DRIVE.headCents),
     swageCents: DRIVE.swageCents,
+    noHole: { bails: w.emptyBails ?? 0, days: Math.max(0, now - Math.max(last?.t ?? 0, w.spudAt + RIGUP_DAYS * MINUTES_PER_DAY, ...w.strings.map((s) => s.setAt))) / MINUTES_PER_DAY },
     ...groundOf(st, w, own, now),
   };
 }
@@ -456,11 +459,14 @@ function lastShow(own: readonly SampleEvidence[]): Observations["lastShow"] {
 }
 
 /** The circumstances a recommendation was made in, to tell when they have materially changed. */
-function circumstances(st: OperationsState, w: Well): DeclineMemo {
+function circumstances(st: OperationsState, w: Well, t: number): DeclineMemo {
   // Cash in hand, as he judges it: credit counts only once it is borrowed.
   const capital = available(st);
-  return { depthFt: w.depthFt, openSandFt: w.openSandFt, strings: w.strings.length, stuckCount: w.fishCount + (w.status === "stuck" ? 1 : 0), capitalCents: capital, drivenFt: w.drive?.drivenFt ?? 0 };
+  return { depthFt: w.depthFt, openSandFt: w.openSandFt, strings: w.strings.length, stuckCount: w.fishCount + (w.status === "stuck" ? 1 : 0), capitalCents: capital, drivenFt: w.drive?.drivenFt ?? 0, t };
 }
+
+/** Told to keep at a hole that makes no footage, he says so again after a week of it. */
+export const STALL_RAISE_AGAIN_DAYS = 7;
 
 /** A declined recommendation stays declined until the hole has changed enough to matter. */
 function stillDeclined(m: DeclineMemo | undefined, now: DeclineMemo, kind: Advice["kind"]): boolean {
@@ -470,6 +476,8 @@ function stillDeclined(m: DeclineMemo | undefined, now: DeclineMemo, kind: Advic
   if (kind === "setdrive") return (now.drivenFt ?? 0) < (m.drivenFt ?? 0) + 15;
   // Told once to drill on, he raises money again only when the cash in hand has fallen by a third, or the hole is 300 ft deeper.
   if (kind === "quit" || kind === "decide") return now.depthFt < m.depthFt + 300 && (now.capitalCents ?? 0) > (m.capitalCents ?? 0) * (2 / 3);
+  // Told to keep bailing a hole that makes no hole: until it makes hole, or a week has gone by.
+  if (kind === "stalled") return now.depthFt < m.depthFt + 5 && m.strings === now.strings && (now.t ?? 0) - (m.t ?? 0) < STALL_RAISE_AGAIN_DAYS * MINUTES_PER_DAY;
   return m.stuckCount === now.stuckCount && m.strings === now.strings;
 }
 
@@ -477,9 +485,9 @@ function decline(ctx: Ctx, r: Recommendation): void {
   const st = S(ctx);
   const w = st.well;
   st.crew.pending = null;
-  if (w) st.crew.declined[r.kind] = circumstances(st, w);
+  if (w) st.crew.declined[r.kind] = circumstances(st, w, ctx.now);
   if (r.kind === "setdrive" && w?.drive) w.drive.pounding = true;
-  note(ctx, r.wellId, "advice", r.kind === "case" ? "No pipe, then. I'll drill on." : r.kind === "drive" ? "No drive pipe, then. I'll drill on." : r.kind === "setdrive" ? "Drive on, then. I'll keep the maul going." : r.kind === "fish" ? "No fishing job, then." : "We'll keep at it, then.");
+  note(ctx, r.wellId, "advice", r.kind === "case" ? "No pipe, then. I'll drill on." : r.kind === "drive" ? "No drive pipe, then. I'll drill on." : r.kind === "setdrive" ? "Drive on, then. I'll keep the maul going." : r.kind === "fish" ? "No fishing job, then." : r.kind === "stalled" ? "We'll keep bailing, then." : "We'll keep at it, then.");
 }
 
 /** The recovery reserve: his own spending never leaves less than this in hand. */
@@ -503,7 +511,7 @@ function consult(ctx: Ctx, w: Well): void {
   const bucket = Math.floor(w.depthFt / 25);
   const advice = assess(observe(st, w, ctx.now), a, crew.driller.temperament, rngUnit(ctx.seed, "judge", w.id, bucket), rngUnit(ctx.seed, "judge2", w.id, bucket));
   if (!advice) return;
-  if (stillDeclined(crew.declined[advice.kind], circumstances(st, w), advice.kind)) return;
+  if (stillDeclined(crew.declined[advice.kind], circumstances(st, w, ctx.now), advice.kind)) return;
   // Trusted to judge: act within this month's budget, never below the recovery reserve.
   const c = toCalendar(ctx.now), month = c.year * 12 + (c.month - 1);
   if (crew.orders.month !== month) { crew.orders.month = month; crew.orders.spentCents = 0; }
@@ -699,6 +707,7 @@ function complete(ctx: Ctx, w: Well, op: Operation): void {
       const seatCall = seatCallAt(st, w, seatFt);
       pay(st.ledger, ctx.now, "drilling", `Ran the ${PIPE[size]!.name} casing to ${seatFt} ft in the ${w.name}${hung ? ", where it hung up" : seatCall ? `, landed in ${seatCall.split(",")[0]}` : ""}`, "drilling", cost, { wellId: w.id, surveyId: w.surveyId });
       w.strings.push({ size, seatFt, costCents: cost, setAt: ctx.now, seatCall, observed: "pending", pulled: false, ...(hung ? { hung: true } : {}) });
+      w.emptyBails = 0;
       recordOf(st, w).strings++;
       // Mechanical: the pipe holds up every wall above its shoe. Hydraulic: only a seal stops the leak beneath.
       w.casedFt = seatFt;
@@ -1364,7 +1373,7 @@ export const rig: System<Json> = {
       else if (r.kind === "drive") { buyDriveHead(ctx); driveNow(ctx, w); }
       else if (r.kind === "setdrive") { if (!w.drive) throw new CommandRejected("No pipe is being driven."); setDrive(ctx, w, false); }
       else if (r.kind === "fish") fishNow(ctx, w);
-      else finish(ctx, w, "dry", r.kind === "quit" ? `The ${w.name} is plugged at ${Math.round(w.depthFt)} ft to save the company's money.` : r.kind === "decide" ? `The ${w.name} is plugged at ${Math.round(w.depthFt)} ft: the company chose to keep its money.` : `The ${w.name} is plugged and abandoned at ${Math.round(w.depthFt)} ft.`);
+      else finish(ctx, w, "dry", r.kind === "quit" ? `The ${w.name} is plugged at ${Math.round(w.depthFt)} ft to save the company's money.` : r.kind === "decide" ? `The ${w.name} is plugged at ${Math.round(w.depthFt)} ft: the company chose to keep its money.` : r.kind === "stalled" ? `The ${w.name} is plugged and abandoned at ${Math.round(w.depthFt)} ft, where no hole could be made.` : `The ${w.name} is plugged and abandoned at ${Math.round(w.depthFt)} ft.`);
       note(ctx, w.id, "acted", r.kind === "case" ? "Running the pipe, as agreed." : r.kind === "drive" ? "Putting the drive head on, as agreed." : r.kind === "setdrive" ? "Setting it here, as agreed." : r.kind === "fish" ? (w.collapse ? "Rigging the swage, as agreed." : "Rigging the jars, as agreed.") : "Plugging the hole, as agreed.");
     },
     "crew.decline"(ctx, c: Command) {

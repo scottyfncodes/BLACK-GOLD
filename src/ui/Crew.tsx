@@ -18,7 +18,7 @@ export function AdviceCard({ runtime, snap, onOpenRig }: { runtime: GameRuntime;
   if (!p || !w || w.id !== p.wellId) return null;
   const pipe = PIPE[w.strings.length];
   const yes = p.kind === "case" ? `Set the ${pipe?.name ?? "pipe"}` : p.kind === "drive" ? `Drive the ${pipe?.name ?? "pipe"}` : p.kind === "setdrive" ? "Set it here" : p.kind === "fish" ? (w.collapse ? "Swaging job" : "Fishing job") : "Plug the hole";
-  const no = p.kind === "abandon" ? "Keep at it" : p.kind === "quit" ? "Keep drilling" : p.kind === "setdrive" ? "Drive on" : p.kind === "drive" ? "Not yet" : "Drill on";
+  const no = p.kind === "abandon" ? "Keep at it" : p.kind === "stalled" ? "Keep bailing" : p.kind === "quit" ? "Keep drilling" : p.kind === "setdrive" ? "Drive on" : p.kind === "drive" ? "Not yet" : "Drill on";
   // With nothing seen either way he recommends nothing: neither choice is set as his.
   const open = p.kind === "decide";
   return (

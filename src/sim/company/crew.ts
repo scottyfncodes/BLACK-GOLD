@@ -60,7 +60,7 @@ export interface Orders {
  * says to stop. "decide": no recommendation: the evidence says neither way, and the owner must
  * choose between the money and the hole.
  */
-export type RecommendationKind = "case" | "fish" | "abandon" | "quit" | "decide" | "drive" | "setdrive";
+export type RecommendationKind = "case" | "fish" | "abandon" | "quit" | "decide" | "drive" | "setdrive" | "stalled";
 
 export interface Recommendation {
   id: number;
@@ -82,6 +82,8 @@ export interface DeclineMemo {
   capitalCents?: number;
   /** Feet of pipe driven when "set it here" was declined. */
   drivenFt?: number;
+  /** When it was declined (for "stalled": he raises a hole that makes no footage again a week later). */
+  t?: number;
 }
 
 export interface DrillerNote {

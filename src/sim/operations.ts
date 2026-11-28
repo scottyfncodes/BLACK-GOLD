@@ -56,6 +56,11 @@ export interface Well {
   collapse?: { atFt: number; attempts: number } | null;
   /** Sand the bailer brought up beyond the cuttings, per hour since the bail before (ft/hour): what the crew sees of sand running in. */
   lastInflow?: number;
+  /**
+   * Bails in a row that brought up no new hole: the bailer went down to the same bottom and came
+   * back with sand that had run in. Reset by new hole or by a string set. What the crew sees.
+   */
+  emptyBails?: number;
   /** When the hole was last bailed, and the sand come in since (ft). */
   lastBailAt?: number;
   sandInFt?: number;
