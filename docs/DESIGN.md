@@ -1294,6 +1294,57 @@ Guardrails:
   - Rival behaviour, the excitement, the depth operators can afford and the loss rate are provisional gameplay values, measured but not balanced.
   - The "no Rush" counterfactual switches the Rush off at the harness only.
 
+**M9.0, is one rig the constraint? (measured, no game change)**
+
+*Method.* `tools/analysis/m9.harness.ts` and `m9-compare.mjs`, outside CI.
+- After a discovery, each world is played five years two ways: passive, and an explorer that keeps the one rig exploring other structures.
+- The explorer is M7's disciplined operator, using only public information. It buys the fieldwork it needs, once a year it buys more readings when it has run out of prospects, and it drills while it has money for a hole. It leaves the discovery's own structure alone.
+- Two cohorts:
+  - A: M8b's worlds, with a truth-sited first well (92 discoveries).
+  - B: M7's disciplined operator on public information throughout (42 discoveries in 36 months).
+- Truth only measures afterwards: oil below a hole, and structures left untapped.
+- Regression: cohort A's passive play reproduces M8b's to the dollar ($29,492 mean at five years).
+
+*What constrains the company.*
+
+| Five years after the discovery (explorer) | Cohort A | Cohort B |
+|---|---|---|
+| Rig drilling | 61 days (3%) | 36 days (2%) |
+| Fieldwork | 156 days | 2 days |
+| Idle with no prospect left | 1,608 days | 1,770 days |
+| Idle waiting for money | 0 | 15 days |
+| Idle with cash for a whole campaign *and* a prospect in hand | 0 | 0 |
+| Cash ÷ a campaign ($7,324, M7's cost per discovery), median | 3.3× | 3.4× |
+| Holes after the discovery | 3.0 | 1.4 |
+| Second field found | 17 of 92 (18%) | 3 of 42 (7%) |
+| Capital vs passive (paired) | −$609 (n.s.), median −$4,095; +$21,347 where a second field was found, −$5,586 elsewhere | −$3,860 (p < 0.001) |
+| Structures with oil in reach left untapped (truth) | 0.8 a world, in 61% of worlds | 0.9, in 64% |
+
+- **Rig throughput is not the constraint.** The rig is idle 97–98% of the time, and money is never short.
+- **Information is the constraint.** The explorer stops because its evidence names nothing more to drill. Its prospects are the printed hills and the mounds and seeps fieldwork finds. After about three holes they are tried, and nothing in the game produces new ones.
+- **Of the oil left in reach** (0.8 structures a world), 0.5 is on structures the explorer drilled and missed: 16 of its holes stopped above oil, and it made only 6 step-outs. 0.3 is on structures its evidence never pointed to.
+- **Passive play is idle with money "and a prospect" almost all the time:** 1,540 days in A, 1,815 in B. But those prospects are mostly barren. 245 of the explorer's 278 holes had no oil below them. "Identifiable opportunity" here means a printed rise, not a good one.
+- **Reasons the explorer chose not to drill:** no prospect left (55–61 monthly checks a world); land refused (0.2–1.7); short of money (0–1). The prospects it passed over were its own field's rises and rises already tried. It skipped almost none on news from other operators.
+
+*Defect found (pre-existing, not fixed: no gameplay change was authorised).*
+- A hired driller with authority to act on his own judgement, in running sand with no pipe left to run, bails the hole forever. Each bail reports "the sand comes back in as fast as it is bailed", the depth never moves, no counsel is raised, and the idle guard does not trigger because bailing counts as work.
+- A poor company's money runs out first. A rich one's does not: in one world the hole cost $42,194 over four years at 352 ft.
+- It stalled 37 of the explorer's 335 holes (11%). The M9.0 explorer plugs a hole that makes no footage in 30 days, as a player watching the depth would.
+
+*Correction to M8b's findings.*
+- M8b's scripted strategies had no such rule, so stalled offsets carried the heavy downside reported for quick offsets.
+- Re-measured with the same 30-day rule (`STALL_DAYS=30`, otherwise unchanged), 92 worlds, at five years:
+  - *quick offsets:* +$6,190 against passive (21%, CI $3,485 to $8,816), median +$2,031, worst tenth −$8,086 (was −$21,358);
+  - *combined:* +$7,092 (24%, CI $3,677 to $10,289), worst tenth −$9,932 (was −$24,675);
+  - *defensive leasing and the Rush's cost:* unchanged.
+- "No strategy raises capital significantly" and "offsets are a high-variance gamble" were therefore largely an artefact of the defect. Offsets on a strike's own structure are the strongest post-discovery strategy measured.
+
+*Limits.*
+- The explorer is one fixed script.
+- Cohort A's first well is truth-sited, and cohort B is small (42).
+- The campaign cost is M7's measured mean.
+- "Opportunity left" is a coarse, truth-only structure count.
+
 ## 9. Open decisions
 
 Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.
@@ -1321,3 +1372,13 @@ Decisions taken so far are marked. Where a decision is still open, its default i
       - the heavy downside of offsets;
       - the absence of post-discovery risk;
       - what the company's money should be for after year three.
+    - Decided after M8: defensive leasing need not pay; keep the offsets' downside and variance; passive play stays viable; risk comes from voluntary expansion; idle capital is a progression problem.
+14. **M9, The Oil Company:** M9.0 measured (§8). Rig throughput is not the constraint; information is. A delegated driller stalls in running sand with no pipe left; this is unfixed. The M8b offset downside is restated.
+    - Provisional for M9 planning, not built:
+      - $900 used and $1,500 new rigs, with a meaningful difference between them;
+      - at most three rigs;
+      - idle crews paid, and crews releasable;
+      - foreclosure unchanged, with no loan recalls;
+      - contract work stays recovery-only;
+      - prices after 1905 frozen;
+      - acquisitions, storage and pipelines deferred.
