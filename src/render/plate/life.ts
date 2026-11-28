@@ -6,7 +6,7 @@
  */
 import { SURVEYS, centroid } from "../../content/geography/surveys";
 import { toCalendar, wholeFeet, type KnowledgeView, type RivalWell, type Well } from "../../sim";
-import { lengthOf, pointAt, type Pt } from "./kit";
+import { lengthOf, Placer, pointAt, type Pt } from "./kit";
 import { geography } from "./geography";
 import { toPx, type MapView } from "./map";
 import { FONT, INK } from "./palette";
@@ -81,6 +81,14 @@ export function drawLife(ctx: CanvasRenderingContext2D, v: MapView, inp: LifeInp
     }
   }
 
+  // Labels never overlap: the company's own come first (they are always drawn), then others' where there is room.
+  const placer = new Placer(v.w, v.h, 2);
+  ctx.font = `italic 12px ${FONT}`;
+  for (const w of inp.wells) {
+    const [x, y] = P([w.x, w.y]);
+    placer.add([x - 8, y - 16, x + 14 + ctx.measureText(`${w.name}: producing, 0000 ft`).width, y + 6]);
+  }
+
   // Other operators' wells, in ink: the county's conventions (a derrick while drilling, a filled
   // circle for oil, a circle struck through for a dry hole). Named only at field scale.
   for (const w of inp.rivals ?? []) {
@@ -101,11 +109,13 @@ export function drawLife(ctx: CanvasRenderingContext2D, v: MapView, inp: LifeInp
       ctx.font = `italic 11px ${FONT}`;
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = INK.paper;
-      ctx.strokeText(label, x + 8, y + 8);
-      ctx.fillStyle = INK.inkSoft;
-      ctx.fillText(label, x + 8, y + 8);
+      if (placer.take([x + 6, y + 1, x + 10 + ctx.measureText(label).width, y + 15])) {
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = INK.paper;
+        ctx.strokeText(label, x + 8, y + 8);
+        ctx.fillStyle = INK.inkSoft;
+        ctx.fillText(label, x + 8, y + 8);
+      }
     }
   }
 

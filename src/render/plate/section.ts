@@ -229,7 +229,11 @@ export function drawSection(
   ctx.setLineDash([]);
 
   // Logs: pattern first, tint underneath. Words go beside a column only where there is room.
-  const room = controls.map((c, i) => (controls[i + 1] ? X(controls[i + 1]!.along) - X(c.along) : w - padR - X(c.along)));
+  // Room for a log's words: up to the next log, or the next well known from the news, whichever is nearer.
+  const room = controls.map((c, i) => {
+    const next = [controls[i + 1] ? X(controls[i + 1]!.along) : w - padR, ...heard.filter((hw) => hw.along > c.along).map((hw) => X(hw.along))];
+    return Math.min(...next) - X(c.along);
+  });
   const labels = new Placer(w, h, 2);
   controls.forEach((c, ci) => {
     const x = X(c.along) - colW / 2;
