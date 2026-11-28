@@ -65,13 +65,22 @@ function firstSite(seed: string): { x: number; y: number } | null {
 }
 
 /** Drill the current well out with the driller; decline counsel to stop until `quitBelowFt`; cap oil. */
+/**
+ * M9.0 re-measurement only (default off, so M8b's runs reproduce): with STALL_DAYS set, a hole that
+ * has made no footage for that many days is plugged, as a player watching the depth would.
+ */
+const STALL_DAYS = process.env.STALL_DAYS ? Number(process.env.STALL_DAYS) : null;
 function drillOut(w: WorldState, quitBelowFt: number): "oil" | "other" {
   gameEngine.advance(w, w.time + 3 * DAY + 10);
   cmd(w, "rig.auto", { on: true });
+  let deepest = ops(w).well?.depthFt ?? 0, since = w.time;
   for (let k = 0; k < 2000; k++) {
     const s = ops(w).well?.status;
     if (s !== "rigging" && s !== "drilling" && s !== "stuck") break;
     gameEngine.advance(w, w.time + DAY, { stopOnInterrupt: true });
+    const d = ops(w).well!.depthFt;
+    if (d > deepest + 0.5) { deepest = d; since = w.time; }
+    else if (STALL_DAYS !== null && w.time - since > STALL_DAYS * DAY && !ops(w).crew.pending) { cmd(w, "rig.abandon"); break; }
     const q = ops(w).crew.pending;
     if (q) {
       const stop = q.kind === "quit" || q.kind === "decide" || q.kind === "abandon";
