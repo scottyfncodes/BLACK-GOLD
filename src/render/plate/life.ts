@@ -5,7 +5,7 @@
  * Inputs are observable state only. Motion uses the real-time animation clock.
  */
 import { SURVEYS, centroid } from "../../content/geography/surveys";
-import { toCalendar, wholeFeet, type KnowledgeView, type Well } from "../../sim";
+import { toCalendar, wholeFeet, type KnowledgeView, type RivalWell, type Well } from "../../sim";
 import { lengthOf, pointAt, type Pt } from "./kit";
 import { geography } from "./geography";
 import { toPx, type MapView } from "./map";
@@ -18,6 +18,8 @@ export interface LifeInputs {
   wells: Well[];
   /** Wells capped and selling oil. */
   producing?: string[];
+  /** Other operators' wells, as Beaumont knows them. */
+  rivals?: readonly RivalWell[];
 }
 
 export function drawLife(ctx: CanvasRenderingContext2D, v: MapView, inp: LifeInputs): void {
@@ -76,6 +78,34 @@ export function drawLife(ctx: CanvasRenderingContext2D, v: MapView, inp: LifeInp
       const a = inp.anim * 0.7;
       const x = cx + Math.cos(a) * r, y = cy + Math.sin(a * 1.3) * r * 0.6;
       rider(ctx, x, y, Math.cos(a) < 0 ? -1 : 1, inp.anim);
+    }
+  }
+
+  // Other operators' wells, in ink: the county's conventions (a derrick while drilling, a filled
+  // circle for oil, a circle struck through for a dry hole). Named only at field scale.
+  for (const w of inp.rivals ?? []) {
+    const [x, y] = P([w.x, w.y]);
+    ctx.strokeStyle = INK.ink;
+    ctx.fillStyle = INK.ink;
+    ctx.lineWidth = 1.2;
+    if (w.status === "drilling") derrick(ctx, x, y, false);
+    else {
+      ctx.beginPath(); ctx.arc(x, y, 3.6, 0, Math.PI * 2);
+      if (w.status === "oil") ctx.fill(); else ctx.stroke();
+      if (w.status === "dry") { ctx.beginPath(); ctx.moveTo(x - 5.5, y + 5.5); ctx.lineTo(x + 5.5, y - 5.5); ctx.stroke(); }
+      if (w.status === "gas") { ctx.beginPath(); ctx.moveTo(x - 5.5, y); ctx.lineTo(x + 5.5, y); ctx.stroke(); }
+    }
+    if (v.scale >= 34) {
+      const short = w.name.replace(/^the /, "").replace(/ Oil Co\.| Petroleum Co\./, "");
+      const label = w.status === "drilling" ? `${short}: drilling` : `${short}: ${w.status}${w.depthFt ? `, ${wholeFeet(w.depthFt)} ft` : ""}`;
+      ctx.font = `italic 11px ${FONT}`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = INK.paper;
+      ctx.strokeText(label, x + 8, y + 8);
+      ctx.fillStyle = INK.inkSoft;
+      ctx.fillText(label, x + 8, y + 8);
     }
   }
 

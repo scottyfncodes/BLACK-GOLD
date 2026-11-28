@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { gameEngine, MINUTES_PER_DAY, operationsOf, type WorldState } from "../../src/sim";
 import { canonicalJson } from "../../src/sim/core/hash";
-import { v7ToV8 } from "../../src/sim/migrations";
+import { v7ToV8, v8ToV9 } from "../../src/sim/migrations";
 import type { FieldState } from "../../src/sim/hidden/reservoir";
 import { columnAt, generateGeology, isCharged } from "../../src/sim/geology/truth/model";
 import { SURVEYS, insidePoly } from "../../src/content/geography/surveys";
@@ -37,7 +37,7 @@ function producing(): WorldState {
       if (!operationsOf(w).well!.outcome?.startsWith("OIL")) continue;
       cmd(w, "prod.cap");
       if (!operationsOf(w).production.producers.length) continue;
-      gameEngine.advance(w, w.time + 400 * MINUTES_PER_DAY);
+      // Taken the moment the well is capped: before midnight, so no other operator has come yet.
       return w;
     }
   }
@@ -57,12 +57,14 @@ function asV7(w: WorldState): Record<string, unknown> {
   }
   (ops.production as Record<string, unknown>).drawn = drawn;
   delete (ops as Record<string, unknown>).field;
+  delete (ops as Record<string, unknown>).rush;
   return old as never;
 }
 
 describe("what the UI can read of production (M8a)", () => {
   it("is the company's own barrels only: no field, no tank, no reserve, no opening flow, no key shared between wells", () => {
     const w = producing();
+    gameEngine.advance(w, w.time + 60 * MINUTES_PER_DAY);
     const view = operationsOf(w) as unknown as Record<string, unknown>;
     expect(view).not.toHaveProperty("field");
     for (const p of operationsOf(w).production.producers) {
@@ -75,12 +77,13 @@ describe("what the UI can read of production (M8a)", () => {
 describe("v7 → v8", () => {
   it("moves the hidden figures to the field and production goes on exactly as before", () => {
     const w = producing();
-    const up = v7ToV8(asV7(w)) as unknown as WorldState;
+    expect(operationsOf(w).rush.wells).toEqual([]);
+    const up = v8ToV9(v7ToV8(asV7(w))) as unknown as WorldState;
     const ops = (x: WorldState) => x.systems.operations as unknown as { field: FieldState; production: { producers: { cumBbl: number; firstDayBbl: number; months: number[] }[] } };
     expect(canonicalJson(ops(up).field as never)).toBe(canonicalJson(ops(w).field as never));
     // The visible book carries no trap, reserve or opening flow.
     for (const p of ops(up).production.producers) for (const k of ["trap", "initialBbl", "reserveBbl"]) expect(p).not.toHaveProperty(k);
-    expect(v7ToV8(up as never)).toEqual(up);
+    expect(v8ToV9(v7ToV8(up as never))).toEqual(up);
     // Another two years: the migrated world produces barrel for barrel as the original.
     gameEngine.advance(w, w.time + 730 * MINUTES_PER_DAY);
     gameEngine.advance(up, up.time + 730 * MINUTES_PER_DAY);

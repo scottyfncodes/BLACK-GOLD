@@ -224,7 +224,21 @@ export function v7ToV8(input: Record<string, unknown>): Record<string, unknown> 
   return world;
 }
 
-export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5, 5: v5ToV6, 6: v6ToV7, 7: v7ToV8 };
+/**
+ * v8 → v9: the Rush (M8b). No other operator has come yet: the field is empty of rivals, and
+ * none has a well pending. They come with the next public strike.
+ */
+export function v8ToV9(input: Record<string, unknown>): Record<string, unknown> {
+  const world = structuredClone(input) as unknown as WorldState & Record<string, unknown>;
+  const ops = world.systems.operations as Record<string, unknown> | undefined;
+  if (!ops) return world;
+  if (!ops.rush) ops.rush = { wells: [], leases: [], operators: [], monthOthersBbl: 0, lastMonthOthersBbl: 0, next: 1 };
+  const field = ops.field as Record<string, unknown> | undefined;
+  if (field && !field.pending) field.pending = {};
+  return world;
+}
+
+export const MIGRATIONS: Readonly<Record<number, Migration>> = { 1: v1ToV2, 2: v2ToV3, 3: v3ToV4, 4: v4ToV5, 5: v5ToV6, 6: v6ToV7, 7: v7ToV8, 8: v8ToV9 };
 
 /** Invariants a loaded world must hold beyond its shape. Returns a reason, or null. */
 export function worldProblem(world: WorldState): string | null {

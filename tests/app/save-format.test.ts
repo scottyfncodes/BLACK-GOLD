@@ -54,18 +54,18 @@ describe("save format", () => {
     const current = freshSaveText();
     const seen: number[] = [];
     const migrations: Record<number, Migration> = {
-      8: (w) => (seen.push(8), { ...w, systems: { ...(w.systems as object), weather: null } }),
-      9: (w) => (seen.push(9), { ...w, renamedInV4: true }),
+      9: (w) => (seen.push(9), { ...w, systems: { ...(w.systems as object), weather: null } }),
+      10: (w) => (seen.push(10), { ...w, renamedInV4: true }),
     };
-    const out = decodeSave(current, gameEngine, migrations, 10);
-    expect(seen).toEqual([8, 9]);
-    expect(out.schemaVersion).toBe(10);
+    const out = decodeSave(current, gameEngine, migrations, 11);
+    expect(seen).toEqual([9, 10]);
+    expect(out.schemaVersion).toBe(11);
     expect(out.world.systems.weather).toBeNull();
     expect((out.world as unknown as Record<string, unknown>).renamedInV4).toBe(true);
   });
 
   it("refuses to load when a migration is missing", () => {
-    expect(() => decodeSave(freshSaveText(), gameEngine, {}, 9)).toThrow(/No migration from schema 8 to 9/);
+    expect(() => decodeSave(freshSaveText(), gameEngine, {}, 10)).toThrow(/No migration from schema 9 to 10/);
   });
 });
 

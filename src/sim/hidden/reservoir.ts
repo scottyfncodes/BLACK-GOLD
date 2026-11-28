@@ -34,9 +34,11 @@ export interface Tap {
 export interface FieldState {
   tanks: Record<string, Tank>;
   taps: Tap[];
+  /** Rival wells' outcomes, decided by the ground at spud and kept here until they are known (M8b). */
+  pending: Record<string, { result: "oil" | "gas" | "dry"; depthFt: number }>;
 }
 
-export const emptyField = (): FieldState => ({ tanks: {}, taps: [] });
+export const emptyField = (): FieldState => ({ tanks: {}, taps: [], pending: {} });
 
 /**
  * Open a well on the oil at the bottom of a hole: its tank (created on first tap, from the trap's

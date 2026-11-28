@@ -115,4 +115,6 @@ describe("performance", () => {
 // "1e3c8857be2e29" (the stress-only run, no company play). The M7 refinement (a rainbow of oil on the
 // bailer water, drawn from its own stream) moved it once more, from "06ce6a7704aa28".
 // M8a (the hidden field: tanks shared by every well) moved it from "1a1dfac96d01af", the M7 baseline.
-const GOLDEN_TEN_YEAR_HASH = "10b5a4766fa733";
+// M8b (the Rush's state in the world; no strike in this run, so no rival comes) moved it from "10b5a4766fa733".
+// The field's own golden run, with a strike, an offset and the Rush, is tests/determinism/field.test.ts.
+const GOLDEN_TEN_YEAR_HASH = "08458440c940d3";

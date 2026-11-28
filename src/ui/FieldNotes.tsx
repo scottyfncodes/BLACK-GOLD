@@ -1,7 +1,7 @@
 import type { GameRuntime, Snapshot } from "../app/runtime";
 import { formatDate } from "../app/runtime";
 import { SURVEYS, insidePoly } from "../content/geography/surveys";
-import { activeLease, askingTerms, CONSULT_DAYS, COSTS, FIELD_COSTS, INQUIRE_DAYS, WALK_DAYS, wholeFeet, type Evidence, type FieldTask, type Well } from "../sim";
+import { activeLease, askingTerms, CONSULT_DAYS, COSTS, FIELD_COSTS, INQUIRE_DAYS, rivalHolder, WALK_DAYS, wholeFeet, type Evidence, type FieldTask, type NewsEvidence, type Well } from "../sim";
 import { GroundReading, HoleAccount } from "./Ground";
 import type { Selection } from "../render/plate/map";
 import { nextStep } from "./advice";
@@ -45,6 +45,8 @@ function evidenceLine(e: Evidence): { text: string; src: string; red?: boolean }
       return { text: `${e.owner}'s water well (${e.year}), ${e.depthFt} ft. ${e.intervals.length} beds described.`, src: `His account, ${when} · ${memoryWord(e.memory)}`, red: e.intervals.some((i) => i.show) };
     case "reading":
       return { text: e.text, src: `The geologist's reading, ${when} · an interpretation, from ${e.basis.join("; ")}` };
+    case "news":
+      return { text: e.text, src: `News in Beaumont, ${when} · hearsay`, red: false };
     case "account":
       return { text: `The ${e.name}, ended at ${e.deepestFt.toLocaleString("en-US")} ft${e.rock ? `: rock at about ${e.rock.topFt.toLocaleString("en-US")} ft${e.rockDry ? ", dry to the salt" : ""}` : ": no rock met"}.`, src: `Our own hole, ${when} · observed`, red: e.result !== "dry" };
   }
@@ -54,6 +56,16 @@ function evidenceLine(e: Evidence): { text: string; src: string; red?: boolean }
 function LeaseBlock({ runtime, snap, surveyId }: { runtime: GameRuntime; snap: Snapshot; surveyId: string }) {
   const survey = SURVEYS.find((x) => x.id === surveyId)!;
   const lease = activeLease(snap.ops.leases, surveyId, snap.time);
+  const rival = rivalHolder(snap.ops.rush, surveyId, snap.time);
+  if (rival) {
+    return (
+      <div class="lease lease-theirs" data-testid="lease">
+        <h3>Another operator's lease</h3>
+        <p>{cap1(rival.operator)} holds this survey, since {formatDate(rival.since)}. It runs to <b>{formatDate(rival.until)}</b>, and longer while they drill or produce on it.</p>
+        <p class="empty">The company cannot lease or drill here while they hold it.</p>
+      </div>
+    );
+  }
   if (lease) {
     return (
       <div class="lease lease-ours" data-testid="lease">
@@ -111,6 +123,24 @@ function flowWords(p: { lastDayBbl: number; firstDayBbl: number; since: number }
   const now = `producing ${p.lastDayBbl} bbl a day`;
   if (!p.firstDayBbl || p.lastDayBbl >= p.firstDayBbl) return now;
   return `${now}, down from ${p.firstDayBbl} when capped (${formatDate(p.since)})`;
+}
+
+const cap1 = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** The field's news: the latest of what Beaumont has heard, newest first. */
+function FieldNews({ snap, limit = 5 }: { snap: Snapshot; limit?: number }) {
+  const news = snap.knowledge.evidence.filter((e): e is NewsEvidence => e.kind === "news").slice(-limit).reverse();
+  if (!news.length) return null;
+  const r = snap.ops.rush;
+  const counts = { drilling: 0, oil: 0, gas: 0, dry: 0 };
+  for (const w of r.wells) counts[w.status]++;
+  return (
+    <div class="field-news" data-testid="field-news">
+      <h3>The field <small>news in Beaumont: hearsay</small></h3>
+      <p class="tally">{r.operators.length} other operator{r.operators.length === 1 ? "" : "s"} · {counts.drilling} drilling · {counts.oil} producing oil · {counts.dry} dry{counts.gas ? ` · ${counts.gas} gas` : ""}{r.lastMonthOthersBbl ? ` · ${r.lastMonthOthersBbl.toLocaleString("en-US")} bbl shipped by others last month` : ""}</p>
+      <ul>{news.map((n) => <li key={n.id}>{n.text}<small>{formatDate(n.t)}</small></li>)}</ul>
+    </div>
+  );
 }
 
 const memoryWord = (m: number) => (m > 0.85 ? "remembers well" : m > 0.7 ? "fair memory" : "hazy memory");
@@ -187,6 +217,41 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
     );
   }
 
+  if (selection?.kind === "rival") {
+    const w = snap.ops.rush.wells.find((x) => x.id === selection.id);
+    if (!w) return null;
+    const rec = k.evidence.find((e) => e.kind === "wellRecord" && e.wellId === w.id);
+    const heard = k.evidence.filter((e): e is NewsEvidence => e.kind === "news" && e.wellId === w.id);
+    const survey = SURVEYS.find((x) => x.id === w.surveyId);
+    return (
+      <section class="notes-body" aria-labelledby="notes-h">
+        <h2 id="notes-h">{cap1(w.name)}</h2>
+        <p class="sub">{w.status === "drilling" ? "Drilling" : w.status === "oil" ? "Producing oil" : w.status === "gas" ? "Blew in gas" : "A dry hole"} · the {survey?.name ?? ""} survey · another operator's well</p>
+        {busy}
+        <h3>What Beaumont says</h3>
+        <ol class="ev" data-testid="evidence">
+          {heard.map((e, i) => <li key={e.id}><span class="num">{ROMAN[i] ?? i + 1}.</span><span>{e.text}<small>News in Beaumont, {formatDate(e.t)} · hearsay</small></span></li>)}
+        </ol>
+        {rec && rec.kind === "wellRecord" ? (
+          <>
+            <h3>As their driller tells it</h3>
+            <table class="log" data-testid="log">
+              <thead><tr><th scope="col">From</th><th scope="col">To</th><th scope="col">His words</th></tr></thead>
+              <tbody>{rec.intervals.map((iv, i) => (
+                <tr key={i} class={iv.show ? "red" : ""}><td>{iv.topFt}</td><td>{iv.baseFt}</td><td>{iv.call}</td></tr>
+              ))}</tbody>
+            </table>
+            <p class="empty">Another man's log, as he remembers it: hearsay. Below {rec.depthFt} ft nothing is known.</p>
+          </>
+        ) : w.status === "drilling" ? (
+          <p class="empty">Nothing is known of what it has gone through until it is done.</p>
+        ) : (
+          <div class="acts"><button type="button" class="button button-primary" data-testid="ask-rival" disabled={!!task || snap.ops.cash * 100 < FIELD_COSTS.inquireCents} onClick={act("fieldwork.inquire", { wellId: w.id })}>Ask their driller what it went through<small>{days(INQUIRE_DAYS)} · {cost(FIELD_COSTS.inquireCents)}</small></button></div>
+        )}
+      </section>
+    );
+  }
+
   if (selection?.kind === "well") {
     const w = snap.print.wells.find((x) => x.id === selection.id);
     if (!w) return null;
@@ -249,6 +314,7 @@ export function FieldNotes({ runtime, snap, selection, onSelect, onStake, onOpen
         </div>
       </div>
       {busy}
+      <FieldNews snap={snap} />
       <p class="empty">Print is the county survey anyone can buy. Red is the company's own hand. Blank paper means unknown, not empty.</p>
       <p class="tally">{signs} sign{signs === 1 ? "" : "s"} seen · {records} well record{records === 1 ? "" : "s"} · {k.interp.sections.length} section{k.interp.sections.length === 1 ? "" : "s"} · {k.interp.prospects.length} prospect{k.interp.prospects.length === 1 ? "" : "s"}</p>
     </section>
