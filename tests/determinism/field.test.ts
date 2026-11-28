@@ -77,6 +77,6 @@ describe("the field's golden run (M8)", () => {
 });
 
 // Pinned on purpose for M8b: the strike, the offset and the Rush on this seed.
-// M9a-0 moved it from "0f035f101b1cbb" by state alone (bails from the same bottom counted on the
-// well, and when a recommendation was declined); without those fields the run hashes as before.
-const GOLDEN_FIELD_HASH = "1dbdc92f245d71";
+// M9a-0 moved it from "0f035f101b1cbb" by state alone (the run of bails from about the same bottom
+// kept on the well, and when a recommendation was declined); without those fields the run hashes as before.
+const GOLDEN_FIELD_HASH = "020b95cb185b0c";

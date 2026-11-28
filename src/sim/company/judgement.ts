@@ -63,8 +63,8 @@ export interface Observations {
   /** Feet a day this hole has made since the derrick was up. */
   paceFtDay: number;
   /**
-   * The hole has stopped making footage: bails in a row that came up from the same bottom, and
-   * days since the bailer last brought up new hole (or since the last string was set).
+   * The hole has stopped making footage: bails in a row from about the same bottom (within 5 ft
+   * of where the run began), and the days since the run began.
    */
   noHole: { bails: number; days: number };
 }

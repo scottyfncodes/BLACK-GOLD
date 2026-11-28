@@ -166,8 +166,10 @@ function bail(ctx: Ctx, w: Well): void {
     id: `rs-${st.next++}`, t: ctx.now, provenance: "observed", kind: "sample", wellId: w.id, x: w.x, y: w.y,
     topFt: Math.round(w.lastBailFt), baseFt: Math.round(w.depthFt), ...said, call, ...(gyp ? { gypsum: true } : {}), ...(sheen ? { sheen: true } : {}),
   };
-  if (sample.baseFt > sample.topFt) { st.samples.push(sample); w.emptyBails = 0; }
-  else w.emptyBails = (w.emptyBails ?? 0) + 1;
+  if (sample.baseFt > sample.topFt) st.samples.push(sample);
+  // Bails from about the same bottom: a run that ends only when the hole is 5 ft deeper than where it began.
+  if (!w.noHole || w.depthFt > w.noHole.fromFt + NO_HOLE_FT) w.noHole = { fromFt: w.depthFt, at: ctx.now, bails: 0 };
+  else w.noHole.bails++;
   observeStrings(ctx, w);
   // How much sand came in beyond the cuttings since the last bail: the crew sees it in the bailer.
   const hours = Math.max(0.5, (ctx.now - (w.lastBailAt ?? w.spudAt)) / 60);
@@ -356,7 +358,7 @@ function setDrive(ctx: Ctx, w: Well, parted: boolean, quiet = false): void {
   const pipe = PIPE[d.size]!.name;
   const seatCall = seatCallAt(st, w, shoe);
   w.strings.push({ size: d.size, seatFt: shoe, costCents: cost, setAt: ctx.now, seatCall, observed: "pending", pulled: false, method: "driven", drivenFt: Math.round(d.drivenFt), damage: parted ? "parted" : null });
-  w.emptyBails = 0;
+  w.noHole = null;
   recordOf(st, w).strings++;
   w.drive = null;
   w.casedFt = shoe;
@@ -425,7 +427,7 @@ function observe(st: OperationsState, w: Well, now: number): Observations {
     driveHead: st.tools.driveHead,
     nextDriveCents: driveEstimateCents(st, w) + (st.tools.driveHead ? 0 : DRIVE.headCents),
     swageCents: DRIVE.swageCents,
-    noHole: { bails: w.emptyBails ?? 0, days: Math.max(0, now - Math.max(last?.t ?? 0, w.spudAt + RIGUP_DAYS * MINUTES_PER_DAY, ...w.strings.map((s) => s.setAt))) / MINUTES_PER_DAY },
+    noHole: w.noHole ? { bails: w.noHole.bails, days: (now - w.noHole.at) / MINUTES_PER_DAY } : { bails: 0, days: 0 },
     ...groundOf(st, w, own, now),
   };
 }
@@ -465,6 +467,8 @@ function circumstances(st: OperationsState, w: Well, t: number): DeclineMemo {
   return { depthFt: w.depthFt, openSandFt: w.openSandFt, strings: w.strings.length, stuckCount: w.fishCount + (w.status === "stuck" ? 1 : 0), capitalCents: capital, drivenFt: w.drive?.drivenFt ?? 0, t };
 }
 
+/** Hole made, within a run of bails, that still counts as "no hole" (ft): the bailer line shows no more. */
+const NO_HOLE_FT = 5;
 /** Told to keep at a hole that makes no footage, he says so again after a week of it. */
 export const STALL_RAISE_AGAIN_DAYS = 7;
 
@@ -707,7 +711,7 @@ function complete(ctx: Ctx, w: Well, op: Operation): void {
       const seatCall = seatCallAt(st, w, seatFt);
       pay(st.ledger, ctx.now, "drilling", `Ran the ${PIPE[size]!.name} casing to ${seatFt} ft in the ${w.name}${hung ? ", where it hung up" : seatCall ? `, landed in ${seatCall.split(",")[0]}` : ""}`, "drilling", cost, { wellId: w.id, surveyId: w.surveyId });
       w.strings.push({ size, seatFt, costCents: cost, setAt: ctx.now, seatCall, observed: "pending", pulled: false, ...(hung ? { hung: true } : {}) });
-      w.emptyBails = 0;
+      w.noHole = null;
       recordOf(st, w).strings++;
       // Mechanical: the pipe holds up every wall above its shoe. Hydraulic: only a seal stops the leak beneath.
       w.casedFt = seatFt;

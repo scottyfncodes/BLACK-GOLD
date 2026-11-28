@@ -117,7 +117,7 @@ describe("performance", () => {
 // M8a (the hidden field: tanks shared by every well) moved it from "1a1dfac96d01af", the M7 baseline.
 // M8b (the Rush's state in the world; no strike in this run, so no rival comes) moved it from "10b5a4766fa733".
 // The field's own golden run, with a strike, an offset and the Rush, is tests/determinism/field.test.ts.
-// M9a-0 (a hole that makes no footage: the bails from the same bottom counted on the well, and
-// when a recommendation was declined) moved it from "08458440c940d3" by state alone: with those
+// M9a-0 (a hole that makes no footage: the run of bails from about the same bottom kept on the
+// well, and when a recommendation was declined) moved it from "08458440c940d3" by state alone: with those
 // two fields left out the run hashes exactly as before, so play is unchanged here.
-const GOLDEN_TEN_YEAR_HASH = "17b6d8663bf200";
+const GOLDEN_TEN_YEAR_HASH = "1496b4528ba93d";
