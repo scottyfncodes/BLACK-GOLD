@@ -13,7 +13,9 @@ import { SURVEYS, insidePoly, surveyAt } from "../../content/geography/surveys";
 import { generateGeology } from "../geology/truth/model";
 import { surfaceSigns, type SurfaceSign } from "../geology/truth/surface";
 import { waterWells, type WaterWell } from "../geology/truth/waterWells";
-import type { AccountEvidence, Evidence, FieldTask, KnowledgeState, OpinionEvidence, ReadingEvidence, ReportedInterval, Strength, WellRecordEvidence } from "../knowledge/types";
+import type { AccountEvidence, Evidence, FieldTask, KnowledgeState, NewsEvidence, OpinionEvidence, ReadingEvidence, ReportedInterval, Strength, WellRecordEvidence } from "../knowledge/types";
+import { columnAt } from "../geology/truth/model";
+import { ftToM } from "../math/units";
 import { SAME_RISE_KM } from "../knowledge/reading";
 import { printedMap } from "../surface/print";
 
@@ -145,7 +147,28 @@ function remember(ctx: Ctx, w: WaterWell): WellRecordEvidence["intervals"] {
   return out;
 }
 
+/** The finished rival well the company has heard of, by its id. */
+const rivalNews = (st: KnowledgeState, wellId: string): NewsEvidence | undefined =>
+  st.evidence.find((e): e is NewsEvidence => e.kind === "news" && e.wellId === wellId && (e.event === "oil" || e.event === "gas" || e.event === "dry"));
+
+/**
+ * Asking another operator's driller about a finished well: his log as he tells it, remembered
+ * fairly well (a driller keeps a log), within what he drilled. Hearsay, like a settler's account.
+ */
+function inquireRival(ctx: Ctx, n: NewsEvidence): string {
+  const depthM = ftToM(n.depthFt ?? 0);
+  const log = columnAt(generateGeology(ctx.seed), n.x!, n.y!, Math.max(1, Math.ceil(depthM)));
+  const w: WaterWell = { id: n.wellId!, x: n.x!, y: n.y!, owner: n.name ?? n.operator ?? "another operator", year: toCalendar(ctx.now).year, depth: depthM, log };
+  const intervals = remember(ctx, w);
+  const memory = 0.8 + (rngKey(ctx.seed, "memory", w.id, "memory") / 0x100000000) * 0.15;
+  const rec = record(ctx, { kind: "wellRecord", provenance: "hearsay", wellId: w.id, x: w.x, y: w.y, owner: w.owner, year: w.year, depthFt: Math.round(n.depthFt ?? 0), intervals, memory });
+  ctx.schedule(ctx.now, "ops.learn", rec as unknown as Json);
+  return `Their driller told what ${w.owner} went through, to ${Math.round(n.depthFt ?? 0)} ft.`;
+}
+
 function inquire(ctx: Ctx, wellId: string): string {
+  const rival = rivalNews(S(ctx), wellId);
+  if (rival) return inquireRival(ctx, rival);
   const w = waterWells(generateGeology(ctx.seed)).find((x) => x.id === wellId)!;
   const memory = 0.55 + (rngKey(ctx.seed, "memory", w.id, "memory") / 0x100000000) * 0.4;
   const intervals = remember(ctx, w);
@@ -278,6 +301,10 @@ export const fieldwork: System<Json> = {
       const { day, month } = toCalendar(ctx.now);
       ctx.emit({ type: "fieldwork.report", severity: "notice", interrupt: true, data: { message: (payload as { message?: string })?.message ?? "The party could not be paid and stayed at home.", day, month } });
     },
+    /** News of the field reaches the company. */
+    "knowledge.news"(ctx, payload) {
+      record(ctx, payload as unknown as Omit<NewsEvidence, "id" | "t">);
+    },
     /** One of the company's holes has ended: its account joins the evidence. */
     "knowledge.account"(ctx, payload) {
       record(ctx, payload as unknown as Omit<AccountEvidence, "id" | "t">);
@@ -305,7 +332,7 @@ export const fieldwork: System<Json> = {
     "fieldwork.inquire"(ctx, c: Command) {
       busy(ctx);
       const wellId = (c.payload as { wellId?: string })?.wellId;
-      if (!waterWells(generateGeology(ctx.seed)).some((w) => w.id === wellId)) throw new CommandRejected("No such well.");
+      if (!waterWells(generateGeology(ctx.seed)).some((w) => w.id === wellId) && !rivalNews(S(ctx), wellId ?? "")) throw new CommandRejected("No such well, or none finished that its driller could tell of.");
       if (S(ctx).evidence.some((e) => e.kind === "wellRecord" && e.wellId === wellId)) throw new CommandRejected("You already have his account of that well.");
       startTask(ctx, { kind: "inquire", wellId: wellId!, until: returnTime(ctx.now, INQUIRE_DAYS) });
     },

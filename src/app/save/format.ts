@@ -12,7 +12,7 @@ import { GEOLOGY_VERSION, isSeed, MIGRATIONS as SIM_MIGRATIONS, worldProblem, ty
  *   3. add a test that loads a fixture saved at the old version.
  */
 export const SAVE_FORMAT = "black-gold-save";
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export interface SaveFile {
   format: typeof SAVE_FORMAT;

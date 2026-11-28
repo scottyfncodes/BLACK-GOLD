@@ -110,8 +110,9 @@ export function MapFigure({ runtime, snap, selection, onSelect, tool, setTool, o
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const { snap: s, selection: sel, draft: d } = latest.current;
       const leased = s.ops.leases.leases.filter((l) => l.status === "active" && l.expiresAt > s.time).map((l) => l.surveyId);
-      drawManuscript(ctx, v, { knowledge: s.knowledge, print: s.print, selection: sel, draft: d, leased });
-      drawLife(ctx, v, { anim: (performance.now() - started) / 1000, gameTime: s.time, knowledge: s.knowledge, wells: s.ops.well ? [...s.ops.past, s.ops.well] : s.ops.past, producing: s.ops.production.producers.map((p) => p.wellId) });
+      const rivalLeased = s.ops.rush.leases.filter((l) => l.until > s.time).map((l) => l.surveyId);
+      drawManuscript(ctx, v, { knowledge: s.knowledge, print: s.print, selection: sel, draft: d, leased, rivalLeased });
+      drawLife(ctx, v, { anim: (performance.now() - started) / 1000, gameTime: s.time, knowledge: s.knowledge, wells: s.ops.well ? [...s.ops.past, s.ops.well] : s.ops.past, producing: s.ops.production.producers.map((p) => p.wellId), rivals: s.ops.rush.wells });
       devOverlay()?.map(ctx, v, runtime.currentWorld.seed);
     };
     raf = requestAnimationFrame(frame);
@@ -206,7 +207,7 @@ export function MapFigure({ runtime, snap, selection, onSelect, tool, setTool, o
         if (!reason) { const ps = runtime.snapshot().knowledge.interp.prospects; onSelect({ kind: "prospect", id: ps[ps.length - 1]!.id }); }
         return;
       }
-      onSelect(hitTest(v, { knowledge: s.knowledge, print: s.print, selection: null, draft: null }, px, py));
+      onSelect(hitTest(v, { knowledge: s.knowledge, print: s.print, selection: null, draft: null, rivals: s.ops.rush.wells }, px, py));
     };
     cv.addEventListener("pointerdown", down);
     cv.addEventListener("pointermove", move);

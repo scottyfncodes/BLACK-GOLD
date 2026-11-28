@@ -9,7 +9,7 @@
  *   - the player's prospects, dotted (conjecture).
  * Everything else is blank paper, which means unknown (docs/ART-DIRECTION.md §1).
  */
-import { type KnowledgeView, type PrintedMap, type ReadingEvidence, type ReportedInterval, type SampleEvidence, type SectionLine } from "../../sim";
+import { type KnowledgeView, type NewsEvidence, type PrintedMap, type ReadingEvidence, type ReportedInterval, type SampleEvidence, type SectionLine } from "../../sim";
 import { Placer, type Pt } from "./kit";
 import { FONT, INK, LITH } from "./palette";
 import { paper } from "./paper";
@@ -86,6 +86,18 @@ export function controlsFor(line: SectionLine, k: KnowledgeView): Control[] {
   return out.sort((p, q) => p.along - q.along);
 }
 
+/** Other operators' finished wells near the line that the company knows only from the news: a depth and an outcome, nothing of the ground. */
+function heardOf(line: SectionLine, k: KnowledgeView): { n: NewsEvidence; along: number }[] {
+  const logged = new Set(k.evidence.filter((e) => e.kind === "wellRecord").map((e) => (e as { wellId: string }).wellId));
+  const out: { n: NewsEvidence; along: number }[] = [];
+  for (const e of k.evidence) {
+    if (e.kind !== "news" || (e.event !== "oil" && e.event !== "gas" && e.event !== "dry") || e.x === null || e.y === null || !e.wellId || logged.has(e.wellId)) continue;
+    const along = project(line, e.x, e.y);
+    if (along !== null) out.push({ n: e, along });
+  }
+  return out;
+}
+
 /** The geologist's readings of rock depth near the line (the latest per rise). */
 function readingsFor(line: SectionLine, k: KnowledgeView): { r: ReadingEvidence; along: number }[] {
   const out: { r: ReadingEvidence; along: number }[] = [];
@@ -125,7 +137,8 @@ export function drawSection(
   const L = Math.hypot(bx - ax, by - ay);
   const controls = controlsFor(line, k);
   const readings = readingsFor(line, k);
-  const deepest = Math.max(0, ...controls.map((c) => c.rec.depthFt), ...readings.map(({ r }) => (r.rockFt![1] ?? r.rockFt![0] + 250)));
+  const heard = heardOf(line, k);
+  const deepest = Math.max(0, ...controls.map((c) => c.rec.depthFt), ...readings.map(({ r }) => (r.rockFt![1] ?? r.rockFt![0] + 250)), ...heard.map(({ n }) => n.depthFt ?? 0));
   const maxFt = Math.max(600, Math.ceil((deepest + 150) / 100) * 100);
   const X = (km: number) => padL + (km / L) * (w - padL - padR);
   const Y = (ft: number) => padT + (ft / maxFt) * (h - padT - padB);
@@ -216,7 +229,11 @@ export function drawSection(
   ctx.setLineDash([]);
 
   // Logs: pattern first, tint underneath. Words go beside a column only where there is room.
-  const room = controls.map((c, i) => (controls[i + 1] ? X(controls[i + 1]!.along) - X(c.along) : w - padR - X(c.along)));
+  // Room for a log's words: up to the next log, or the next well known from the news, whichever is nearer.
+  const room = controls.map((c, i) => {
+    const next = [controls[i + 1] ? X(controls[i + 1]!.along) : w - padR, ...heard.filter((hw) => hw.along > c.along).map((hw) => X(hw.along))];
+    return Math.min(...next) - X(c.along);
+  });
   const labels = new Placer(w, h, 2);
   controls.forEach((c, ci) => {
     const x = X(c.along) - colW / 2;
@@ -267,6 +284,27 @@ export function drawSection(
     }
   });
 
+  // Other operators' wells known from the news: a dashed ink line to the depth reported, the outcome
+  // at its foot. Told, not seen: no beds are drawn, because none were described.
+  for (const { n, along } of heard) {
+    const x = X(along), d = n.depthFt ?? 0;
+    ctx.strokeStyle = INK.ink;
+    ctx.lineWidth = 1.1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(x, groundY(along)); ctx.lineTo(x, Y(d)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = INK.ink;
+    ctx.beginPath(); ctx.arc(x, Y(d), n.event === "oil" ? 3.2 : 2.4, 0, Math.PI * 2);
+    if (n.event === "oil") ctx.fill(); else ctx.stroke();
+    ctx.font = `italic ${compact ? 10 : 11}px ${FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    const short = (n.name ?? n.operator ?? "").replace(/^the /, "").replace(/ Oil Co\.| Petroleum Co\./, "");
+    const label = `${short}: ${n.event === "dry" ? "dry" : n.event}, ${d} ft (news)`;
+    const lw = ctx.measureText(label).width;
+    if (labels.take([x - lw / 2, Y(d) + 4, x + lw / 2, Y(d) + 18])) halo(ctx, label, x, Y(d) + 4, INK.inkSoft);
+  }
+
   // The player's prospects that this line crosses: a dotted bracket, explicitly a guess.
   for (const p of k.interp.prospects) {
     const t = ((p.x - ax) * (bx - ax) + (p.y - ay) * (by - ay)) / (L * L);
@@ -288,7 +326,7 @@ export function drawSection(
   }
 
   // When nothing is known below the surface, say so plainly. The paper stays blank.
-  if (controls.length === 0 && readings.length === 0) {
+  if (controls.length === 0 && readings.length === 0 && heard.length === 0) {
     ctx.fillStyle = INK.inkSoft;
     ctx.font = `italic ${compact ? 13 : 15}px ${FONT}`;
     ctx.textAlign = "center";

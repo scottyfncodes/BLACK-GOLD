@@ -1692,3 +1692,35 @@ table.book tr.nocash td {
   font-style: italic;
   color: var(--ink-soft);
 }
+
+/* M8b: the field, as Beaumont hears of it (hearsay, in ink), and land other operators hold. */
+.field-news {
+  margin: 12px 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--ink-soft);
+  background: rgba(20, 14, 10, 0.04);
+}
+.field-news h3 {
+  margin-top: 0 !important;
+}
+.field-news h3 small {
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-soft);
+}
+.field-news ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 14.5px;
+}
+.field-news li small {
+  display: block;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+.lease-theirs {
+  border-style: dashed;
+  border-color: var(--ink-soft);
+}

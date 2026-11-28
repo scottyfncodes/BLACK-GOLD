@@ -30,6 +30,14 @@ describe("architecture boundaries", () => {
     }
   });
 
+  it("other operators decide from public facts only: the Rush may not read truth or anything hidden", async () => {
+    for (const target of ["../geology/truth/model", "../hidden/reservoir", "../hidden/rivals"]) {
+      const errors = await lintAs("src/sim/rush/decide.ts", `import { x } from "${target}";\nexport const y = x;\n`);
+      expect(errors.join("\n"), target).toMatch(/public facts only/);
+    }
+    expect(await lintAs("src/sim/rush/decide.ts", `import { printedMap } from "../surface/print";\nexport const y = printedMap;\n`)).toEqual([]);
+  });
+
   it("lets UI read the subsurface through knowledge", async () => {
     expect(await lintAs("src/ui/Prospect.tsx", `import { evidence } from "../sim/knowledge";\nexport const x = evidence;\n`)).toEqual([]);
   });

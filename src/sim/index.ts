@@ -17,6 +17,7 @@ export { isSeed, type Seed } from "./core/rng";
 export { ftToM, mToFt, wholeFeet } from "./math/units";
 export { knowledgeOf, type KnowledgeView } from "./knowledge";
 export { readSpot, SAME_RISE_KM, type Expectation, type SpotReading } from "./knowledge/reading";
+export { rivalHolder, type RivalWell, type RivalLease, type RushState, type RivalStatus } from "./rush/types";
 export type * from "./knowledge/types";
 export { printedMap, PRINT_RELIEF_FT, type PrintedMap, type PrintedHill, type PrintedWell } from "./surface/print";
 export { WALK_DAYS, CONSULT_DAYS, INQUIRE_DAYS, FIELD_COSTS, errandCost } from "./systems/fieldwork";

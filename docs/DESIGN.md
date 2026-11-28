@@ -1222,6 +1222,78 @@ Guardrails:
 - **Schema 8** (`v7ToV8`): each producer's hidden figures move into the field, with the barrels already drawn from each trap. A test migrates a producing world and checks that two more years of production, field and books match the unmigrated world barrel for barrel.
 - **Golden hash** re-pinned on purpose, because the world now carries the field: `10b5a4766fa733`. The M8 golden run will play an offset well and a rush once M8b lands.
 
+**M8b, the Rush (as built, schema 9)**
+
+- **What starts it:** only a public strike, the company's or another operator's. Each oil strike gives the field excitement that fades over about 240 days; gas counts for less, because gas has no buyer. Dry holes within 2.5 km of a strike cool it. With no strike, no operator ever comes: the M7 worlds without a company strike reproduce exactly (751 of 751 campaigns).
+- **What the operators decide, and on what.** `sim/rush/decide.ts` may import no truth and nothing hidden; lint enforces this and a test proves it. Its inputs are:
+  - public strikes and dry holes;
+  - the printed map;
+  - ground already leased;
+  - existing wells.
+
+  From these:
+  - Operators offset the strikes they hear of, at a few hundred yards to a mile, and favour printed hills near them.
+  - They avoid ground near dry holes, never take land the company or another operator holds, and never drill on top of a well.
+  - Newcomers arrive in about four cases in ten.
+  - At most 6 rival wells drill at once, and 60 in all.
+  - A rival lease runs a year and is held while the operator drills or produces on it.
+- **How their wells end.**
+  - `sim/hidden/rivals.ts` decides each well's outcome from the ground when it is spudded, cheaply: no tick-by-tick drilling. A well finds the first oil or gas above the depth its operator can afford (1,400–2,200 ft); it stops at salt; and about 15% of holes are lost.
+  - The outcome is kept in the hidden field until its day comes. The public record says only "drilling" until then.
+  - A rival oil well is opened on the same authoritative tank as any company well on that trap. Company and rival wells draw together under M8a's accounting, so a neighbour's production shows only in the company's own falling barrels.
+- **How the Rush is seen.** Every rival derrick going up, strike, gas blowout and dry hole is news (`NewsEvidence`, hearsay), and so are Beaumont's monthly shipments from other operators.
+  - *Field notes:* a "The field" block tallies operators, wells drilling, producing and dry, and last month's shipments by others, with the latest news.
+  - *Map:* rival wells are drawn in ink, not the company's carmine, with the county's symbols: a derrick while drilling, a filled circle for oil, a circle struck through for a dry hole, and a bar for gas. At field scale they are named where the label fits. Land other operators hold is outlined in dashed ink.
+  - *Rival wells:* each has a page. Once finished, its driller can be asked for his log (50¢, a day): that is hearsay, remembered well, and it joins the company's records.
+  - *Leases:* the company cannot lease land another operator holds, and the land's page says whose it is.
+  - *Section:* a rival well known only from the news is a dashed ink line to the depth reported, with its outcome. Once its driller has been asked, it is a full "told" log.
+- **No hidden knowledge reaches the company or any operator.** The view carries the Rush's public state only. A rival well's outcome is not in it until it is known, and the tanks are never in it. The architecture tests cover the Rush module.
+- **Golden runs.** `tests/determinism/field.test.ts` is a second, five-year golden run on a seed with a shallow, sand-free strike: the strike, an offset well and the Rush, pinned at `0f035f101b1cbb`. It also checks that the field is identical however time is sliced, and after a save and load in the middle of the Rush. The original run has no strike. Its hash moved only because the world now carries the Rush state: `08458440c940d3`, from `10b5a4766fa733`.
+
+*Measured.*
+- **M7 regression,** 240 worlds × 4 profiles, against M8a:
+  - every campaign without a company strike is identical (751);
+  - every campaign with one keeps identical discovery results: first-well oil, first site, months and money to production (209);
+  - solvency is unchanged (206 of 209);
+  - only the company's capital after discovery falls: 10.8% in total over the 209 strike campaigns, the Rush draining shared oil.
+- **Strategies after a strike** (`tools/analysis/m8.harness.ts` and `m8-compare.mjs`, outside CI).
+  - The first well is placed from truth at the cheapest oil site, so that most worlds have a strike to play from. That is scaffolding: the exploration game is M7's. 92 of 240 worlds struck oil (75 first wells failed, and 73 worlds had no oil site within 1,476 ft).
+  - From the moment the well is capped, each world is copied and played five years five ways.
+  - Every decision after the strike reads only public information. Truth only measures the outcome: field share from the hidden tanks, and whether leased ground holds oil.
+
+  | 5 years after the strike | Passive | Defensive leasing | Quick offsets | Combined | Passive, no Rush (counterfactual) |
+  |---|---|---|---|---|---|
+  | Capital (cash − debt), mean / median | $29,492 / $27,455 | $29,455 / $26,931 | $31,622 / $27,930 | $30,565 / $25,491 | $33,686 / $31,945 |
+  | p10 / p90 | $17,353 / $43,429 | $18,387 / $42,714 | **$5,474** / $65,112 | **$1,030** / $63,874 | $22,235 / $47,239 |
+  | Barrels sold, mean | 74,824 | 78,630 | 91,336 | 97,022 | 88,538 |
+  | Share of the oil drawn from the company's tanks | 86% | 90% | 87% | 91% | 100% |
+  | Capital committed after the strike | $322 | $1,624 | $8,407 (p90 $25,981) | $12,809 | $322 |
+  | Land taken | none | 1.6 surveys, 824 acres, 37% with no oil under it | none | 1.4 surveys, 709 acres, 37% dry | none |
+  | Offsets drilled / oil | none | none | 3.9 / 1.6 | 5.3 / 2.1 | none |
+  | Other operators' wells / on the company's tanks | 16.4 / 0.7 | 13.0 / 0.5 | 17.6 / 1.1 | 15.7 / 0.8 | none |
+
+  Paired against passive play (same worlds):
+  - *Defensive leasing:* capital −$37 mean (−$795 to +$882), median −$890. Worse in 63 worlds, better in 11 (p < 0.001), and worse by over $1,000 in 48%. Field share +4.4 pts (+15 / −5 worlds, p = 0.04).
+  - *Quick offsets:* capital +$2,130 mean (7%; −$977 to +$5,430), median +$155. Better in 46 worlds and worse in 46. A heavy downside: the worst tenth are −$21,358, and 47% are worse by over $1,000. Field share +1.3 pts (not significant).
+  - *Combined:* capital +$1,074 mean (4%; −$2,663 to +$4,700), median −$3,911. Worse in 54 of 92, and the worst tenth −$24,675. Field share +5.2 pts (+43 / −24, p = 0.03).
+  - *The Rush itself* (passive vs the same world with no other operators): −$4,194 mean (14%; $2,521 to $5,996), median $0. It costs the company in 26 of 92 worlds, $14,842 on average when it does. Field share −13.5 pts.
+- **Findings, reported before any balancing.**
+  - *No dominant strategy.* Passive play is a strong baseline. No strategy raises capital significantly over it; field share rises significantly only with defensive leasing or the combination. The acceptance criterion "at least one strategy measurably raises share **and** value" is met for share, **not for value**. Nothing was tuned to change that.
+  - *Defensive leasing is insurance with a premium.* It costs about $1,600, and 37% of the acreage it buys holds no oil. It pays only where operators would otherwise have come onto the company's oil. In the 26 worlds where the Rush hurt, leasing recovered $2,928 on average (11 better, 11 worse). The company cannot know in advance which world it is in. That is the decision intended, but its expected value is currently close to zero.
+  - *Quick offsets are a high-variance gamble.* They bring the field's oil in faster: 22% more barrels, while the haul limit allows 150 bbl a day per well. But many offsets are dry: only 1.6 of 3.9 find oil, because the trap does not extend beyond the strike. The worst tenth of companies lose most of their capital to them. The scripted rule offset four ways on public information, with no reading of the structure; a player who reads the strike's log and the news may do better.
+  - *The Rush is legible and mostly harmless on average, but sometimes severe.* Other operators drill about 16 wells per field, three-quarters of them dry, so the dry holes are plentiful evidence. Only 0.7 of those wells reach the company's oil on average.
+  - *Unintended economic consequences:*
+    - Every company with a strike stays solvent for five years (100% in every strategy): risk after discovery is still negligible.
+    - Capital barely grows after year three in any strategy. The first well's tank is largely drawn by then, at 150 bbl a day, and nothing else draws the money. "Money with nothing to spend it on" is unchanged in kind.
+    - A company sits on about $30,000 with no further use for it in M8. That is the next design question, not a balancing one.
+- **Limits.**
+  - The first well is truth-sited scaffolding.
+  - The strategies are fixed scripts.
+  - Each world is played once per strategy.
+  - With 92 worlds, effects of a few thousand dollars sit near the noise.
+  - Rival behaviour, the excitement, the depth operators can afford and the loss rate are provisional gameplay values, measured but not balanced.
+  - The "no Rush" counterfactual switches the Rush off at the harness only.
+
 ## 9. Open decisions
 
 Decisions taken so far are marked. Where a decision is still open, its default is noted and work proceeds on the default unless you say otherwise.
@@ -1243,4 +1315,9 @@ Decisions taken so far are marked. Where a decision is still open, its default i
     - Fieldwork costs are provisional and calibrated to the survival threshold.
     - Refined (§8): the rainbow of oil on the bailer water; counsel by its grounds (negative evidence, money, or no evidence and no recommendation). The false-quit target is met.
     - Open: a holistic historical review of the economy, fieldwork prices included (provisional, calibrated for gameplay).
-13. **Next milestone:** M8, The Field (shared reservoirs, offset drilling, the rule of capture, a first Rush), intended but not yet authorised.
+13. **M8, The Field:** *Decided and built* (§8). M8a: shared reservoirs, schema 8. M8b: the Rush, schema 9.
+    - Open, for a later balancing decision:
+      - defensive leasing's near-zero expected value;
+      - the heavy downside of offsets;
+      - the absence of post-discovery risk;
+      - what the company's money should be for after year three.

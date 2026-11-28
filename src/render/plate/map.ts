@@ -26,6 +26,7 @@ export type Selection =
   | { kind: "well"; id: string }
   | { kind: "section"; id: string }
   | { kind: "prospect"; id: string }
+  | { kind: "rival"; id: string }
   | null;
 
 export interface ManuscriptInputs {
@@ -36,6 +37,10 @@ export interface ManuscriptInputs {
   draft: Pt | null;
   /** Surveys the company holds a lease on (its own claim: drawn in carmine). */
   leased?: string[];
+  /** Surveys other operators hold (their claim: drawn in ink, dashed). */
+  rivalLeased?: string[];
+  /** Other operators' wells, for hit testing. */
+  rivals?: readonly { id: string; x: number; y: number }[];
 }
 
 /** County scale shows the whole sheet; field scale shows names and detail. */
@@ -403,6 +408,15 @@ export function drawManuscript(ctx: CanvasRenderingContext2D, v: MapView, m: Man
     const s = SURVEYS.find((x) => x.id === id);
     if (s) { path(ctx, inset(s.poly.map(P), 6), true); ctx.stroke(); }
   }
+  // Land other operators hold: their claim, a dashed ink line inside the grant line.
+  ctx.strokeStyle = INK.ink;
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([5, 3]);
+  for (const id of m.rivalLeased ?? []) {
+    const s = SURVEYS.find((x) => x.id === id);
+    if (s) { path(ctx, inset(s.poly.map(P), 6), true); ctx.stroke(); }
+  }
+  ctx.strokeStyle = INK.carmine;
   ctx.lineWidth = 1;
   ctx.setLineDash([]);
 
@@ -568,6 +582,7 @@ function endLetters(ctx: CanvasRenderingContext2D, a: Pt, b: Pt, letter: string)
 
 export function hitTest(v: MapView, m: ManuscriptInputs, px: number, py: number): Selection {
   const P = toPx(v);
+  for (const w of m.rivals ?? []) { const [x, y] = P([w.x, w.y]); if (Math.hypot(x - px, y - py) < 12) return { kind: "rival", id: w.id }; }
   for (const w of m.print.wells) { const [x, y] = P([w.x, w.y]); if (Math.hypot(x - px, y - py) < 12) return { kind: "well", id: w.id }; }
   for (const s of m.knowledge.interp.sections) {
     const a = P(s.a), b = P(s.b);

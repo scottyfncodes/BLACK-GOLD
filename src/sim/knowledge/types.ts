@@ -148,7 +148,29 @@ export interface AccountEvidence extends Base {
   unknown: string[];
 }
 
-export type Evidence = SignEvidence | WalkEvidence | WellRecordEvidence | OpinionEvidence | SampleEvidence | ReadingEvidence | AccountEvidence;
+/**
+ * What Beaumont hears of the field: another operator's derrick going up, its well coming in or
+ * being abandoned, the railhead's shipments. Hearsay, public, and as true as news is: a well's
+ * reported depth is the depth it ended at; nothing about the ground below it.
+ */
+export interface NewsEvidence extends Base {
+  kind: "news";
+  provenance: "hearsay";
+  event: "spud" | "oil" | "gas" | "dry" | "shipments";
+  wellId: string | null;
+  /** The well's name, as the town calls it ("the Gulf Coast Oil Co.'s No. 2"). */
+  name: string | null;
+  operator: string | null;
+  surveyId: string | null;
+  x: number | null;
+  y: number | null;
+  depthFt: number | null;
+  /** Barrels shipped from the field by others last month (shipments only). */
+  bbl: number | null;
+  text: string;
+}
+
+export type Evidence = SignEvidence | WalkEvidence | WellRecordEvidence | OpinionEvidence | SampleEvidence | ReadingEvidence | AccountEvidence | NewsEvidence;
 
 export interface SectionLine {
   id: string;

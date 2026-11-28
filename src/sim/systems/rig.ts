@@ -25,6 +25,9 @@ import { activeLease, askingTerms, emptyLeaseBook, ownerAccepts, REFUSAL_DAYS, s
 import { printedMap } from "../surface/print";
 import { CAP_COST, emptyProductionBook, HAULING_CENTS, oilPriceCents } from "../company/production";
 import { drawDay, emptyField, openTap } from "../hidden/reservoir";
+import { resolveRival } from "../hidden/rivals";
+import { chooseSite, excitement, OPERATORS, RUSH } from "../rush/decide";
+import { emptyRush, rivalHolder, type PublicWell, type RivalWell } from "../rush/types";
 import { ACCRUAL_UNITS, RATE_PERCENT, BORROW_STEP_CENTS, creditLimitCents, dayAccrual, emptyBank, RIG_RESALE, STRIKES_TO_FORECLOSE, USED_RIG_PRICE } from "../company/bank";
 import { CONTRACT_DAYS, CONTRACT_PAY, CONTRACT_WAGES, contractOffered, recoveryPaths, type Position } from "../company/recovery";
 import { candidatesFor, dayRateCents, emptyCrew, emptyRecord, type Driller, type DrillerRecord } from "../company/crew";
@@ -786,6 +789,7 @@ export function positionOf(st: OperationsState, seed: string, now: number): Posi
       const print = printedMap(seed), nw = news(st);
       let best: { surveyId: string; cents: number } | null = null;
       for (const s of ALL_SURVEYS) {
+        if (rivalHolder(st.rush, s.id, now)) continue;
         const t = askingTerms(s, print, nw);
         if (!best || t.askingCents < best.cents) best = { surveyId: s.id, cents: t.askingCents };
       }
@@ -898,6 +902,8 @@ function produceDay(ctx: Ctx): void {
   const st = S(ctx);
   // Every open well on the field draws on its tank together; the company sees only its own barrels.
   const flows = drawDay(st.field);
+  // Other operators' oil goes to the same railhead: Beaumont's shipments are public.
+  for (const w of st.rush.wells) if (w.status === "oil") st.rush.monthOthersBbl += flows[w.id] ?? 0;
   for (const p of st.production.producers) {
     const flow = flows[p.wellId] ?? 0;
     // Water from sands never shut off comes up with the oil and is let run to the pit.
@@ -931,6 +937,86 @@ function settleMonth(ctx: Ctx, dayOf: number): void {
     oilNet += gross - bbl * HAULING_CENTS - royalty;
   }
   settleBank(ctx, month!, oilNet);
+  // Beaumont's shipments from the field by other operators: public, monthly.
+  const others = st.rush.monthOthersBbl;
+  st.rush.lastMonthOthersBbl = others;
+  st.rush.monthOthersBbl = 0;
+  if (others > 0) tellNews(ctx, { event: "shipments", wellId: null, operator: null, surveyId: null, x: null, y: null, depthFt: null, bbl: others, text: `Other operators shipped ${others.toLocaleString("en-US")} bbl from the field to the railhead in ${month}.` });
+}
+
+// ── The Rush (M8b) ──────────────────────────────────────────────────────────────────────
+
+/** A piece of news reaches Beaumont, and the company hears it. */
+function tellNews(ctx: Ctx, n: { event: "spud" | "oil" | "gas" | "dry" | "shipments"; wellId: string | null; name?: string | null; operator: string | null; surveyId: string | null; x: number | null; y: number | null; depthFt: number | null; bbl: number | null; text: string }): void {
+  ctx.schedule(ctx.now, "knowledge.news", { kind: "news", provenance: "hearsay", ...n, name: n.name ?? null } as unknown as Json);
+  if (n.event !== "shipments") ctx.emit({ type: "rush.news", severity: "info", interrupt: n.event === "oil", data: { message: n.text } });
+}
+
+/** Every well whose end the county knows: the company's (from its accounts) and other operators'. */
+function publicWells(st: OperationsState): PublicWell[] {
+  const out: PublicWell[] = [];
+  for (const e of st.notebook) if (e.kind === "account") out.push({ x: e.x, y: e.y, t: e.t, result: e.result, depthFt: e.deepestFt });
+  for (const w of st.rush.wells) if (w.status !== "drilling") out.push({ x: w.x, y: w.y, t: w.doneAt, result: w.status, depthFt: w.depthFt ?? 0 });
+  return out;
+}
+
+const cap1 = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * One day of the Rush: rival leases lapse or are held; and, if the field draws them, an operator
+ * spuds a new well where the public facts point. Its outcome is decided by the ground now and
+ * kept hidden until the day the well is done. No strike, no Rush.
+ */
+function rushDay(ctx: Ctx): void {
+  const st = S(ctx);
+  const r = st.rush;
+  const now = ctx.now;
+  for (const l of r.leases) {
+    if (l.until > now) continue;
+    // Held while the operator has a well drilling or producing on it.
+    if (r.wells.some((w) => w.surveyId === l.surveyId && w.operator === l.operator && (w.status === "drilling" || w.status === "oil"))) l.until = now + RUSH.leaseDays * MINUTES_PER_DAY;
+  }
+  r.leases = r.leases.filter((l) => l.until > now);
+  const pw = publicWells(st);
+  const heat = excitement(pw, now);
+  if (heat <= 0) return;
+  if (r.wells.filter((w) => w.status === "drilling").length >= RUSH.maxActive || r.wells.length >= RUSH.maxWells) return;
+  if (ctx.random("rush:spud") >= Math.min(RUSH.maxPerDay, RUSH.perDay * heat)) return;
+  // Who: a newcomer, or an operator already in the field.
+  const fresh = OPERATORS.filter((o) => !r.operators.includes(o));
+  const operator = r.operators.length === 0 || (fresh.length > 0 && ctx.random("rush:who") < RUSH.newcomer) ? fresh[Math.floor(ctx.random("rush:new") * fresh.length)]! : r.operators[Math.floor(ctx.random("rush:old") * r.operators.length)]!;
+  const companyLeased = st.leases.leases.filter((l) => l.status === "active" && l.expiresAt > now).map((l) => l.surveyId);
+  const wells = [...st.past, ...(st.well ? [st.well] : []), ...r.wells];
+  const site = chooseSite({ wells: pw, allWells: wells, print: printedMap(ctx.seed), companyLeased, rivalLeases: r.leases, operator }, () => ctx.random("rush:site"));
+  if (!site) return;
+  if (!r.operators.includes(operator)) r.operators.push(operator);
+  if (!rivalHolder(r, site.surveyId, now)) r.leases.push({ surveyId: site.surveyId, operator, since: now, until: now + RUSH.leaseDays * MINUTES_PER_DAY });
+  const n = r.wells.filter((w) => w.operator === operator).length + 1;
+  const id = `rv-${r.next++}`;
+  const out = resolveRival(ctx.seed, site.x, site.y, ctx.random("rush:purse"), ctx.random("rush:luck"), ctx.random("rush:lost"));
+  const doneAt = now + out.days * MINUTES_PER_DAY;
+  const well: RivalWell = { id, name: `${operator}'s No. ${n}`, operator, surveyId: site.surveyId, x: site.x, y: site.y, spudAt: now, doneAt, status: "drilling", depthFt: null };
+  r.wells.push(well);
+  st.field.pending[id] = { result: out.result, depthFt: out.depthFt };
+  ctx.schedule(doneAt, "rush.done", { id });
+  const survey = surveyById(site.surveyId)?.name ?? "";
+  tellNews(ctx, { event: "spud", wellId: id, name: well.name, operator, surveyId: site.surveyId, x: site.x, y: site.y, depthFt: null, bbl: null, text: `${cap1(operator)} is putting up a derrick on the ${survey} survey.` });
+}
+
+/** A rival well is done: what it found becomes known, and an oil well is opened on its tank. */
+function rushDone(ctx: Ctx, id: string): void {
+  const st = S(ctx);
+  const w = st.rush.wells.find((x) => x.id === id);
+  const out = st.field.pending[id];
+  if (!w || !out || w.status !== "drilling") return;
+  delete st.field.pending[id];
+  w.status = out.result;
+  w.depthFt = out.depthFt;
+  if (out.result === "oil") openTap(st.field, ctx.seed, w.id, w.x, w.y, out.depthFt);
+  const survey = surveyById(w.surveyId)?.name ?? "";
+  const ft = out.depthFt.toLocaleString("en-US");
+  const text = out.result === "oil" ? `${cap1(w.name)} on the ${survey} survey came in, flowing oil from ${ft} ft.` : out.result === "gas" ? `${cap1(w.name)} on the ${survey} survey blew in gas at ${ft} ft.` : `${cap1(w.name)} on the ${survey} survey was abandoned dry at ${ft} ft.`;
+  tellNews(ctx, { event: out.result, wellId: w.id, name: w.name, operator: w.operator, surveyId: w.surveyId, x: w.x, y: w.y, depthFt: out.depthFt, bbl: null, text });
 }
 
 function notice(ctx: Ctx, message: string): void {
@@ -948,7 +1034,8 @@ function renew(ctx: Ctx, lease: { expiresAt: number; renewals: number; surveyId:
 /** Public news: where the company's wells have come in with oil. */
 function news(st: OperationsState): PublicNews {
   const wells = st.well ? [...st.past, st.well] : st.past;
-  return { strikes: wells.filter((w) => w.status === "gusher" && w.outcome?.startsWith("OIL")).map((w) => ({ x: w.x, y: w.y })) };
+  // Oil has come in nearby: the company's strikes and other operators' alike drive up the asking price.
+  return { strikes: [...wells.filter((w) => w.status === "gusher" && w.outcome?.startsWith("OIL")).map((w) => ({ x: w.x, y: w.y })), ...st.rush.wells.filter((w) => w.status === "oil").map((w) => ({ x: w.x, y: w.y }))] };
 }
 
 /** Cash that can be spent now: the books less rig time run today and not yet entered. */
@@ -982,7 +1069,7 @@ function well(ctx: Ctx): Well {
 
 export const rig: System<Json> = {
   id: "operations",
-  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), bank: emptyBank(), contract: null, outcome: emptyOutcome(), crew: null, tools: { driveHead: false }, well: null, past: [], samples: [], notebook: [], field: emptyField(), next: 1 }) as unknown as Json,
+  initialState: () => ({ ledger: emptyLedger(), accrued: { ticks: 0 }, leases: emptyLeaseBook(), production: emptyProductionBook(), bank: emptyBank(), contract: null, outcome: emptyOutcome(), crew: null, tools: { driveHead: false }, well: null, past: [], samples: [], notebook: [], field: emptyField(), rush: emptyRush(), next: 1 }) as unknown as Json,
   init(ctx) {
     const st = S(ctx);
     st.crew = emptyCrew(ctx.seed);
@@ -1013,6 +1100,7 @@ export const rig: System<Json> = {
       // the month) the month's settlement.
       flushRigTime(ctx, ctx.now - 1);
       produceDay(ctx);
+      rushDay(ctx);
       // Interest accrues daily on the loan, in exact integer units.
       S(ctx).bank.accrued += dayAccrual(debtCents(S(ctx).ledger));
       contractDue(ctx);
@@ -1020,6 +1108,9 @@ export const rig: System<Json> = {
       refreshCandidates(ctx);
       review(ctx);
       ctx.schedule(nextMidnight(ctx.now), "company.day");
+    },
+    "rush.done"(ctx, payload) {
+      rushDone(ctx, String((payload as { id?: string })?.id ?? ""));
     },
     "rig.pulled"(ctx, payload) {
       const st = S(ctx);
@@ -1115,6 +1206,8 @@ export const rig: System<Json> = {
       const survey = surveyById(p?.surveyId ?? "");
       if (!survey) throw new CommandRejected("No such survey.");
       if (activeLease(st.leases, survey.id, ctx.now)) throw new CommandRejected(`You already hold the ${survey.name} lease.`);
+      const rival = rivalHolder(st.rush, survey.id, ctx.now);
+      if (rival) throw new CommandRejected(`${cap1(rival.operator)} holds the ${survey.name} lease.`);
       const lower = p.offer === "lower";
       const t = askingTerms(survey, printedMap(ctx.seed), news(st));
       if (lower && (st.leases.refusedUntil[survey.id] ?? -1) > ctx.now) throw new CommandRejected(`The owner has already refused a lower offer. The asking bonus is $${t.askingCents / 100}.`);

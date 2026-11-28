@@ -15,6 +15,7 @@ import { oilPriceCents } from "./company/production";
 import type { CasingString, DriveJob } from "./company/casing";
 import { dayRateCents, type Crew } from "./company/crew";
 import type { FieldState } from "./hidden/reservoir";
+import type { RushState } from "./rush/types";
 
 export type WellStatus = "rigging" | "drilling" | "stuck" | "gusher" | "dry";
 export type Operation = "rigup" | "bail" | "dress" | "case" | "fish" | "drive" | "swage";
@@ -121,6 +122,8 @@ export interface OperationsState {
   notebook: (ReadingEvidence | WellRecordEvidence | AccountEvidence)[];
   /** HIDDEN: the oil in the ground as it is drawn (sim/hidden/reservoir.ts). Never in the view. */
   field: FieldState;
+  /** The Rush: other operators' wells and leases, as Beaumont knows them (public). */
+  rush: RushState;
   next: number;
 }
 
@@ -148,6 +151,8 @@ export interface OperationsView {
   oilPriceCents: number;
   well: Well | null;
   past: Well[];
+  /** Other operators in the field: their wells and leases as Beaumont knows them. */
+  rush: RushState;
 }
 
 /** Rig time accrued today, in cents (whole cents, rounded once). */
@@ -157,7 +162,7 @@ export function accruedCents(o: OperationsState): number {
 
 export function operationsOf(world: Readonly<WorldState>): OperationsView {
   const o = world.systems.operations as unknown as OperationsState;
-  return { cash: (cashCents(o.ledger) - accruedCents(o)) / 100, debt: debtCents(o.ledger) / 100, ledger: o.ledger, leases: o.leases, production: o.production, bank: o.bank, contract: o.contract, outcome: o.outcome, crew: o.crew, tools: o.tools, dayRate: dayRateCents(o.crew) / 100, oilPriceCents: oilPriceCents(world.time), well: o.well, past: o.past };
+  return { cash: (cashCents(o.ledger) - accruedCents(o)) / 100, debt: debtCents(o.ledger) / 100, ledger: o.ledger, leases: o.leases, production: o.production, bank: o.bank, contract: o.contract, outcome: o.outcome, crew: o.crew, tools: o.tools, dayRate: dayRateCents(o.crew) / 100, oilPriceCents: oilPriceCents(world.time), well: o.well, past: o.past, rush: o.rush };
 }
 
 /** Samples are evidence like any other; they join the knowledge view. */

@@ -48,6 +48,21 @@ export default tseslint.config(
     },
   },
   {
+    // The Rush decides from public facts only: no truth and nothing hidden (M8b).
+    files: ["src/sim/rush/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            { group: TRUTH, message: "Other operators decide from public facts only: a rival well meets the ground in sim/hidden/rivals.ts." },
+            { group: ["**/ui", "**/ui/**", "**/render", "**/render/**", "**/app", "**/app/**", "preact", "preact/**"], message: "sim/ must not depend on UI, rendering or the app layer." },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Truth is sealed inside sim/. Only the dev-only god view (src/debug, never in production
     // builds) may read it from outside.
     files: ["src/ui/**/*.{ts,tsx}", "src/render/**/*.{ts,tsx}", "src/app/**/*.{ts,tsx}", "src/main.tsx", "src/content/**/*.ts"],
