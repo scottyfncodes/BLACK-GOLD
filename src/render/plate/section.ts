@@ -63,7 +63,8 @@ function ownLogs(k: KnowledgeView): (Log & { x: number; y: number })[] {
     for (const s of ss) {
       const call = s.call.split(",")[0]!;
       const prev = intervals[intervals.length - 1];
-      if (prev && prev.lith === s.lith && !s.show && !prev.show) { prev.baseFt = s.baseFt; continue; }
+      // A bed continues while the rock and its show stay the same: caprock bailed every few feet with sulphur water is one bed, not forty.
+      if (prev && prev.lith === s.lith && prev.show === s.show) { prev.baseFt = s.baseFt; continue; }
       intervals.push({ topFt: s.topFt, baseFt: s.baseFt, call: s.show ? s.call : call, lith: s.lith, ...(s.show ? { show: s.show } : {}) });
     }
     out.push({ owner: names.get(id) ?? "our well", depthFt: ss[ss.length - 1]!.baseFt, intervals, observed: true, x: ss[0]!.x, y: ss[0]!.y });
@@ -171,9 +172,13 @@ export function drawSection(
     ctx.font = `italic ${compact ? 11 : 12}px ${FONT}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    halo(ctx, hiOrNull === null ? `rock, if any, deeper than ${lo} ft?` : `rock looked for, ${lo}–${hi} ft?`, (x0 + x1) / 2, Y(hi) + 3, INK.carmine);
+    // The caption sits beside the band, on its left, so it never runs into a log's words on the right.
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    const mid = (Y(lo) + Y(hi)) / 2, cx = x0 - 6;
+    halo(ctx, hiOrNull === null ? `rock deeper than ${lo} ft?` : `rock, ${lo}–${hi} ft?`, cx, mid - (compact ? 6 : 7), INK.carmine);
     ctx.font = `italic ${compact ? 10 : 11}px ${FONT}`;
-    halo(ctx, "the geologist's reading", (x0 + x1) / 2, Y(hi) + (compact ? 16 : 18), INK.carmine);
+    halo(ctx, "the geologist's reading", cx, mid + (compact ? 7 : 8), INK.carmine);
   }
 
   // Correlations between neighbouring records: dashed, carmine (the company's inference).
@@ -197,7 +202,9 @@ export function drawSection(
   const stub = Math.min(0.6, L * 0.15);
   for (const [c, dir] of [[controls[0], -1], [controls[controls.length - 1], 1]] as const) {
     if (!c) continue;
-    for (const iv of c.rec.intervals.slice(1)) {
+    // One query per change of rock, not per show: a stub says "this contact may continue", nothing more.
+    for (const [i, iv] of c.rec.intervals.entries()) {
+      if (i === 0 || c.rec.intervals[i - 1]!.lith === iv.lith) continue;
       const x0 = X(c.along) + (dir * colW) / 2, x1 = X(Math.max(0, Math.min(L, c.along + dir * stub)));
       if (Math.abs(x1 - x0) < 10) continue;
       ctx.setLineDash([6, 4]);
