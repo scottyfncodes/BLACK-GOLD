@@ -20,7 +20,7 @@ const POOR: Ability = { feel: 0.3, judgement: 0.1, reliability: 0.3, prudence: 0
 
 describe("assess: a hole that makes no footage", () => {
   it("says so, names the sand and that no pipe is left, and recommends plugging", () => {
-    const a = assess({ ...OBS, noHole: { bails: 30, days: 2 } }, GOOD, "methodical", 0.5, 0.5)!;
+    const a = assess({ ...OBS, noHole: { bails: 300, days: 6 } }, GOOD, "methodical", 0.5, 0.5)!;
     expect(a.kind).toBe("stalled");
     expect(a.text).toMatch(/made no hole/);
     expect(a.text).toMatch(/as fast as we bail it/);
@@ -28,21 +28,23 @@ describe("assess: a hole that makes no footage", () => {
     expect(a.text).toMatch(/I'd plug it/);
   });
   it("names the pipe that could still be driven when there is one", () => {
-    const a = assess({ ...OBS, stringsLeft: 1, nextPipe: "6⅝-inch", nextDriveCents: 12_800, openSandFt: 5, noHole: { bails: 30, days: 2 } }, GOOD, "methodical", 0.5, 0.5)!;
+    const a = assess({ ...OBS, stringsLeft: 1, nextPipe: "6⅝-inch", nextDriveCents: 12_800, openSandFt: 5, noHole: { bails: 300, days: 6 } }, GOOD, "methodical", 0.5, 0.5)!;
     expect(a.kind).toBe("stalled");
     expect(a.text).toMatch(/The 6⅝-inch could still be driven through it \(about \$128\)/);
   });
   it("needs both: bails from the same bottom, and days of it; a poor judge or a hard driver takes longer", () => {
     expect(assess({ ...OBS, noHole: { bails: NO_HOLE.bails - 1, days: 10 } }, GOOD, "methodical", 0.5, 0.5)?.kind).not.toBe("stalled");
-    expect(assess({ ...OBS, noHole: { bails: 30, days: 0.5 } }, GOOD, "methodical", 0.5, 0.5)?.kind).not.toBe("stalled");
+    expect(assess({ ...OBS, noHole: { bails: 300, days: 4 } }, GOOD, "methodical", 0.5, 0.5)?.kind).not.toBe("stalled");
     expect(noHoleDays(GOOD, "methodical")).toBeLessThan(noHoleDays(POOR, "methodical"));
     expect(noHoleDays(GOOD, "methodical")).toBeLessThan(noHoleDays(GOOD, "aggressive"));
-    expect(noHoleDays(POOR, "aggressive")).toBeLessThanOrEqual(5);
-    expect(assess({ ...OBS, noHole: { bails: 30, days: 2 } }, POOR, "methodical", 0.5, 0.5)?.kind).not.toBe("stalled");
-    expect(assess({ ...OBS, noHole: { bails: 30, days: 5 } }, POOR, "aggressive", 0.5, 0.5)?.kind).toBe("stalled");
+    // Running sand slows far more holes than it stops: about five days for a good judge, never more than nine.
+    expect(noHoleDays(GOOD, "methodical")).toBeGreaterThanOrEqual(5);
+    expect(noHoleDays(POOR, "aggressive")).toBeLessThanOrEqual(9);
+    expect(assess({ ...OBS, noHole: { bails: 300, days: 6 } }, POOR, "methodical", 0.5, 0.5)?.kind).not.toBe("stalled");
+    expect(assess({ ...OBS, noHole: { bails: 300, days: 9 } }, POOR, "aggressive", 0.5, 0.5)?.kind).toBe("stalled");
   });
   it("comes before any talk of money: it is a fact about the hole, not a guess about the ground", () => {
-    expect(assess({ ...OBS, cashCents: 1_000, noHole: { bails: 30, days: 3 } }, GOOD, "methodical", 0.5, 0.5)?.kind).toBe("stalled");
+    expect(assess({ ...OBS, cashCents: 1_000, noHole: { bails: 300, days: 7 } }, GOOD, "methodical", 0.5, 0.5)?.kind).toBe("stalled");
   });
 });
 
@@ -80,9 +82,10 @@ describe("in the game: the driller trusted with his own judgement, a rich compan
       } else if (p) cmd(w, "crew.decline", { id: p.id });
     }
     expect(raised.length).toBe(3);
-    // The first time within a few days of the hole standing still; then a week apart.
+    // The first time after about a week of the hole standing still; then a week apart.
     const stood = operationsOf(w).well!.spudAt + 7 * DAY;
-    expect(raised[0]! - stood).toBeLessThan(6 * DAY);
+    expect(raised[0]! - stood).toBeGreaterThan(4 * DAY);
+    expect(raised[0]! - stood).toBeLessThan(11 * DAY);
     expect(raised[1]! - raised[0]!).toBeGreaterThanOrEqual(7 * DAY);
     expect(raised[1]! - raised[0]!).toBeLessThan(8 * DAY);
     const well = operationsOf(w).well!;
@@ -98,7 +101,7 @@ describe("in the game: the driller trusted with his own judgement, a rich compan
     }
     expect(operationsOf(w).well!.status).toBe("drilling");
     // Unanswered advice lapses as "keep at it"; he says it again each week.
-    expect(raised).toBeGreaterThanOrEqual(3);
-    expect(raised).toBeLessThanOrEqual(5);
+    expect(raised).toBeGreaterThanOrEqual(2);
+    expect(raised).toBeLessThanOrEqual(4);
   });
 });

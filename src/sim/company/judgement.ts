@@ -180,12 +180,16 @@ const REFUSAL_WORDS: Record<Temperament, string> = {
 };
 
 /**
- * When he says the hole is making no footage: bails in a row from the same bottom, and days of it.
- * A cable-tool driller logs his footage every tour; two tours of bailing and no hole is plain to a
- * good one. A poor judge keeps at it for days, hoping the sand will tire; a hard driver longer still.
- * (Provisional: no period source puts a number on it.)
+ * When he says the hole is making no footage: bails in a row from about the same bottom, and days
+ * of it. Running sand slows a hole far more often than it stops one, and a driller knows it: most
+ * such runs break through within a day or two. Measured over 635 holes in running sand
+ * (tools/analysis/stall.harness.ts), of the runs still standing after 5 days, 36% broke through
+ * later; after 6 days, 15%; after 7, 4%; after 10, none; and none that broke through after 5 days
+ * went on to oil. So a good judge says so after about five days, a poor one after about eight,
+ * and a hard driver a day later still. (Calibrated on the simulation; no period source puts a
+ * number on it.)
  */
-export const NO_HOLE = { bails: 8, days: 1, poorDays: 3, aggressiveDays: 1 } as const;
+export const NO_HOLE = { bails: 8, days: 5, poorDays: 3, aggressiveDays: 1 } as const;
 export function noHoleDays(a: Ability, t: Temperament): number {
   return NO_HOLE.days + NO_HOLE.poorDays * (1 - a.judgement) + (t === "aggressive" ? NO_HOLE.aggressiveDays : 0);
 }
